@@ -30,8 +30,22 @@ const fail = (m) => fails.push(m);
 const warn = (m) => warns.push(m);
 const ok = (m) => oks.push(m);
 
-/** Walk emitted .claude bundle files (skip backups/binary). */
+/**
+ * The files veriloop OWNS in the target repo — never other pre-existing files in
+ * the repo's `.claude/` (a hand-built sibling workflow, settings, lockfiles). The
+ * manifest's `emitted_files` is the authoritative list of what generate wrote;
+ * scoping to it stops the linter from flagging, e.g., a repo's own `*-advise.js`.
+ */
 function bundleFiles(root) {
+  const man = join(root, '.claude/veriloop/veriloop-manifest.json');
+  if (existsSync(man)) {
+    try {
+      const m = JSON.parse(readFileSync(man, 'utf8'));
+      const paths = (m.emitted_files || []).map((e) => join(root, e.path)).filter((p) => existsSync(p));
+      if (paths.length) return [...paths, man]; // manifest isn't in its own list
+    } catch { /* fall through to the pattern scope */ }
+  }
+  // Fallback (no/unreadable manifest): only veriloop-owned locations.
   const out = [];
   const walk = (dir) => {
     for (const name of listDir(dir)) {
@@ -41,8 +55,12 @@ function bundleFiles(root) {
       else out.push(abs);
     }
   };
-  const cdir = join(root, '.claude');
-  if (isDir(cdir)) walk(cdir);
+  const vdir = join(root, '.claude/veriloop');
+  if (isDir(vdir)) walk(vdir);
+  const cmd = join(root, '.claude/commands/dev-loop.md');
+  if (existsSync(cmd)) out.push(cmd);
+  const wfDir = join(root, '.claude/workflows');
+  for (const n of listDir(wfDir) || []) if (n.endsWith('-dev-loop.js')) out.push(join(wfDir, n));
   return out;
 }
 

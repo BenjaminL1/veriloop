@@ -46,7 +46,7 @@ const CI_SIGNATURES = {
   lint: [/\bruff check\b/, /\beslint\b/, /\bnext lint\b/, /\bflake8\b/, /\bpylint\b/, /\bnpm run lint\b/, /\bmake lint\b/],
   format: [/\bprettier\b[^\n]*(--check|-c)\b/, /\bruff format\b[^\n]*--check/, /\bblack\b[^\n]*--check/, /\bnpm run format:check\b/, /\bmake format-check\b/],
   test: [/\bpytest\b/, /\bvitest\b/, /\bjest\b/, /\bmocha\b/, /\bnpm run test\b/, /\bnpm test\b/, /\bmake test(-unit)?\b/],
-  e2e: [/-m integration\b/, /\bplaywright\b/, /\bcypress\b/, /test:e2e/, /\bmake test-integration\b/],
+  e2e: [/-m integration\b/, /\bplaywright\s+test\b/, /\bcypress\s+(run|open)\b/, /test:e2e/, /\bmake test-integration\b/],
   build: [/\bnpm run build\b/, /\bnext build\b/, /\bmaturin\b/, /python -m build\b/, /\bmake build\b/, /\btsc -p\b/],
 };
 
@@ -55,8 +55,11 @@ const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 /** Does a raw command match a category's signature? */
 function matchesCategory(cmd, category) {
   const sigs = CI_SIGNATURES[category] || [];
-  const n = cmd; // keep case for regexes that are case-insensitive via /i? use raw
-  return sigs.some((re) => re.test(n));
+  // A dependency/browser install or other setup step is never the RUN command for
+  // another category — e.g. `npx playwright install --with-deps chromium` is e2e
+  // *setup*, not the e2e run, and must not fill the e2e slot.
+  if (category !== 'install' && /(\binstall\b|--with-deps)/.test(cmd)) return false;
+  return sigs.some((re) => re.test(cmd));
 }
 
 // ---------------------------------------------------------------------------

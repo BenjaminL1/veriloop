@@ -133,7 +133,7 @@ function lensPrompt(key, ctx) {
   const e = expertByKey(key);
   const base =
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
-    `Review the diff of branch \`${ctx.branch}\` (\`git -C ${ctx.wt} diff ${ctx.baseBranch}...${ctx.branch}\`) for the feature: "${feature}". ` +
+    `Review this change on branch \`${ctx.branch}\` for the feature: "${feature}". The implementation is UNCOMMITTED in the worktree, so read it with \`git -C ${ctx.wt} diff ${ctx.baseBranch}\` (edits to tracked files) AND \`git -C ${ctx.wt} status --porcelain\` (any newly added files) — a plain \`${ctx.baseBranch}...${ctx.branch}\` diff is empty at this stage and is NOT the change. ` +
     `Ground every finding in the real code. Tag each BLOCKER / SHOULD-FIX / NIT. ` +
     `Also check the diff against every invariant in \`$REPO/${CONSTITUTION}\` — a violation is a BLOCKER. Output findings only; change nothing.`;
   const persona =
@@ -181,7 +181,7 @@ async function runXModel(ctx, ph) {
   return agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `CROSS-MODEL second opinion. First check whether the OpenAI Codex CLI is installed (\`command -v codex\`). If NOT installed, return {skipped:true, reason:"codex CLI not installed", findings:[]} — do not fail the gate. ` +
-      `If installed, run it as an INDEPENDENT reviewer of \`git -C ${ctx.wt} diff ${ctx.baseBranch}...${ctx.branch}\` against the invariants in \`$REPO/${CONSTITUTION}\`, and return its blockers/concerns as findings (severity BLOCKER/SHOULD-FIX/NIT).`,
+      `If installed, run it as an INDEPENDENT reviewer of the worktree change (\`git -C ${ctx.wt} diff ${ctx.baseBranch}\` plus \`git -C ${ctx.wt} status --porcelain\` for new files — the change is uncommitted, so a \`${ctx.baseBranch}...${ctx.branch}\` diff is empty) against the invariants in \`$REPO/${CONSTITUTION}\`, and return its blockers/concerns as findings (severity BLOCKER/SHOULD-FIX/NIT).`,
     { label: 'cross-model', phase: ph, schema: XMODEL_SCHEMA },
   );
 }

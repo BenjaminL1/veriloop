@@ -95,14 +95,11 @@ export function renderOverrides(key, title, repoName) {
 // Constitution (starter — phase 4 mining enriches with code-cited invariants)
 // ---------------------------------------------------------------------------
 
-export function renderConstitution({ repoName, stack, commandsJson, roster }) {
+export function renderConstitution({ repoName, stack, roster, gate }) {
   const owners = roster.experts.map((e) => `- **${e.title}** (\`${e.key}\`) — ${e.evidence[0]}`).join('\n');
-  // only the true exit-code gate (typecheck/lint/test) — build is ask-tier, not gated
-  const cmds = ['typecheck', 'lint', 'test']
-    .map((k) => commandsJson.commands[k])
-    .filter(Boolean)
-    .map((c) => `\`${c.cmd}\``)
-    .join(' · ');
+  // the real exit-code gate, straight from the generated config (single source of
+  // truth with the workflow); build/install are ask-tier and not gated
+  const cmds = (gate || []).map((c) => `\`${c.cmd}\``).join(' · ');
   return (
     `# ${repoName} constitution — invariants the dev-loop checks every plan against\n\n` +
     `These are non-negotiables. The \`/dev-loop\` gate checks the **plan** against this list *before*\n` +
@@ -136,9 +133,9 @@ export function renderConstitution({ repoName, stack, commandsJson, roster }) {
 // /dev-loop command
 // ---------------------------------------------------------------------------
 
-export function renderCommand({ repoName, roster, commandsJson }) {
+export function renderCommand({ repoName, roster, commandsJson, gate }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
-  const gate = ['typecheck', 'lint', 'test'].map((k) => commandsJson.commands[k]).filter(Boolean).map((c) => `\`${c.cmd}\``).join(' + ');
+  const gateText = (gate || []).map((c) => `\`${c.cmd}\``).join(' + ');
   const shot = commandsJson.has_ui ? ', a **screenshot gate** on UI changes,' : '';
   return (
     `---\n` +
@@ -152,7 +149,7 @@ export function renderCommand({ repoName, roster, commandsJson }) {
     `   If the plan violates an invariant, it stops and reports instead of coding.\n` +
     `2. **Risk triage** — classifies the change (trivial / standard / high) so gate depth scales with risk.\n` +
     `3. **Implement** in the worktree.\n` +
-    `4. **GO/NO-GO gate** — REAL ${gate || 'checks'} that must actually pass (exit codes decide), plus the\n` +
+    `4. **GO/NO-GO gate** — REAL ${gateText || 'checks'} that must actually pass (exit codes decide), plus the\n` +
     `   review lenses (${lenses})${shot} and an optional cross-model second opinion. Emits **PASS / CONCERNS /\n` +
     `   FAIL / WAIVED**.\n` +
     `5. **Bounded auto-fix** — on FAIL, fixes blockers and re-runs, up to **3 passes**, stopping early if it\n` +

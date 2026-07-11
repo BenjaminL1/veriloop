@@ -16,6 +16,8 @@ import { detectCommands } from './lib/detectors.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', 'fixtures');
 const verifyPath = join(here, 'verify.mjs');
+const generatePath = join(here, 'generate.mjs');
+const lintPath = join(here, 'lint-bundle.mjs');
 
 let pass = 0;
 let fail = 0;
@@ -125,6 +127,44 @@ function assert(cond, desc) {
   assert(!('verify_exit' in r2.commands.test), "verify run2: 'verify_exit' removed from test");
   assert(r2.commands.test.verify_skipped != null, 'verify run2: test.verify_skipped present');
   assert(r2.commands.lint.verified === false, 'verify run2: lint.verified === false (still runs safe)');
+}
+
+// --- generate.mjs gate composition: a non-mutating format check gates; a
+//     mutating formatter never does (regression guard for the M1 warm-up fix) ---
+{
+  const gateOf = (pkgJson) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'veriloop-gate-'));
+    writeFileSync(join(tmp, 'package.json'), JSON.stringify(pkgJson));
+    const cj = detectCommands(tmp);
+    const cjPath = join(tmp, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+    const manifest = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+    return manifest.gate_commands.map((c) => c.name);
+  };
+
+  const checkGate = gateOf({ name: 'g1', scripts: { typecheck: 'tsc --noEmit', lint: 'eslint .', 'format:check': 'prettier --check .', test: 'vitest run' } });
+  assert(checkGate.includes('format'), "generate: non-mutating format:check IS in the gate (name 'format')");
+  assert(checkGate.indexOf('format') < checkGate.indexOf('test'), 'generate: format check ordered before test in the gate');
+
+  const writeGate = gateOf({ name: 'g2', scripts: { lint: 'eslint .', format: 'prettier --write .' } });
+  assert(!writeGate.includes('format'), 'generate: mutating format --write is NOT in the gate');
+}
+
+// --- lint-bundle scopes to veriloop-owned files only: a pre-existing sibling
+//     workflow with an absolute path must NOT trip the linter (M1 regression) ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-lint-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'lintscope', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+  // a pre-existing NON-veriloop sibling workflow carrying an absolute path
+  writeFileSync(join(tmp, '.claude/workflows/other-advise.js'), "const P = '/Users/someone/x/prompt.md'; export const meta = {};\n");
+  const r = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(r.status === 0, 'lint-bundle: passes despite a pre-existing non-emitted sibling workflow with an absolute path');
+  assert(!/other-advise/.test((r.stdout || '') + (r.stderr || '')), 'lint-bundle: never inspects the non-emitted sibling file');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

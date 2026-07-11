@@ -21,7 +21,7 @@ import { detectRoster } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.1.0';
+const VERILOOP_VERSION = '0.1.1';
 
 function parseArgs(argv) {
   const args = { repo: process.cwd(), commands: null, out: null, force: false, interview: null };
@@ -79,9 +79,14 @@ function buildRiskTiers(cj, roster) {
 }
 
 function buildConfig(cj, roster, repoName, interview = {}) {
-  const gateOrder = ['typecheck', 'lint', 'test'];
+  // Gate order: static analysis first (fast, non-mutating), then tests. A
+  // read-only format check (e.g. `prettier --check`) belongs in the gate; a
+  // MUTATING formatter (`prettier --write`, `ruff format`) never does — it would
+  // rewrite files mid-gate. `mutates` is the precise signal (verify also skips on
+  // it), so include `format` only when it does not mutate.
+  const gateOrder = ['typecheck', 'lint', 'format', 'test'];
   const gate = gateOrder
-    .map((k) => cj.commands[k] && { name: k, cmd: cj.commands[k].cmd, verified: cj.commands[k].verified, ci: cj.commands[k].verified_by_ci })
+    .map((k) => cj.commands[k] && !cj.commands[k].mutates && { name: k, cmd: cj.commands[k].cmd, verified: cj.commands[k].verified, ci: cj.commands[k].verified_by_ci })
     .filter(Boolean);
   const experts = roster.experts.map((e) => ({
     key: e.key,
@@ -196,7 +201,7 @@ function main() {
 
   // machine-owned artifacts
   w.machine(P('.claude/workflows', `${repoName}-dev-loop.js`), workflow);
-  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj }));
+  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate }));
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
@@ -205,7 +210,7 @@ function main() {
     w.handOnce(P('.claude/veriloop/experts', `${slug}.overrides.md`), renderOverrides(e.key, e.title, repoName), 'hand');
   }
   // hand-owned constitution (starter; three-way-merged on future re-runs)
-  w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, commandsJson: cj, roster }), 'starter');
+  w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, roster, gate: config.gate }), 'starter');
 
   // manifest (phase 9)
   const manifest = {
