@@ -367,3 +367,29 @@ implementation; the emitted loops route by tier × budget posture (from M3 on).
 
 *Estimated total: ~10–13 working sessions to v1.0. Milestone check-offs and
 "actual vs planned" notes get appended below as work lands.*
+
+---
+
+## Check-offs
+
+### M1 warm-up — DONE (2026-07-11) · main event pending
+
+Warm-up completed in one session ([full report](./m1-dogfood-report.md)). Actual vs
+planned:
+
+- **Better than planned:** the warm-up wasn't just plumbing validation — the review
+  lenses caught a real content-corruption bug (Prettier non-idempotency mangling
+  `random_ai` + italics in `mvp-build-plan.md`) that the green `format:check` exit
+  code missed. Thesis validated on day one.
+- **As planned (iron rule held):** 6 compiler bugs found, all fixed in veriloop with
+  selftest coverage (21→26), never hand-patched in the emitted bundle; bundle
+  regenerated + recommitted into Torevan after each fix.
+- **Exit met:** PASS-gated preview `feat/format-check-green` @ `f264731` pushed by
+  the loop (93 files; verified author/trailer/`.env` hygiene). A mid-run process
+  restart was recovered via journal-cache resume with zero loss.
+- **Deviations:** evidence-bundle v0 (`.claude/veriloop/history/*.json`) NOT yet
+  auto-emitted — the dogfood report + run records serve as v0; auto-emission moved
+  to the M1 main event / M2. Warm-up landed as `style:` on a preview branch rather
+  than auto-merging (owner gate, as designed).
+- **Remaining for M1:** the main event — one standard-tier UI-touching feature
+  driven fresh-context; **feature choice is the owner's**.
