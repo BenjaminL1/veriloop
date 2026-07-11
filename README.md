@@ -1,0 +1,159 @@
+# veriloop
+
+**Compile a tailored, self-verifying dev-loop for any repo.**
+
+Point veriloop at a repository and it generates a bespoke engineering setup for
+*that* repo:
+
+1. **AI reviewer "expert" personas** — a baseline reviewer plus specialists
+   nominated by the repo's actual danger surfaces (security, drift/parity, UX, …).
+2. **A constitution** — the repo's invariants, each one code-cited.
+3. **A per-feature dev-loop workflow** whose gate passes/fails on **REAL command
+   exit codes** (your `typecheck` / `lint` / `test`), never the AI's self-assessment.
+4. **A `/dev-loop` slash command** to drive it.
+
+> **veriloop is a compiler; the dev-loop it emits is the compiled output.** It
+> automates, for any repo, work that was first done once by hand for a Next.js +
+> Supabase game monorepo — then generalized.
+
+## Why it's different
+
+Most "AI review" setups ask a model to *judge* whether code is good. veriloop
+wires the model's gate to the **process exit codes of the repo's own commands**,
+discovered deterministically from `package.json` / `Makefile` / `pyproject.toml`
+**and cross-checked against CI (the ground truth)**. Scripts own the facts
+(paths, commands, numbers, `file:line` citations); the LLM only handles judgment
+(personas, invariants) — and every mined rule must cite real code.
+
+## Install
+
+veriloop ships as one public repo that is *also* its own plugin marketplace:
+
+```bash
+# as a skill
+npx skills add benjaminli/veriloop
+
+# or as a plugin (the repo is its own marketplace)
+/plugin marketplace add benjaminli/veriloop
+/plugin install veriloop@veriloop
+```
+
+Then, in the repo you want to set up:
+
+```
+/veriloop            # runs the pipeline against the current repo
+```
+
+## The pipeline (10 phases)
+
+| # | Phase | Owner | What happens |
+|---|-------|-------|--------------|
+| 0 | Preflight | script | Detect a prior install via the manifest → Quick-Update vs re-interview; back up anything it touches. |
+| 1 | **Detect** | script | Parse scripts / Makefile / pyproject **+ CI `run:` blocks** → `commands.json` with source citations, safety tiers, `verified_by_ci`. |
+| 2 | **Verify** | script | Smoke-run per a safe-list: auto-run typecheck/lint; **ask** before test/build; **never** e2e/deploy; skip mutating formatters. |
+| 3 | Deep scan | LLM | Classify the repo, HALT for confirmation, scan danger surfaces (resumable). |
+| 4 | Mine constitution | LLM | Propose only code-verified invariants; ask 1–2 "why?" per rule. |
+| 5 | Interview | LLM | ≤5 non-derivable questions (tiers, merge policy, lenses, waivers). |
+| 6 | **Generate** | script | Slot-fill the portable template with verified commands + roster + tiers. |
+| 7 | **Wire the gate** | script | The gate literally runs the verified commands; exit codes decide. |
+| 8 | **Validate** | script + LLM | Lint every artifact; then a *fresh-context* agent drives the real loop. |
+| 9 | Report + stamp | script | `veriloop-manifest.json`: version, repo SHA, roster, verification results. |
+| 10 | Maintenance | script | Re-run regenerates only marked sections; three-way-merges the constitution. |
+
+## Emitted bundle (plain files, into the target repo)
+
+```
+.claude/workflows/<repo>-dev-loop.js          the dev-loop workflow (exit-code gate)
+.claude/commands/dev-loop.md                  the /dev-loop slash command
+.claude/veriloop/commands.json                detected + verified command surface
+.claude/veriloop/constitution.md              invariants (hand-owned; merged on re-run)
+.claude/veriloop/experts/<name>.md            reviewer personas (machine-owned)
+.claude/veriloop/experts/<name>.overrides.md  manual tweaks (hand-owned; never clobbered)
+.claude/veriloop/veriloop-manifest.json       version, repo SHA, roster, verification
+```
+
+Emitted artifacts are **portable** — they resolve the repo root at run time via
+`$CLAUDE_PROJECT_DIR` (falling back to `git rev-parse --show-toplevel`); no
+absolute path is ever baked in.
+
+## The emitted loop's shape
+
+plan-vs-constitution review → risk triage (trivial / standard / high) → isolated
+**worktree** implement → tiered **GO/NO-GO gate** (real typecheck/lint/test exit
+codes + review-lens experts + screenshot gate on UI + optional cross-model second
+opinion → **PASS / CONCERNS / FAIL / WAIVED**) → bounded auto-fix (≤3 passes, stop
+on no-progress) → docs sync → push a branch/preview, **STOP before merge**. Waivers
+are human-only — an agent may never waive its own finding. The cross-model second
+opinion is **on by default** and can be disabled via the interview
+(`cross_model: false`).
+
+### Repo-specific gate checks (`extra_checks`)
+
+Some real gate checks aren't portable commands (e.g. Torevan's Supabase security
+advisor, which must run on any DB-touching change). The interview's `extra_checks`
+restore them: each entry becomes an instruction the gate's **checks agent** runs
+(scoped to the change's touched areas when `areaKeywords` is given), reported as a
+pass/fail check alongside the exit-code checks. Without an `extra_checks` entry, the
+generated loop does **not** reproduce such repo-specific checks that a hand-built
+loop had — they must be declared through the interview.
+
+## Locked design decisions
+
+1. **Your edits win.** Re-runs regenerate only clearly-marked machine sections;
+   hand-tuned personas / constitution are preserved, and drift is flagged.
+2. **Bespoke + override.** Each expert is `<name>.md` (regenerable) **+**
+   `<name>.overrides.md` (yours, never overwritten).
+3. **Plain files only.** No plugin/hook magic in the emitted bundle — portable and
+   inspectable.
+4. **Auto-run safe-list.** Verify auto-runs typecheck + lint; asks before test /
+   build; never auto-runs e2e / deploy / integration (real side effects). Verify
+   runs commands with `CI=1` (deterministic, non-watch), which can make a
+   warnings-as-errors toolchain verify **red** even when it is locally green — the
+   stored failure tail shows the real output.
+
+## Proven on two very different stacks
+
+The deterministic spine is validated against two real repos; detection reproduces
+the command surface an expert would map by hand, and every emitted bundle lints
+clean (valid workflow syntax, portable paths, real gate):
+
+| Repo | Stack | Detected gate | Roster |
+|------|-------|---------------|--------|
+| Torevan | TS + Next.js + Supabase monorepo (npm workspaces) | `npm run typecheck / lint / test` (+ `test:e2e -w @torevan/web`) | baseline, security, drift, ux |
+| catan_rl_v2 | Python RL + Rust ext (maturin, Makefile-driven) | `make typecheck / lint / test-unit` (+ integration) | baseline, drift |
+
+Note the compiler correctly reads CI as ground truth (catan's `make test-unit` is
+what CI runs, not `make test`), promotes workspace-only signals (Torevan's
+`has_ui` + `e2e` live in `apps/web`, not root), and cuts a jobless expert (catan
+has no real security surface).
+
+## Repo layout
+
+```
+.claude-plugin/plugin.json          plugin manifest
+.claude-plugin/marketplace.json     the repo is its own marketplace
+skills/veriloop/SKILL.md            the pipeline runbook (LLM orchestration)
+scripts/detect.mjs                  phase 1 — command-surface detection
+scripts/verify.mjs                  phase 2 — safe-list smoke-run
+scripts/generate.mjs                phases 6/7 — generate + wire the gate
+scripts/lint-bundle.mjs             phase 8 — artifact lint
+scripts/selftest.mjs                deterministic self-test (asserts detect/verify/generate on fixtures)
+scripts/templates/dev-loop.template.js   the portable workflow machinery
+scripts/lib/                        detectors, parsers (toml/makefile/ci), roster, renderers
+fixtures/                           fixture repos exercised by the self-test
+```
+
+Publishing is just `git push`. Requires Node ≥ 18.
+
+## Status
+
+**v0.1.1 — deterministic spine complete and self-tested** (detect → verify →
+generate → wire gate → lint, with a deterministic `scripts/selftest.mjs` over
+fixtures). Interview answers persist in the manifest and shape the emitted loop
+(cross-model on/off, extra high-risk areas, and repo-specific `extra_checks`). The
+LLM-judgment layers (deep scan, constitution mining, interview, fresh-context
+validation) are driven by `skills/veriloop/SKILL.md`.
+
+## License
+
+MIT

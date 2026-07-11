@@ -1,0 +1,20 @@
+{
+  "name": "veriloop",
+  "version": "0.1.1",
+  "description": "Compile a tailored, self-verifying dev-loop for any repo: bespoke AI reviewer personas, a constitution of the repo's invariants, and a per-feature workflow whose gate passes/fails on REAL command exit codes — not the AI's self-assessment.",
+  "author": {
+    "name": "Benjamin Li",
+    "email": "bbl35@cornell.edu"
+  },
+  "homepage": "https://github.com/benjaminli/veriloop",
+  "repository": "https://github.com/benjaminli/veriloop",
+  "license": "MIT",
+  "keywords": [
+    "dev-loop",
+    "code-review",
+    "ci",
+    "verification",
+    "exit-code-gate",
+    "workflow"
+  ]
+}

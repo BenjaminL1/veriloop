@@ -1,0 +1,5 @@
+{
+  "name": "@fix/app",
+  "scripts": { "test": "vitest run", "lint": "eslint ." },
+  "devDependencies": { "react": "18.0.0", "vitest": "1.0.0" }
+}
