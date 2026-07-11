@@ -31,10 +31,10 @@ veriloop ships as one public repo that is *also* its own plugin marketplace:
 
 ```bash
 # as a skill
-npx skills add benjaminli/veriloop
+npx skills add BenjaminL1/veriloop
 
 # or as a plugin (the repo is its own marketplace)
-/plugin marketplace add benjaminli/veriloop
+/plugin marketplace add BenjaminL1/veriloop
 /plugin install veriloop@veriloop
 ```
 
