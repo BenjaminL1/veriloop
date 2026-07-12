@@ -111,6 +111,30 @@ const LAND_SCHEMA = {
   required: ['branch', 'commitSha', 'pushed', 'previewUrlOrNote', 'notes'],
   properties: { branch: { type: 'string' }, commitSha: { type: 'string' }, pushed: { type: 'boolean' }, previewUrlOrNote: { type: 'string' }, notes: { type: 'string' } },
 };
+// Re-runs a FAILED gate check against the base tree, so a check that was already
+// RED before the change is not blamed on the change. `newFailures` is the guard:
+// failure units present in the worktree run but NOT on base = a real regression
+// added on top of a red baseline.
+const BASE_PROBE_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['probes', 'cleanedUp'],
+  properties: {
+    probes: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'baseResult', 'newFailures', 'evidence'],
+        properties: {
+          name: { type: 'string' },
+          baseResult: { type: 'string', enum: ['pass', 'fail', 'error'] },
+          newFailures: { type: 'array', items: { type: 'string' } },
+          evidence: { type: 'string' },
+        },
+      },
+    },
+    cleanedUp: { type: 'boolean' },
+  },
+};
 
 // ---------------- helpers ----------------
 const wt = (p) =>
@@ -166,6 +190,30 @@ async function runChecks(ctx, ph) {
   );
 }
 
+// Runs ONLY on the failure path: re-run the failed gate checks on a throwaway
+// worktree detached at the base branch, to tell "this change broke it" from
+// "it was already broken". A second worktree — never `git stash` in the feature
+// worktree (a failed pop strands the change), never the owner's checkout.
+async function runBaselineProbe(ctx, failed, failingOutput, ph) {
+  const list = failed.map((c) => `- check "${c.name}": \`${c.command}\``).join('\n');
+  const out = (failingOutput || '(none captured)').split('\n').slice(0, 60).map((l) => '    ' + l).join('\n');
+  return agent(
+    `${RESOLVE}\n` +
+      `BASELINE PROBE. These gate checks FAILED on branch \`${ctx.branch}\`. Determine, for each, whether it ALSO fails on the untouched base branch \`${ctx.baseBranch}\` — i.e. whether the failure is pre-existing or was introduced by this change.\n\n${list}\n\n` +
+      `Failure output captured from the FEATURE worktree run (excerpt):\n${out}\n` +
+      `If that excerpt is not enough to enumerate the failure units, re-run the failed command in the feature worktree at \`${ctx.wt}\` to capture them (read-only; change nothing there).\n\n` +
+      `Method:\n` +
+      `1. Create a throwaway worktree detached at the base: \`git -C $REPO worktree add "$(dirname "${ctx.wt}")/.baseline-probe-${ctx.branch.replace(/[^A-Za-z0-9]+/g, '-')}" --detach ${ctx.baseBranch}\`. NEVER touch the owner's main checkout and NEVER stash or modify the feature worktree at \`${ctx.wt}\`.\n` +
+      `2. Make dependencies available there the same way: ${VERILOOP.depsSetup}\n` +
+      `3. Run ONLY the failed commands above in that probe worktree. Judge each strictly by its process EXIT CODE (0=pass, nonzero=fail) — never by reading the output.\n` +
+      `4. For each check, compare FAILURE UNITS between the feature worktree's output (excerpts above) and the base run: the file paths a format check lists, the \`file:line\` locations a lint/typecheck reports, the failing test names a test run reports. \`newFailures\` = units failing in the FEATURE worktree that do NOT fail on base. Set baseResult='pass' if the check passes on base (so the change caused it), 'fail' if it fails on base too, 'error' if the command could not be run there at all.\n` +
+      `5. FAIL SAFE: if you cannot confidently compare the two outputs unit-by-unit, say so in \`evidence\` and list the feature worktree's failure units in \`newFailures\` (treat them as new). Never guess a check clean.\n` +
+      `6. ALWAYS remove the probe worktree when done, even if a command errored: \`git -C $REPO worktree remove --force <probe-dir>\`. Report cleanedUp=true only if it is actually gone.\n` +
+      `Report findings only; fix NOTHING, and leave no branch or worktree behind.`,
+    { label: 'baseline-probe', phase: ph, schema: BASE_PROBE_SCHEMA },
+  );
+}
+
 async function runScreenshot(ctx, ph) {
   const e2e = VERILOOP.e2e ? `You may drive \`${VERILOOP.e2e.cmd}\` (on its own server/port) or the project's browser MCP.` : `Use the project's browser automation / Playwright MCP if present.`;
   return agent(
@@ -186,20 +234,38 @@ async function runXModel(ctx, ph) {
   );
 }
 
-function applyWaivers(blockers) {
-  if (!waivers.length) return { blockers, waived: [] };
+// <<< veriloop:verdict:start >>>
+// Pure verdict logic (no closure over module state) — the selftest extracts this
+// region and executes it directly against a table of cases.
+function applyWaivers(blockers, waivers) {
+  const ws = waivers || [];
+  if (!ws.length) return { blockers, waived: [] };
   const kept = [], waived = [];
   for (const b of blockers) {
-    if (waivers.some((w) => b.toLowerCase().includes(w.toLowerCase()))) waived.push(b);
+    if (ws.some((w) => b.toLowerCase().includes(w.toLowerCase()))) waived.push(b);
     else kept.push(b);
   }
   return { blockers: kept, waived };
 }
 
-function verdictFrom(checks, lenses, shot, xmodel) {
+function verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers) {
   let blockers = [], concerns = [];
   if (checks) {
-    for (const c of (checks.checks || [])) if (c.result === 'fail') blockers.push(`check: ${c.name} failed (\`${c.command}\`)`);
+    // A failed check is a BLOCKER unless the baseline probe proves it was ALREADY
+    // failing on the base tree with no new failures added by this change. The
+    // probe is the only authority for that downgrade: no probe, an errored probe,
+    // or a probe that failed to clean up ⇒ blocker (fail safe — a red check is
+    // never silently forgiven).
+    const probeOk = !!(baseProbe && baseProbe.cleanedUp);
+    for (const c of (checks.checks || [])) {
+      if (c.result !== 'fail') continue;
+      const label = `check: ${c.name} failed (\`${c.command}\`)`;
+      const p = probeOk ? (baseProbe.probes || []).find((x) => x.name === c.name) : null;
+      if (!p || p.baseResult !== 'fail') { blockers.push(label); continue; }
+      const added = p.newFailures || [];
+      if (added.length) blockers.push(`check: ${c.name} was already RED on the base tree, but this change ADDS new failures: ${added.join(', ')} (\`${c.command}\`)`);
+      else concerns.push(`[pre-existing] check: ${c.name} was already RED on the base tree — not caused by this change (\`${c.command}\`)`);
+    }
   }
   for (const l of (lenses || [])) for (const f of (l.findings || [])) {
     const tag = `[${l.lens}] ${f.issue}`;
@@ -211,7 +277,7 @@ function verdictFrom(checks, lenses, shot, xmodel) {
     const tag = `[cross-model] ${f.issue}`;
     if (f.severity === 'BLOCKER') blockers.push(tag); else concerns.push(tag);
   }
-  const w = applyWaivers(blockers);
+  const w = applyWaivers(blockers, waivers);
   blockers = w.blockers;
   let verdict;
   if (blockers.length) verdict = 'FAIL';
@@ -220,6 +286,7 @@ function verdictFrom(checks, lenses, shot, xmodel) {
   else verdict = 'PASS';
   return { verdict, blockers, concerns, waived: w.waived };
 }
+// <<< veriloop:verdict:end >>>
 
 function matchAny(areas, keywords) {
   return (areas || []).some((t) => keywords.some((k) => new RegExp(k, 'i').test(t)));
@@ -239,8 +306,21 @@ async function gate(ctx, ph) {
   const lenses = jobs.filter((j) => j.key.startsWith('lens:')).map((j) => res[j.key]).filter(Boolean);
   const shot = res.shot || null;
   const xmodel = res.xmodel || null;
-  const v = verdictFrom(checks, lenses, shot, xmodel);
-  return { verdict: v.verdict, blockers: v.blockers, concerns: v.concerns, waived: v.waived, checks, lenses, screenshot: shot, xmodel };
+
+  // Failure path only: a failed gate check is re-run against the base tree to
+  // separate "this change broke it" from "it was already broken". Costs nothing
+  // on the happy path, and runs AFTER the parallel jobs (never alongside the
+  // lenses, which read the live worktree). extraChecks are interview-defined
+  // instructions, not re-runnable commands — their failures stay blockers.
+  const failedGate = ((checks && checks.checks) || []).filter(
+    (c) => c.result === 'fail' && VERILOOP.gate.some((gc) => gc.name === c.name),
+  );
+  const baseProbe = failedGate.length
+    ? await runBaselineProbe(ctx, failedGate, checks.failingOutput, ph)
+    : null;
+
+  const v = verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers);
+  return { verdict: v.verdict, blockers: v.blockers, concerns: v.concerns, waived: v.waived, checks, lenses, screenshot: shot, xmodel, baseProbe };
 }
 
 const digest = (g) => ({ verdict: g.verdict, blockers: g.blockers.length, concerns: g.concerns.length, waived: g.waived.length });
@@ -286,7 +366,8 @@ while (g.verdict === 'FAIL' && fixPass < MAX_FIX) {
   const prev = g.blockers.length;
   await agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
-      `Fix pass ${fixPass}/${MAX_FIX} on branch \`${ctx.branch}\`. Resolve every BLOCKER (and cheap SHOULD-FIX). Make surgical, constitution-compliant changes; do not re-run the gate (the loop does).\n\nBLOCKERS:\n${g.blockers.map((b) => '- ' + b).join('\n')}\n\nCONCERNS (fix if cheap):\n${g.concerns.map((c) => '- ' + c).join('\n')}\n\nFAILING CHECK OUTPUT:\n${g.checks ? g.checks.failingOutput : ''}`,
+      `Fix pass ${fixPass}/${MAX_FIX} on branch \`${ctx.branch}\`. Resolve every BLOCKER (and cheap SHOULD-FIX). Make surgical, constitution-compliant changes; do not re-run the gate (the loop does).\n` +
+      `A concern tagged \`[pre-existing]\` is a baseline issue that was ALREADY failing on \`${ctx.baseBranch}\` before this change — it is OUT OF SCOPE for this branch. Do NOT attempt to fix it and do not touch files outside this feature's scope to make it go green; the owner fixes the baseline separately.\n\nBLOCKERS:\n${g.blockers.map((b) => '- ' + b).join('\n')}\n\nCONCERNS (fix if cheap):\n${g.concerns.map((c) => '- ' + c).join('\n')}\n\nFAILING CHECK OUTPUT:\n${g.checks ? g.checks.failingOutput : ''}`,
     { label: `fix:pass${fixPass}`, phase: 'Fix' },
   );
   g = await gate(ctx, 'Fix');
