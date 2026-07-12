@@ -7,7 +7,7 @@
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -165,6 +165,106 @@ function assert(cond, desc) {
   const r = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(r.status === 0, 'lint-bundle: passes despite a pre-existing non-emitted sibling workflow with an absolute path');
   assert(!/other-advise/.test((r.stdout || '') + (r.stderr || '')), 'lint-bundle: never inspects the non-emitted sibling file');
+}
+
+// --- #9: machine-owned files are exempted from the target repo's format check,
+//     and the backups dir is gitignored — via ONE idempotent marked block in each
+//     owner-owned ignore file (installing veriloop must not break the host gate) ---
+{
+  const gen = (dir, pkgJson) => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(pkgJson));
+    const cj = detectCommands(dir);
+    const cjPath = join(dir, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    spawnSync(process.execPath, [generatePath, '--repo', dir, '--commands', cjPath, '--out', dir], { encoding: 'utf8' });
+  };
+  const START = '# <<< veriloop:auto:start >>>';
+  // NOTE: the detected command is the WRAPPER (`npm run format:check`) — its text
+  // never says "prettier". Prettier must be detected from the script body/deps, so
+  // this fixture deliberately starts with NO .prettierignore to seed the answer.
+  const prettierPkg = { name: 'p1', scripts: { lint: 'eslint .', 'format:check': 'prettier --check .', test: 'vitest run' } };
+
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-ignore-'));
+  gen(tmp, prettierPkg);
+  const pi1 = readFileSync(join(tmp, '.prettierignore'), 'utf8');
+  const gi1 = readFileSync(join(tmp, '.gitignore'), 'utf8');
+  assert(pi1.includes(START) && pi1.includes('.claude/veriloop/'), 'generate: prettier repo (wrapper script, no pre-existing .prettierignore) gets the exemption block');
+  assert(gi1.includes('.claude/veriloop/.backups/'), 'generate: .gitignore block ignores the .backups/ dir');
+
+  // a repo whose only prettier evidence is a devDependency still counts
+  const depOnly = mkdtempSync(join(tmpdir(), 'veriloop-prettierdep-'));
+  gen(depOnly, { name: 'p3', scripts: { test: 'vitest run' }, devDependencies: { prettier: '^3.0.0' } });
+  assert(existsSync(join(depOnly, '.prettierignore')), 'generate: prettier as a devDependency alone is enough to emit the exemption');
+
+  writeFileSync(join(tmp, '.prettierignore'), 'dist/\n' + readFileSync(join(tmp, '.prettierignore'), 'utf8')); // owner edits above the block
+  gen(tmp, prettierPkg); // second run — the block must be replaced, not appended
+  const pi2 = readFileSync(join(tmp, '.prettierignore'), 'utf8');
+  assert(pi2.split(START).length === 2, 'generate: re-run leaves exactly ONE veriloop block in .prettierignore (idempotent)');
+  assert(pi2.includes('dist/'), "re-run: the owner's own line ('dist/') outside the block is preserved");
+
+  const noPrettier = mkdtempSync(join(tmpdir(), 'veriloop-noprettier-'));
+  gen(noPrettier, { name: 'p2', scripts: { lint: 'eslint .', test: 'vitest run' } });
+  assert(!existsSync(join(noPrettier, '.prettierignore')), 'generate: a repo that does not use prettier gets NO .prettierignore');
+}
+
+// --- #8: a check that was already RED on the base tree is a CONCERN, not a
+//     blocker — but a NEW failure on top of a red baseline still blocks. The
+//     emitted verdict logic is extracted from the real workflow and EXECUTED. ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-verdict-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'vd', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+  // the workflow is named after the repo DIRECTORY (kebab), not package.json
+  const repoName = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).repo_name;
+  const wf = readFileSync(join(tmp, `.claude/workflows/${repoName}-dev-loop.js`), 'utf8');
+
+  const S = '// <<< veriloop:verdict:start >>>';
+  const E = '// <<< veriloop:verdict:end >>>';
+  const src = wf.slice(wf.indexOf(S) + S.length, wf.indexOf(E));
+  assert(wf.includes(S) && wf.includes(E), 'template: emitted workflow carries the veriloop:verdict markers');
+  const verdictFrom = new Function(`${src}; return verdictFrom;`)();
+
+  const failed = { checks: [{ name: 'test', command: 'npx vitest run', result: 'fail' }], failingOutput: 'x' };
+  const passing = { checks: [{ name: 'test', command: 'npx vitest run', result: 'pass' }], failingOutput: '' };
+  const probe = (baseResult, newFailures, cleanedUp = true) => ({ cleanedUp, probes: [{ name: 'test', baseResult, newFailures, evidence: 'e' }] });
+
+  const green = verdictFrom(passing, [], null, null, null, []);
+  assert(green.verdict === 'PASS', 'verdict: all checks pass + no findings → PASS');
+
+  const broke = verdictFrom(failed, [], null, null, probe('pass', []), []);
+  assert(broke.verdict === 'FAIL', 'verdict: check fails but PASSES on base → FAIL (the change broke it)');
+
+  const preExisting = verdictFrom(failed, [], null, null, probe('fail', []), []);
+  assert(preExisting.verdict === 'CONCERNS', 'verdict: check already RED on base, no new failures → CONCERNS, not FAIL');
+  assert(
+    preExisting.concerns.some((c) => c.includes('[pre-existing]')) && preExisting.blockers.length === 0,
+    "verdict: the pre-existing failure is tagged '[pre-existing]' and blocks nothing",
+  );
+
+  const regressed = verdictFrom(failed, [], null, null, probe('fail', ['apps/web/x.ts']), []);
+  assert(regressed.verdict === 'FAIL', 'verdict: red baseline + NEW failure units → FAIL (regression not masked)');
+  assert(
+    regressed.blockers.some((b) => b.includes('apps/web/x.ts')),
+    'verdict: the blocker names the new failure unit added on top of the red baseline',
+  );
+
+  const noProbe = verdictFrom(failed, [], null, null, null, []);
+  assert(noProbe.verdict === 'FAIL', 'verdict: failed check with NO baseline probe → FAIL (fail safe)');
+
+  const dirty = verdictFrom(failed, [], null, null, probe('fail', [], false), []);
+  assert(dirty.verdict === 'FAIL', 'verdict: probe that did not clean up its worktree is not trusted → FAIL (fail safe)');
+
+  assert(
+    /\[pre-existing\][^\n]*OUT OF SCOPE/i.test(wf.replace(/\\n/g, '\n')),
+    'template: the fix agent is told [pre-existing] concerns are OUT OF SCOPE',
+  );
+  assert(
+    /baseline-probe/.test(wf) && /worktree add[^\n]*--detach/.test(wf),
+    'template: the baseline probe uses a detached throwaway worktree (never stash / owner checkout)',
+  );
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

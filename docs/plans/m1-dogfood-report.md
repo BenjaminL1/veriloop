@@ -67,9 +67,8 @@ emitted bundle). All fixed with selftest coverage (**21 → 26 assertions, all g
 
 ## Open findings / observations (recorded, not yet fixed)
 
-- **Auto-gitignore `.backups/`** — the generator writes `.claude/veriloop/.backups/`
-  but doesn't gitignore it; added to Torevan's `.gitignore` by hand during install.
-  veriloop should manage this entry itself.
+- ~~**Auto-gitignore `.backups/`**~~ — **FIXED** (v0.1.2, with #9 below): the
+  generator now maintains a marked block in the repo's `.gitignore`.
 - **Repo-identity guard** — the emitted loop resolves its target via
   `${CLAUDE_PROJECT_DIR:-git rev-parse}`. With an empty `CLAUDE_PROJECT_DIR` and a cwd
   inside a *different* repo, it would silently operate on the wrong repo. Mitigated
@@ -113,9 +112,49 @@ gated by the pre-#5 loop) was superseded and deleted from the remote.
 | `wy1n9r3ka` (real, pre-#5 loop) | CONCERNS | clean content pushed (`0bf3a96`, later superseded); sole concern was the #5 empty-diff false alarm |
 | `wf_8e30603f-d35` (real, fixed loop) | **PASS** | 0 blockers · 0 concerns · 0 fix passes — the #5 fix validated (no empty-diff false alarm); pushed `feat/format-check-green` @ `f264731`. Interrupted once by a Claude Code process restart mid-gate and **resumed from the journal cache with zero loss** (plan+implement replayed cached) — incidental validation of the loop's recoverability. |
 
-## Next: the main event
+## The main event — feature #76 (queue-timeout UI)
 
-The roadmap's M1 main event — one **standard-tier, UI-touching feature** driven by a
-fresh-context agent (exercises the review lenses + screenshot gate + land policy on a
-real feature, and validates the #5 fix on a real feature diff). Feature choice is an
-owner decision.
+Owner-chosen feature: a lobby "no opponents right now / Try again" state after a
+search threshold. Run `wpbcukkxf`, verdict **FAIL**, and a rich dogfood result:
+
+- **Tier triage correct** — came out `standard` (client-only scope), so the
+  standard-tier lens panel ran, as intended.
+- **Screenshot gate PASSED on a hard-to-stage state.** It drove the app all the way
+  into the *timed-out searching* state (only reachable by waiting in queue) and
+  captured 1440x900 / 1280x620 / 760x470 with `defects: []`. This was the open
+  question from the warm-up: the visual gate can stage non-default UI states.
+- **The lenses caught 2 real bugs in the loop's OWN feature code**, three lenses
+  converging on one root cause: "Try again" called `findMatch()` directly instead
+  of the `enterQueue` wrapper, so it (a) skipped the `ranked_queue_enter` funnel
+  event, and (b) re-queued from a duplicated local `queuedMode` that can hold a
+  stale default — silently moving a ranked player into the casual queue.
+- **Correctly did not land** (FAIL blocks the push).
+
+The FAIL itself was a **false blocker** — and that is what surfaced #8/#9 below.
+`format:check` failed only on **pre-existing** files (the warm-up's prettier fix was
+pushed as a *preview*, never merged into `veriloop/install`, so that base is still
+RED); the feature's own 3 files were clean.
+
+## Compiler bugs from the main event — fixed (v0.1.2)
+
+| # | Bug | Fix | File |
+|---|---|---|---|
+| 8 | `verdictFrom()` treated EVERY failed check as a BLOCKER, so a repo with any pre-existing red check could never PASS — no matter how clean the change (a false FAIL, the verdict-trust killer) | On the failure path only, a **baseline probe** re-runs the failed checks on a throwaway worktree detached at the base branch and compares failure *units*. Base passes ⇒ BLOCKER (the change broke it). Base fails with **new** units added ⇒ BLOCKER naming them (a regression on a red baseline is never masked). Base fails identically ⇒ `[pre-existing]` CONCERN, and the fix agent is explicitly barred from touching it. No probe / errored / failed cleanup ⇒ BLOCKER (fail-safe) | `dev-loop.template.js` |
+| 9 | veriloop's own emitted files aren't prettier-clean, so installing the bundle turned the **host repo's** `format:check` RED — a dev tool must never break its host's gate | Machine-owned files are **exempted, not formatted**: formatting them is unstable (regeneration rewrites them and the check flaps back to red). The generator maintains one marked block in `.prettierignore` (and `.backups/` in `.gitignore`); owner lines outside the block are never touched. Verified against a real prettier binary: **6 veriloop files flagged before, 0 after** | `generate.mjs` |
+
+Prettier detection is deliberately not command-based: the detected command is the
+*wrapper* (`npm run format:check`), whose text never contains "prettier". It reads
+the real signals (config file, dependency, script body, or a direct `npx prettier`
+invocation).
+
+Selftest grew **26 → 43 assertions**: the #8 additions **extract the emitted
+`verdictFrom` from the real workflow and execute it** against a 6-case table
+(regression / pre-existing / new-failure-on-red-baseline / no-probe / dirty-probe /
+all-green), rather than string-matching the template.
+
+## Next
+
+Green the dogfood base (the warm-up's prettier preview is still unmerged into
+`veriloop/install`), regenerate Torevan's bundle on v0.1.2, and re-drive #76 to a
+clean land — the loop's own 2 feature bugs are real and should be fixed by the loop,
+not by hand.

@@ -147,12 +147,24 @@ Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
 
-**v0.1.1 — deterministic spine complete and self-tested** (detect → verify →
+**v0.1.2 — deterministic spine complete and self-tested** (detect → verify →
 generate → wire gate → lint, with a deterministic `scripts/selftest.mjs` over
 fixtures). Interview answers persist in the manifest and shape the emitted loop
 (cross-model on/off, extra high-risk areas, and repo-specific `extra_checks`). The
 LLM-judgment layers (deep scan, constitution mining, interview, fresh-context
 validation) are driven by `skills/veriloop/SKILL.md`.
+
+Dogfooded on a real repo (see `docs/plans/m1-dogfood-report.md`), which added two
+guarantees worth stating up front:
+
+- **Installing veriloop never breaks the host repo's own gate.** Machine-owned
+  files are exempted from the repo's format check via a marked block veriloop
+  maintains in `.prettierignore` (and `.backups/` in `.gitignore`). Your own lines
+  in those files are never touched.
+- **A check that was already RED before your change does not block it.** When a
+  gate check fails, the loop re-runs it against the base tree in a throwaway
+  worktree: pre-existing failures become a `[pre-existing]` concern, while any
+  *new* failure added on top of a red baseline still blocks.
 
 ## License
 
