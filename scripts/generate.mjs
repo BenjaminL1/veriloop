@@ -21,7 +21,13 @@ import { detectRoster } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.1.1';
+const VERILOOP_VERSION = '0.1.2';
+
+// Markers for the one machine-owned block veriloop maintains inside an
+// owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
+// in both formats. Everything outside the block is never touched.
+const BLOCK_START = '# <<< veriloop:auto:start >>>';
+const BLOCK_END = '# <<< veriloop:auto:end >>>';
 
 function parseArgs(argv) {
   const args = { repo: process.cwd(), commands: null, out: null, force: false, interview: null };
@@ -69,6 +75,30 @@ function buildDepsSetup(cj) {
     return s;
   }
   return install ? `run \`${install}\` inside the worktree so its dependencies resolve.` : 'make the repo\'s dependencies available inside the worktree.';
+}
+
+/**
+ * Does this repo run prettier over its tree? A detected command is NOT enough
+ * evidence — `format:check` resolves to the wrapper `npm run format:check`, whose
+ * text never contains "prettier". So look at the real signals: a prettier config
+ * (any flavor), a prettier dependency, a script body that invokes it, or a
+ * command that calls it directly (`npx prettier --check .`).
+ */
+function repoUsesPrettier(repo, cj) {
+  const CONFIGS = [
+    '.prettierrc', '.prettierrc.json', '.prettierrc.json5', '.prettierrc.yaml', '.prettierrc.yml',
+    '.prettierrc.js', '.prettierrc.cjs', '.prettierrc.mjs', '.prettierrc.toml',
+    'prettier.config.js', 'prettier.config.cjs', 'prettier.config.mjs', '.prettierignore',
+  ];
+  if (CONFIGS.some((f) => existsSync(join(repo, f)))) return true;
+  try {
+    const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+    if (pkg.prettier) return true;
+    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+    if (Object.keys(deps).some((d) => d === 'prettier' || d.startsWith('prettier-') || d.includes('/prettier'))) return true;
+    if (Object.values(pkg.scripts || {}).some((s) => /\bprettier\b/.test(String(s)))) return true;
+  } catch { /* no/unreadable package.json */ }
+  return Object.values(cj.commands || {}).some((c) => /\bprettier\b/.test((c && c.cmd) || ''));
 }
 
 function buildRiskTiers(cj, roster) {
@@ -157,6 +187,36 @@ function makeWriter(outRoot, force) {
       writeFileSync(path, content);
       emitted.push({ path: rel(path), ownership: 'machine', status: existsSync(path) && !changed ? 'unchanged' : 'written' });
     },
+    // shared: an OWNER-owned file (.gitignore/.prettierignore) carrying ONE
+    // machine-owned marked block. The block is created/replaced idempotently;
+    // every line outside it is preserved byte-for-byte. A user line that happens
+    // to duplicate a block line is harmless for ignore-file semantics — never
+    // rewrite the owner's lines.
+    spliceBlock(path, lines, { createIfMissing = false } = {}) {
+      const exists = existsSync(path);
+      if (!exists && !createIfMissing) return;
+      const block = [BLOCK_START, ...lines, BLOCK_END].join('\n');
+      const prior = exists ? readFileSync(path, 'utf8') : null;
+      let next;
+      if (prior === null) {
+        next = block + '\n';
+      } else {
+        const s = prior.indexOf(BLOCK_START);
+        const e = prior.indexOf(BLOCK_END);
+        if (s !== -1 && e !== -1 && e > s) {
+          next = prior.slice(0, s) + block + prior.slice(e + BLOCK_END.length);
+        } else {
+          next = prior.replace(/\n*$/, '\n') + '\n' + block + '\n';
+        }
+      }
+      const changed = next !== prior;
+      if (changed && exists) backup(path);
+      if (changed) {
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, next);
+      }
+      emitted.push({ path: rel(path), ownership: 'shared-block', status: changed ? 'written' : 'unchanged' });
+    },
     // hand-owned: written once; preserved on re-run unless --force
     handOnce(path, content, kind = 'hand') {
       mkdirSync(dirname(path), { recursive: true });
@@ -211,6 +271,22 @@ function main() {
   }
   // hand-owned constitution (starter; three-way-merged on future re-runs)
   w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, roster, gate: config.gate }), 'starter');
+
+  // shared owner files: veriloop keeps one marked block in each.
+  // .gitignore — the rolling backups of clobbered machine files are local state.
+  w.spliceBlock(P('.gitignore'), ['.claude/veriloop/.backups/'], { createIfMissing: true });
+  // .prettierignore — machine-owned files are EXEMPT from the repo's style, not
+  // formatted to it: the generator rewrites them on every re-run, so any
+  // repo-style pass over them is undone and the repo's format check flaps back
+  // to RED. Exemption is the only stable answer (installing veriloop must never
+  // break the host repo's own gate).
+  if (repoUsesPrettier(args.repo, cj)) {
+    w.spliceBlock(
+      P('.prettierignore'),
+      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md'],
+      { createIfMissing: true },
+    );
+  }
 
   // manifest (phase 9)
   const manifest = {
