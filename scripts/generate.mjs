@@ -21,7 +21,7 @@ import { detectRoster } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.1.2';
+const VERILOOP_VERSION = '0.2.0';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -101,6 +101,67 @@ function repoUsesPrettier(repo, cj) {
   return Object.values(cj.commands || {}).some((c) => /\bprettier\b/.test((c && c.cmd) || ''));
 }
 
+// ---- cost/quality routing (phase-group → model + reasoning effort) ----
+// Phase groups, not individual agents: a knob per agent would be unusable.
+const PHASE_GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land'];
+const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// Presets are only DEFAULTS for the per-group map — the map is the primitive, so
+// any group can be pointed at any model (e.g. plan on fable, implement on opus).
+// `checks` is deliberately cheap at every posture: that agent runs the real
+// commands and reports exit codes — a mechanical job, not a judgment call, so
+// spending a frontier model on it buys nothing. The posture NEVER removes a job.
+const BUDGET_PRESETS = {
+  frugal: {
+    plan: { model: 'sonnet', effort: 'high' },
+    implement: { model: 'sonnet', effort: 'medium' },
+    review: { model: 'sonnet', effort: 'medium' },
+    checks: { model: 'haiku', effort: 'low' },
+    fix: { model: 'sonnet', effort: 'medium' },
+    land: { model: 'haiku', effort: 'low' },
+  },
+  balanced: {
+    plan: { model: 'opus', effort: 'high' },
+    implement: { model: 'opus', effort: 'medium' },
+    review: { model: 'opus', effort: 'high' },
+    checks: { model: 'haiku', effort: 'low' },
+    fix: { model: 'opus', effort: 'medium' },
+    land: { model: 'sonnet', effort: 'low' },
+  },
+  max: {
+    plan: { model: 'opus', effort: 'xhigh' },
+    implement: { model: 'opus', effort: 'high' },
+    review: { model: 'opus', effort: 'xhigh' },
+    checks: { model: 'sonnet', effort: 'low' },
+    fix: { model: 'opus', effort: 'high' },
+    land: { model: 'sonnet', effort: 'medium' },
+  },
+};
+
+/** Fail the BUILD on a bad routing answer — never emit a loop that dies mid-run. */
+function buildBudget(interview) {
+  const posture = interview.budget_posture || 'balanced';
+  if (!BUDGET_PRESETS[posture]) {
+    throw new Error(`interview.budget_posture: '${posture}' is not one of ${Object.keys(BUDGET_PRESETS).join(' | ')}`);
+  }
+  const pick = (key, allowed) => {
+    const src = interview[key] || {};
+    const out = {};
+    for (const [group, val] of Object.entries(src)) {
+      if (!PHASE_GROUPS.includes(group)) throw new Error(`interview.${key}: '${group}' is not a phase group (${PHASE_GROUPS.join(' | ')})`);
+      if (!allowed.includes(val)) throw new Error(`interview.${key}.${group}: '${val}' is not one of ${allowed.join(' | ')}`);
+      out[group] = val;
+    }
+    return out;
+  };
+  return {
+    posture,
+    presets: BUDGET_PRESETS,
+    models: pick('phase_models', MODELS),
+    effort: pick('phase_effort', EFFORTS),
+  };
+}
+
 function buildRiskTiers(cj, roster) {
   const high = new Set(['migration', 'schema', 'auth', 'database', 'secret', 'token', 'password', 'rls', 'sql', 'permission', 'payment', 'deploy', 'access', 'crypto']);
   if (roster.experts.some((e) => e.key === 'drift')) ['engine', 'rules', 'parity', 'oracle', 'reward', 'rng', 'obs', 'conformance', 'fixture', 'protocol', 'contract', 'algorithm'].forEach((k) => high.add(k));
@@ -136,6 +197,7 @@ function buildConfig(cj, roster, repoName, interview = {}) {
     install: cj.commands.install?.cmd || null,
     depsSetup: buildDepsSetup(cj),
     crossModel: interview.cross_model !== undefined ? !!interview.cross_model : true,
+    budget: buildBudget(interview),
     uiAreas: ['ui', 'component', 'page', 'screen', 'view', 'css', 'style', 'layout', 'hud', 'board', 'lobby', 'render', 'widget', 'gui', 'frontend'],
     riskTiers: (() => {
       const rt = buildRiskTiers(cj, roster);
@@ -261,7 +323,7 @@ function main() {
 
   // machine-owned artifacts
   w.machine(P('.claude/workflows', `${repoName}-dev-loop.js`), workflow);
-  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate }));
+  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget }));
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
@@ -302,6 +364,7 @@ function main() {
     roster: roster.experts.map((e) => ({ key: e.key, title: e.title, tiers: e.tiers, evidence: e.evidence, file: `.claude/veriloop/experts/${expertSlug(e.key)}.md` })),
     roster_notes: roster.notes,
     gate_commands: config.gate,
+    budget: config.budget,
     e2e: config.e2e,
     commands_summary: Object.fromEntries(Object.entries(cj.commands).map(([k, c]) => [k, { cmd: c.cmd, safety: c.safety, verified: c.verified, verified_by_ci: c.verified_by_ci }])),
     verified_at: cj.verified_at || null,
@@ -314,6 +377,11 @@ function main() {
   console.error(`veriloop generate — ${repoName}  (stack: ${cj.stack.join('+')}, has_ui: ${cj.has_ui})`);
   console.error(`  roster: ${roster.experts.map((e) => e.key).join(', ')}`);
   console.error(`  gate:   ${config.gate.map((c) => c.cmd).join('  |  ') || '(none)'}`);
+  {
+    const b = config.budget;
+    const r = (g) => b.models[g] || (b.presets[b.posture][g] || {}).model || 'session';
+    console.error(`  budget: posture=${b.posture} — ${PHASE_GROUPS.map((g) => `${g}:${r(g)}`).join(' ')}`);
+  }
   if (config.e2e) console.error(`  e2e/screenshot: ${config.e2e.cmd}`);
   console.error('  emitted:');
   for (const f of w.emitted) console.error(`    [${f.ownership}/${f.status}] ${f.path}`);

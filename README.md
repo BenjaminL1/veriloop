@@ -165,6 +165,17 @@ guarantees worth stating up front:
   gate check fails, the loop re-runs it against the base tree in a throwaway
   worktree: pre-existing failures become a `[pre-existing]` concern, while any
   *new* failure added on top of a red baseline still blocks.
+- **It asks before it builds — but only what it can't work out itself.** `/dev-loop`
+  recons the code first, then interviews you (≤5 questions, skipped entirely when
+  nothing is genuinely ambiguous) about scope, design forks, and acceptance criteria.
+  The answers become a binding spec: the reviewers treat a silent deviation from an
+  explicit decision as a blocker.
+- **You choose the model for each phase.** `plan`, `implement`, `review`, `checks`,
+  `fix`, `land` route independently — e.g. `{ plan: "fable", implement: "opus" }`, with
+  the mechanical run-the-commands agent on `haiku`. `posture: frugal|balanced|max` is a
+  one-word preset over the same map. Routing sets *how well each layer thinks*; it can
+  never drop a check, a lens, or the baseline probe — the cost dial is not allowed to
+  weaken the ground truth.
 
 ## License
 

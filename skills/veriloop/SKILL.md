@@ -108,8 +108,18 @@ node SKILL_DIR/../../scripts/verify.mjs --repo "$REPO" --commands "$REPO/.claude
 
 ### Phase 5 — Interview (LLM, ≤5 questions)
 Ask ONLY non-derivable facts, as option-table questions with a recommended default:
-risk-tier boundaries, merge/deploy policy, cross-model second opinion, and any
-repo-specific gate checks that aren't portable commands.
+risk-tier boundaries, merge/deploy policy, cross-model second opinion, the **budget
+posture / per-phase model routing** (below), and any repo-specific gate checks that
+aren't portable commands.
+
+**Budget posture + model routing.** The emitted loop routes each phase group
+(`plan`, `implement`, `review`, `checks`, `fix`, `land`) to its own model and
+reasoning effort. `budget_posture` (frugal/balanced/max) picks a preset; `phase_models`
+overrides any group individually — so "plan on Fable, build on Opus" is
+`{"phase_models": {"plan": "fable", "implement": "opus"}}`. An unknown model, effort,
+or group **fails the build** rather than dying mid-run. Routing changes only how well
+each judgment layer thinks — it can NEVER drop a gate check, a review lens, or the
+baseline probe. The cost dial must not be able to weaken the ground truth.
 
 Write the answers to `$REPO/.claude/veriloop/interview.json` and pass that file to
 the generator so they shape the emitted loop:
@@ -122,6 +132,11 @@ Schema (every field optional):
 ```
 { "cross_model": bool,              // default true; false disables the cross-model lens
   "high_risk_areas": string[],      // extra keywords appended to the high-risk tier
+  "budget_posture": "frugal" | "balanced" | "max",   // default balanced; cost dial
+  "phase_models": {                 // per-phase model — overrides the posture preset
+    "plan"|"implement"|"review"|"checks"|"fix"|"land": "haiku"|"sonnet"|"opus"|"fable" },
+  "phase_effort": {                 // per-phase reasoning effort
+    "<same groups>": "low"|"medium"|"high"|"xhigh"|"max" },
   "extra_checks": [                 // repo-specific gate checks the checks agent runs
     { "name": string, "instruction": string, "areaKeywords"?: string[] } ] }
 ```
@@ -194,13 +209,20 @@ sections, three-way-merges the constitution, and never clobbers `.overrides.md`.
 
 ## The emitted dev-loop's proven shape (do not reinvent)
 
-plan-vs-constitution review → risk triage (trivial/standard/high) → isolated
-**worktree** implement → tiered **GO/NO-GO gate** (real typecheck/lint/test exit
-codes + review-lens experts + screenshot gate on UI + optional cross-model second
-opinion → **PASS / CONCERNS / FAIL / WAIVED**) → bounded auto-fix (≤3 passes, stop
-on no-progress) → docs sync → push a branch/preview, **STOP before merge** (owner
-gate). Waivers are human-only (`args.waive`); an agent may never waive its own
-finding.
+**spec interview (in the `/dev-loop` command, not the workflow)** → plan-vs-constitution
+review → risk triage (trivial/standard/high) → isolated **worktree** implement → tiered
+**GO/NO-GO gate** (real typecheck/lint/test exit codes + review-lens experts + screenshot
+gate on UI + optional cross-model second opinion → **PASS / CONCERNS / FAIL / WAIVED**) →
+bounded auto-fix (≤3 passes, stop on no-progress) → docs sync → push a branch/preview,
+**STOP before merge** (owner gate). Waivers are human-only (`args.waive`); an agent may
+never waive its own finding.
+
+**Why the interview lives in the command, not the workflow:** the workflow's agents are
+background subagents with **no channel to ask the owner anything**. So `/dev-loop` (main
+loop) does the recon, asks only the questions it cannot derive (≤5, skipped entirely when
+nothing is ambiguous), writes `.claude/veriloop/specs/<slug>.md`, and passes it in as
+`args.spec`. The spec is then **binding**: the planner and implementer build to it, and a
+review lens treats contradicting an explicit decision as a BLOCKER.
 
 ## Guardrails
 - Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`,

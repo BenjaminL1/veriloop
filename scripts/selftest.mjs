@@ -267,5 +267,88 @@ function assert(cond, desc) {
   );
 }
 
+// --- spec interview + per-phase model routing ---
+{
+  const build = (interview) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'veriloop-route-'));
+    writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'rt', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+    const cj = detectCommands(tmp);
+    const cjPath = join(tmp, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    const argv = [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp];
+    if (interview) {
+      const ip = join(tmp, 'interview.json');
+      writeFileSync(ip, JSON.stringify(interview));
+      argv.push('--interview', ip);
+    }
+    const r = spawnSync(process.execPath, argv, { encoding: 'utf8' });
+    return { tmp, r };
+  };
+  const emitted = (tmp) => {
+    const name = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).repo_name;
+    return readFileSync(join(tmp, `.claude/workflows/${name}-dev-loop.js`), 'utf8');
+  };
+
+  // the emitted routeFor is extracted and EXECUTED (same technique as verdictFrom)
+  const { tmp } = build(null);
+  const wf = emitted(tmp);
+  const S = '// <<< veriloop:route:start >>>', E = '// <<< veriloop:route:end >>>';
+  const routeFor = new Function(`${wf.slice(wf.indexOf(S) + S.length, wf.indexOf(E))}; return routeFor;`)();
+  const budget = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).budget;
+
+  assert(budget.posture === 'balanced', 'budget: default posture is balanced');
+  assert(routeFor('plan', budget, null, null, null).model === 'opus', 'route: balanced plan → opus');
+  assert(routeFor('checks', budget, null, null, null).model === 'haiku', 'route: checks is cheap (haiku) — running commands and reading exit codes is mechanical');
+  assert(routeFor('plan', budget, null, null, 'frugal').model === 'sonnet', 'route: per-run posture=frugal downgrades plan → sonnet');
+  assert(routeFor('review', budget, null, null, 'max').effort === 'xhigh', 'route: posture=max raises review effort → xhigh');
+
+  // the headline ask: plan on fable, execution on opus
+  const split = { plan: 'fable', implement: 'opus' };
+  assert(routeFor('plan', budget, split, null, 'frugal').model === 'fable', 'route: explicit per-phase model BEATS the posture preset (plan=fable even under frugal)');
+  assert(routeFor('implement', budget, split, null, 'frugal').model === 'opus', 'route: plan-on-fable / implement-on-opus split works');
+  assert(routeFor('review', budget, split, null, 'frugal').model === 'sonnet', 'route: groups not overridden still follow the posture');
+
+  // a repo can persist its own routing at install time
+  const { tmp: t2, r: r2 } = build({ budget_posture: 'frugal', phase_models: { plan: 'fable', implement: 'opus' } });
+  assert(r2.status === 0, 'generate: accepts a budget_posture + phase_models interview');
+  const b2 = JSON.parse(readFileSync(join(t2, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).budget;
+  assert(b2.posture === 'frugal' && b2.models.plan === 'fable' && b2.models.implement === 'opus', 'budget: interview routing persists into the manifest');
+  assert(routeFor('plan', b2, null, null, null).model === 'fable', 'route: the repo\'s configured plan model wins with no per-run args');
+
+  // build-time validation: never emit a loop that dies mid-run on a bad model name
+  const bad = build({ phase_models: { plan: 'gpt-5' } });
+  assert(bad.r.status !== 0 && /not one of/.test(bad.r.stderr || ''), 'generate: an unknown model FAILS THE BUILD (fail fast, not mid-run)');
+  const badPosture = build({ budget_posture: 'cheap' });
+  assert(badPosture.r.status !== 0, 'generate: an unknown posture fails the build');
+  const badGroup = build({ phase_models: { planning: 'opus' } });
+  assert(badGroup.r.status !== 0, 'generate: an unknown phase group fails the build');
+
+  // INVARIANT: a cost dial must never be able to skip a verification job.
+  const gateBody = wf.slice(wf.indexOf('async function gate('), wf.indexOf('const digest ='));
+  assert(
+    !/posture|budget|route\(/.test(gateBody.replace(/\.\.\.route\('(review|checks)'\)/g, '')),
+    'invariant: which gate jobs run is NOT a function of posture/budget — routing only sets each job\'s model',
+  );
+  assert(
+    /jobs = \[\{ key: 'checks'/.test(gateBody),
+    'invariant: the real exit-code checks always run, at every posture',
+  );
+
+  // EVERY agent call must be routed — an unrouted one silently ignores the cost
+  // dial (this caught `implement`, the very phase the model split exists for).
+  const agentCalls = (wf.match(/\bagent\(/g) || []).length;
+  const routed = (wf.match(/\.\.\.route\('/g) || []).length;
+  assert(agentCalls === routed, `routing covers every agent call (${routed}/${agentCalls} routed)`);
+  assert(/label: 'implement'[^\n]*route\('implement'\)/.test(wf), "routing: the implement agent is on the 'implement' group (the execution model)");
+
+  // spec plumbing
+  assert(/OWNER'S SPEC/.test(wf) && /args\.spec|a\.spec/.test(wf), 'template: an owner spec is threaded into the loop');
+  assert(/do not re-litigate or silently substitute/.test(wf), 'template: the spec is BINDING on the planner/implementer');
+  const cmd = readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8');
+  assert(/AskUserQuestion/.test(cmd) && /cannot ask the owner anything/.test(cmd), '/dev-loop: the interview runs in the COMMAND layer (the workflow cannot ask questions)');
+  assert(/ask nothing and go straight/.test(cmd), '/dev-loop: an unambiguous feature triggers NO interview');
+  assert(/plan: "fable", implement: "opus"/.test(cmd), '/dev-loop: documents the per-phase model split');
+}
+
 console.log(`\n${pass} ok, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

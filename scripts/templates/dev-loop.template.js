@@ -35,7 +35,37 @@ const dryRun = typeof a === 'object' && a.dryRun === true;
 // waive: array of substrings; a blocker matching one is downgraded to WAIVED
 // (human-authored waiver — an agent may never waive its own finding).
 const waivers = (typeof a === 'object' && Array.isArray(a.waive)) ? a.waive.map(String) : [];
+// spec: the OWNER'S answers from the /dev-loop spec interview. The interview
+// cannot happen here — this workflow's agents are background subagents with no
+// channel to ask the user — so it runs in the `/dev-loop` command (main loop)
+// and its outcome arrives as text. Absent = an unambiguous feature, or an
+// autonomous run; the loop behaves exactly as before.
+const spec = (typeof a === 'object' && typeof a.spec === 'string') ? a.spec.trim() : '';
 const MAX_FIX = 3;
+
+// <<< veriloop:route:start >>>
+// Cost/quality routing. Each phase GROUP (plan / implement / review / checks /
+// fix / land) resolves its model + reasoning effort: a per-run arg wins, then
+// the repo's configured override, then the posture preset. Nothing set ⇒ omit
+// the option entirely, so the agent inherits the session's model.
+//
+// INVARIANT: routing changes only HOW WELL each judgment layer thinks — never
+// WHICH jobs run. No posture can drop a gate check, a review lens, or the
+// baseline probe. The exit-code gate is the ground truth and is not a cost dial.
+function routeFor(group, budget, argModels, argEffort, argPosture) {
+  const b = budget || {};
+  const posture = argPosture || b.posture || 'balanced';
+  const preset = ((b.presets || {})[posture] || {})[group] || {};
+  const model = (argModels || {})[group] || (b.models || {})[group] || preset.model || null;
+  const effort = (argEffort || {})[group] || (b.effort || {})[group] || preset.effort || null;
+  const opts = {};
+  if (model) opts.model = model;
+  if (effort) opts.effort = effort;
+  return opts;
+}
+// <<< veriloop:route:end >>>
+const argsObj = (typeof a === 'object' && a) || {};
+const route = (group) => routeFor(group, VERILOOP.budget, argsObj.models, argsObj.effort, argsObj.posture);
 
 // Every agent that runs shell resolves the repo root itself — keeps this file
 // free of any machine-specific absolute path.
@@ -140,6 +170,12 @@ const BASE_PROBE_SCHEMA = {
 const wt = (p) =>
   `Work STRICTLY inside the isolated worktree at \`${p}\` (never the owner's main checkout, never a running dev server). Run every command with that directory as cwd.`;
 
+// The owner's spec is BINDING: they already answered these questions, so an agent
+// must not silently re-decide them.
+const specBlock = spec
+  ? `\n\nOWNER'S SPEC (from the /dev-loop interview — these decisions are already made; follow them, do not re-litigate or silently substitute your own):\n${spec}\n`
+  : '';
+
 function lensesForTier(tier) {
   return VERILOOP.experts.filter((e) => e.tiers.includes(tier)).map((e) => e.key);
 }
@@ -159,14 +195,16 @@ function lensPrompt(key, ctx) {
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
     `Review this change on branch \`${ctx.branch}\` for the feature: "${feature}". The implementation is UNCOMMITTED in the worktree, so read it with \`git -C ${ctx.wt} diff ${ctx.baseBranch}\` (edits to tracked files) AND \`git -C ${ctx.wt} status --porcelain\` (any newly added files) — a plain \`${ctx.baseBranch}...${ctx.branch}\` diff is empty at this stage and is NOT the change. ` +
     `Ground every finding in the real code. Tag each BLOCKER / SHOULD-FIX / NIT. ` +
-    `Also check the diff against every invariant in \`$REPO/${CONSTITUTION}\` — a violation is a BLOCKER. Output findings only; change nothing.`;
+    `Also check the diff against every invariant in \`$REPO/${CONSTITUTION}\` — a violation is a BLOCKER.` +
+    (spec ? ` Check it against the OWNER'S SPEC below too: contradicting an explicit design decision, or quietly dropping something the spec requires, is a BLOCKER (the code must do what the owner actually asked for, not a nearby thing).` : '') +
+    ` Output findings only; change nothing.${specBlock}`;
   const persona =
     `Read \`$REPO/${e.file}\` AND, if it exists, \`$REPO/${e.overrides}\` (hand-authored overrides win on conflict), and adopt that reviewer persona (MODE: REVIEW).`;
   return `${persona}\n${base}`;
 }
 
 async function runLens(key, ctx, ph) {
-  return agent(lensPrompt(key, ctx), { label: `lens:${key}`, phase: ph, schema: LENS_SCHEMA });
+  return agent(lensPrompt(key, ctx), { label: `lens:${key}`, phase: ph, schema: LENS_SCHEMA, ...route('review') });
 }
 
 async function runChecks(ctx, ph) {
@@ -186,7 +224,7 @@ async function runChecks(ctx, ph) {
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `Run the REAL gate checks for branch \`${ctx.branch}\` from the worktree and report each ONLY from its process exit code — never from your own reading of the output:\n${list}${baselineNote}\n` +
       `Return one entry per check with its name, the exact command, and pass/fail. Put a short excerpt of any failure in failingOutput. Do NOT fix anything.`,
-    { label: 'checks', phase: ph, schema: CHECK_SCHEMA },
+    { label: 'checks', phase: ph, schema: CHECK_SCHEMA, ...route('checks') },
   );
 }
 
@@ -210,7 +248,7 @@ async function runBaselineProbe(ctx, failed, failingOutput, ph) {
       `5. FAIL SAFE: if you cannot confidently compare the two outputs unit-by-unit, say so in \`evidence\` and list the feature worktree's failure units in \`newFailures\` (treat them as new). Never guess a check clean.\n` +
       `6. ALWAYS remove the probe worktree when done, even if a command errored: \`git -C $REPO worktree remove --force <probe-dir>\`. Report cleanedUp=true only if it is actually gone.\n` +
       `Report findings only; fix NOTHING, and leave no branch or worktree behind.`,
-    { label: 'baseline-probe', phase: ph, schema: BASE_PROBE_SCHEMA },
+    { label: 'baseline-probe', phase: ph, schema: BASE_PROBE_SCHEMA, ...route('checks') },
   );
 }
 
@@ -221,7 +259,7 @@ async function runScreenshot(ctx, ph) {
       `VISUAL gate for the UI in branch \`${ctx.branch}\`. ${e2e} Capture the affected screens at 1440x900, 1280x620, and 760x470. ` +
       `**Navigate to the EXACT state this change affects — not the default view.** Drive the app all the way to the changed state before capturing; a screenshot of a screen where the changed control isn't active proves nothing, so treat "never reached the changed state" as verdict='fail'. ` +
       `Assert the changed control's real interactive state (clickable / not disabled), then OPEN every screenshot and list concrete visual defects (layout break, overflow, clipping, contrast, dead interaction). verdict='fail' if any real defect exists OR the live state wasn't exercised; else 'pass'. Verify — do not assume.`,
-    { label: 'screenshot-gate', phase: ph, schema: SHOT_SCHEMA },
+    { label: 'screenshot-gate', phase: ph, schema: SHOT_SCHEMA, ...route('review') },
   );
 }
 
@@ -230,7 +268,7 @@ async function runXModel(ctx, ph) {
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `CROSS-MODEL second opinion. First check whether the OpenAI Codex CLI is installed (\`command -v codex\`). If NOT installed, return {skipped:true, reason:"codex CLI not installed", findings:[]} — do not fail the gate. ` +
       `If installed, run it as an INDEPENDENT reviewer of the worktree change (\`git -C ${ctx.wt} diff ${ctx.baseBranch}\` plus \`git -C ${ctx.wt} status --porcelain\` for new files — the change is uncommitted, so a \`${ctx.baseBranch}...${ctx.branch}\` diff is empty) against the invariants in \`$REPO/${CONSTITUTION}\`, and return its blockers/concerns as findings (severity BLOCKER/SHOULD-FIX/NIT).`,
-    { label: 'cross-model', phase: ph, schema: XMODEL_SCHEMA },
+    { label: 'cross-model', phase: ph, schema: XMODEL_SCHEMA, ...route('review') },
   );
 }
 
@@ -330,9 +368,10 @@ phase('Plan');
 const planned = await agent(
   `${RESOLVE}\n` +
     `Read \`$REPO/${CONSTITUTION}\` and the baseline reviewer persona at \`$REPO/${VERILOOP.experts[0].file}\` (plus \`$REPO/${VERILOOP.experts[0].overrides}\` if it exists — hand-authored overrides win).\n` +
-    `Design the smallest correct slice for this feature: "${feature}". Planning is just-in-time — depth scales with risk.\n` +
+    `Design the smallest correct slice for this feature: "${feature}". Planning is just-in-time — depth scales with risk.${specBlock}\n` +
+    (spec ? `The spec above is the owner's answer to the open design questions — build to it. If following it would break a constitution invariant, set constitutionOk=false and say so rather than quietly deviating.\n` : '') +
     `Then REVIEW your own plan and: (1) list the areas it will touch; (2) ${tierRulesText()} (3) check the plan against every invariant in the constitution and set constitutionOk=false with the specific violations if any invariant would be broken. Do NOT write code.`,
-  { label: 'plan-review', phase: 'Plan', schema: PLAN_SCHEMA },
+  { label: 'plan-review', phase: 'Plan', schema: PLAN_SCHEMA, ...route('plan') },
 );
 if (!planned.constitutionOk) {
   log(`HALT: plan violates the constitution (${planned.constitutionViolations.length} violation(s)).`);
@@ -347,8 +386,8 @@ const impl = await agent(
     `Implement this slice in an ISOLATED git worktree so the owner's main checkout is never touched.\n` +
     `Steps: pick a branch \`feat/<kebab-slug>\`; determine the base branch (\`git -C $REPO symbolic-ref --short HEAD\` or default main); create a persistent worktree OUTSIDE the repo (e.g. \`git -C $REPO worktree add "$(dirname "$REPO")/.${VERILOOP.repoName}-veriloop/<slug>" -b <branch> <base>\`).\n` +
     `MAKE DEPENDENCIES AVAILABLE so the gate's checks can run: ${VERILOOP.depsSetup}\n` +
-    `Implement the plan below there (edits via the worktree path only); keep changes surgical and constitution-compliant. Do NOT commit, push, or review yet.\n\nPLAN:\n${planned.plan}\n\nReturn the worktree path, the branch, the base branch used, a summary, and the files changed.`,
-  { label: 'implement', phase: 'Implement', schema: { ...IMPL_SCHEMA, properties: { ...IMPL_SCHEMA.properties, baseBranch: { type: 'string' } }, required: [...IMPL_SCHEMA.required, 'baseBranch'] } },
+    `Implement the plan below there (edits via the worktree path only); keep changes surgical and constitution-compliant. Do NOT commit, push, or review yet.${specBlock}\n\nPLAN:\n${planned.plan}\n\nReturn the worktree path, the branch, the base branch used, a summary, and the files changed.`,
+  { label: 'implement', phase: 'Implement', schema: { ...IMPL_SCHEMA, properties: { ...IMPL_SCHEMA.properties, baseBranch: { type: 'string' } }, required: [...IMPL_SCHEMA.required, 'baseBranch'] }, ...route('implement') },
 );
 const ctx = { wt: impl.worktreePath, branch: impl.branch, baseBranch: impl.baseBranch || 'main', tier: planned.tier, touched: planned.touchedAreas };
 log(`Implemented on ${ctx.branch} (${impl.filesChanged.length} files) in ${ctx.wt}`);
@@ -368,7 +407,7 @@ while (g.verdict === 'FAIL' && fixPass < MAX_FIX) {
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `Fix pass ${fixPass}/${MAX_FIX} on branch \`${ctx.branch}\`. Resolve every BLOCKER (and cheap SHOULD-FIX). Make surgical, constitution-compliant changes; do not re-run the gate (the loop does).\n` +
       `A concern tagged \`[pre-existing]\` is a baseline issue that was ALREADY failing on \`${ctx.baseBranch}\` before this change — it is OUT OF SCOPE for this branch. Do NOT attempt to fix it and do not touch files outside this feature's scope to make it go green; the owner fixes the baseline separately.\n\nBLOCKERS:\n${g.blockers.map((b) => '- ' + b).join('\n')}\n\nCONCERNS (fix if cheap):\n${g.concerns.map((c) => '- ' + c).join('\n')}\n\nFAILING CHECK OUTPUT:\n${g.checks ? g.checks.failingOutput : ''}`,
-    { label: `fix:pass${fixPass}`, phase: 'Fix' },
+    { label: `fix:pass${fixPass}`, phase: 'Fix', ...route('fix') },
   );
   g = await gate(ctx, 'Fix');
   history.push(digest(g));
@@ -390,7 +429,7 @@ if (g.verdict === 'FAIL') {
   await agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `Docs sync for branch \`${ctx.branch}\`: update ONLY existing artifacts the change touched (README, docstrings/JSDoc, type defs, docs/plans, and \`$REPO/${CONSTITUTION}\` if a rule changed). Do not create new docs.`,
-    { label: 'docs-sync', phase: 'Land' },
+    { label: 'docs-sync', phase: 'Land', ...route('land') },
   );
   land = await agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
@@ -399,15 +438,22 @@ if (g.verdict === 'FAIL') {
       `- \`git push -u origin ${ctx.branch}\`.\n` +
       `- If a CI/preview integration exists it will build a preview — capture the URL if you can; otherwise note that the branch is pushed for review.\n` +
       `Return the commit sha, whether it pushed, and the preview URL or note.`,
-    { label: 'land', phase: 'Land', schema: LAND_SCHEMA },
+    { label: 'land', phase: 'Land', schema: LAND_SCHEMA, ...route('land') },
   );
 }
 
+const GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land'];
 return {
   feature,
   repo: VERILOOP.repoName,
   tier: ctx.tier,
   touched: ctx.touched,
+  spec: spec || null,
+  posture: argsObj.posture || (VERILOOP.budget && VERILOOP.budget.posture) || 'balanced',
+  routing: Object.fromEntries(GROUPS.map((g) => {
+    const r = route(g);
+    return [g, `${r.model || 'session default'}${r.effort ? ' / ' + r.effort : ''}`];
+  })),
   plan: planned.plan,
   finalVerdict: g.verdict,
   blockers: g.blockers,

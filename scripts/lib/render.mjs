@@ -133,33 +133,72 @@ export function renderConstitution({ repoName, stack, roster, gate }) {
 // /dev-loop command
 // ---------------------------------------------------------------------------
 
-export function renderCommand({ repoName, roster, commandsJson, gate }) {
+export function renderCommand({ repoName, roster, commandsJson, gate, budget }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
   const gateText = (gate || []).map((c) => `\`${c.cmd}\``).join(' + ');
   const shot = commandsJson.has_ui ? ', a **screenshot gate** on UI changes,' : '';
+  const b = budget || { posture: 'balanced', presets: {}, models: {}, effort: {} };
+  const groups = ['plan', 'implement', 'review', 'checks', 'fix', 'land'];
+  const routeLine = groups
+    .map((g) => `${g}=${b.models[g] || ((b.presets[b.posture] || {})[g] || {}).model || 'session'}`)
+    .join(' · ');
   return (
     `---\n` +
-    `description: Run the ${repoName} per-feature dev loop (plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off.\n` +
+    `description: Run the ${repoName} per-feature dev loop (spec interview → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off.\n` +
     `---\n\n` +
     `Run the **${repoName} dev-loop** for this feature:\n\n` +
     `> $ARGUMENTS\n\n` +
-    `Invoke the \`${repoName}-dev-loop\` workflow with \`args = { feature: "$ARGUMENTS" }\`.\n\n` +
-    `It runs autonomously on a dedicated **git worktree + branch** (never the owner's main checkout):\n\n` +
-    `1. **Plan-review** — design the slice; the baseline reviewer checks it against \`constitution.md\`.\n` +
-    `   If the plan violates an invariant, it stops and reports instead of coding.\n` +
+    `## Step 1 — Spec interview (you do this, BEFORE invoking the workflow)\n\n` +
+    `The workflow's agents run in the background and **cannot ask the owner anything**, so any question\n` +
+    `worth asking must be asked HERE, by you, now.\n\n` +
+    `1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part of\n` +
+    `   \`.claude/veriloop/constitution.md\`. Most of what you need is derivable — derive it.\n` +
+    `2. **Then ask ONLY what you genuinely cannot derive** — real design forks where you'd otherwise be\n` +
+    `   guessing on the owner's behalf: scope boundaries and explicit non-goals, a design decision with\n` +
+    `   more than one defensible answer (where state lives, client vs server, which existing pattern to\n` +
+    `   follow), user-visible specifics (copy, thresholds, edge-case behavior), and what "done" means\n` +
+    `   (the check or test that would prove it).\n` +
+    `   Use AskUserQuestion. **Cap it at ~5 questions**, each with a recommended default. If a question's\n` +
+    `   answer is already in the code, the constitution, or the feature request — do not ask it.\n` +
+    `   **If nothing is genuinely ambiguous, ask nothing and go straight to step 3.** A trivial change\n` +
+    `   should not trigger an interrogation.\n` +
+    `3. **Write the answers down** as a short spec (the feature in one line, then the decisions made,\n` +
+    `   the non-goals, and the acceptance criteria) to \`.claude/veriloop/specs/<kebab-slug>.md\`, and pass\n` +
+    `   that same text into the workflow as \`args.spec\`. It becomes BINDING: the planner and implementer\n` +
+    `   build to it, and the review lenses treat contradicting an explicit decision — or quietly dropping\n` +
+    `   something the spec requires — as a **BLOCKER**.\n\n` +
+    `Skip the interview entirely when the owner says so (\`args.interview = false\`, or an unattended run).\n\n` +
+    `## Step 2 — Invoke\n\n` +
+    `Invoke the \`${repoName}-dev-loop\` workflow with \`args = { feature: "$ARGUMENTS", spec: "<the spec>" }\`.\n\n` +
+    `It then runs autonomously on a dedicated **git worktree + branch** (never the owner's main checkout):\n\n` +
+    `1. **Plan-review** — design the smallest correct slice **to the spec**; the baseline reviewer checks it\n` +
+    `   against \`constitution.md\`. If the plan violates an invariant, it stops and reports instead of coding.\n` +
     `2. **Risk triage** — classifies the change (trivial / standard / high) so gate depth scales with risk.\n` +
     `3. **Implement** in the worktree.\n` +
     `4. **GO/NO-GO gate** — REAL ${gateText || 'checks'} that must actually pass (exit codes decide), plus the\n` +
-    `   review lenses (${lenses})${shot} and an optional cross-model second opinion. Emits **PASS / CONCERNS /\n` +
-    `   FAIL / WAIVED**.\n` +
+    `   review lenses (${lenses})${shot} and an optional cross-model second opinion. A failing check is re-run\n` +
+    `   against the base tree, so a **pre-existing** red check is a concern, not a blocker — but a NEW failure\n` +
+    `   stacked on a red baseline still blocks. Emits **PASS / CONCERNS / FAIL / WAIVED**.\n` +
     `5. **Bounded auto-fix** — on FAIL, fixes blockers and re-runs, up to **3 passes**, stopping early if it\n` +
     `   stops making progress.\n` +
     `6. **Docs sync**, then **push the branch + leave a preview**.\n\n` +
     `It **STOPS before merge/deploy** — that is the owner gate.\n\n` +
-    `Options: \`args.dryRun = true\` (stop before push), \`args.waive = ["substring", ...]\` (human waiver:\n` +
-    `downgrade a matching blocker to WAIVED — an agent may never waive its own finding).\n\n` +
+    `## Options\n\n` +
+    `- \`args.dryRun = true\` — run everything, stop before the push.\n` +
+    `- \`args.waive = ["substring", ...]\` — human waiver: downgrade a matching blocker to WAIVED. An agent\n` +
+    `  may never waive its own finding.\n` +
+    `- \`args.spec = "..."\` — the spec from step 1 (binding on the planner, implementer, and reviewers).\n` +
+    `- \`args.posture = "frugal" | "balanced" | "max"\` — the cost dial. Shifts the model + reasoning effort of\n` +
+    `  each phase. **It never removes a check, a lens, or the baseline probe** — the exit-code gate is ground\n` +
+    `  truth, not a budget line.\n` +
+    `- \`args.models = { plan: "fable", implement: "opus", ... }\` — per-phase model, overriding the posture.\n` +
+    `  Groups: \`plan\`, \`implement\`, \`review\`, \`checks\`, \`fix\`, \`land\`. Models: \`haiku\`, \`sonnet\`, \`opus\`,\n` +
+    `  \`fable\`. So "plan on Fable, build on Opus" is \`{ plan: "fable", implement: "opus" }\`.\n` +
+    `- \`args.effort = { plan: "xhigh", ... }\` — per-phase reasoning effort (\`low\`…\`max\`).\n\n` +
+    `This repo's default routing (posture \`${b.posture}\`): ${routeLine}.\n\n` +
     `When the workflow returns, present its report: the final **verdict**, the branch + preview link/note,\n` +
-    `remaining **CONCERNS**, and the fix-pass history. Then **wait for explicit merge/deploy sign-off.**\n`
+    `remaining **CONCERNS**, the fix-pass history, and the **routing** it actually used. Then **wait for\n` +
+    `explicit merge/deploy sign-off.**\n`
   );
 }
 
