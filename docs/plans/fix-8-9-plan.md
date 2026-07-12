@@ -319,8 +319,11 @@ is **wrong in the common case** and was caught by an end-to-end check after the
 selftest was already green. Detected commands are *wrappers*: a repo with
 `"format:check": "prettier --check ."` yields the command `npm run format:check`,
 whose text never contains "prettier", so a fresh prettier repo got no exemption.
-The plan's own selftest hid this by pre-seeding `.prettierignore` in the fixture
-(the `existsSync` arm of the predicate then answered true). Replaced with a
+The bad predicate came from the plan; the masking came from the implementation:
+the plan's test matrix kept "fresh prettier repo" (case 1) and "pre-seeded owner
+line" (case 3) as separate fixtures — case 1 as written would have caught the
+predicate — but the implementation merged them into one pre-seeded fixture, and
+the `existsSync` arm of the predicate then answered true. Replaced with a
 `repoUsesPrettier(repo, cj)` detector reading the real signals — any prettier config
 flavor, a `prettier` key / dependency in package.json, a script body invoking it, or
 a command calling it directly — and the fixture no longer pre-seeds the file, so the

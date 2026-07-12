@@ -87,6 +87,16 @@ emitted bundle). All fixed with selftest coverage (**21 → 26 assertions, all g
   write `.claude/veriloop/history/<ts>.json` attestation records (roadmap M1). This
   report + the run records below are the v0 attestation; auto-emission is a candidate
   template enhancement.
+- **#10 — gate fails OPEN when a gate agent dies** (found in the v0.1.2 review, by
+  executing the emitted verdict logic with `checks = null`): `parallel()` resolves a
+  dead/skipped agent to `null`, and `verdictFrom` skips a null `checks` entirely,
+  drops null lenses via `filter(Boolean)`, and skips a null screenshot — so a
+  maximally-degraded gate returns **PASS with zero verifications actually run**.
+  Pre-existing (not introduced by #8; the old code had the same `if (checks)` skip),
+  and rare in practice (agent death survives retries), but it is exactly the
+  "asserted, never verified" class veriloop exists to kill. Fix candidate: a null
+  result for any tier-required gate job is itself a BLOCKER ("gate job did not
+  run"), same fail-safe stance the baseline probe now takes.
 
 ## M1 exit criteria
 
