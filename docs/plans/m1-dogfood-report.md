@@ -162,9 +162,35 @@ Selftest grew **26 → 43 assertions**: the #8 additions **extract the emitted
 (regression / pre-existing / new-failure-on-red-baseline / no-probe / dirty-probe /
 all-green), rather than string-matching the template.
 
-## Next
+## Main event re-drive — CLEAN LAND (2026-07-12, v0.2.0 loop)
 
-Green the dogfood base (the warm-up's prettier preview is still unmerged into
-`veriloop/install`), regenerate Torevan's bundle on v0.1.2, and re-drive #76 to a
-clean land — the loop's own 2 feature bugs are real and should be fixed by the loop,
-not by hand.
+Run `wf_bb6dd006-dff`: **CONCERNS — 0 blockers, 1 concern, 0 fix passes — pushed
+`feat/lobby-queue-timeout-feedback` @ `63bc84a`** (10 agents, 0 errors, ~559k
+subagent tokens, ~35 min). This is the M1 parity proof: the generated loop's first
+clean land of a real feature. Every v0.2.0 feature was exercised and worked:
+
+- **Binding spec honored** (first real use): the two defects from the failed drive
+  were outlawed in `.claude/veriloop/specs/lobby-queue-timeout-feedback.md` and are
+  now impossible by construction — verified in the pushed diff: "Try again" calls
+  `enterQueue(searchMode)` (funnel event preserved) and the mode comes from the
+  hook's new `searchMode` field, no page-local copy.
+- **Baseline probe (#8) worked exactly as designed**: `format` failed at the gate →
+  probe re-ran it on a throwaway base worktree, diffed the failure units (85 files,
+  identical sets on both branches), and downgraded to
+  `[pre-existing] check: format was already RED on the base tree` — the sole
+  concern. Last drive this identical situation was a false-blocker FAIL.
+- **Per-phase routing live**: plan on fable/high, implement on opus/medium, review
+  on opus/high, checks on haiku/low, land on sonnet/low — reported in the run
+  output.
+- **Screenshot gate**: pass, 4 captures of the real timed-out state; one NIT
+  (pre-existing short-viewport scroll, correctly attributed as not-this-change).
+- Lenses returned NITs only, all reasonable owner-review material: the elapsed
+  readout disappears from the timed-out panel while copy says "keep waiting";
+  `searchMode` isn't reset on cancel; the 15s tick means the panel can appear up to
+  ~15s after the exact 2:00 mark; timed-out with `searchMode === null` falls back
+  to the spinner.
+
+**Still open before closing M1:** owner sign-off on the pushed branch (merge is
+human-only); the warm-up prettier preview (`feat/format-check-green`) remains
+unmerged, so the base stays red until the owner lands it; gold-loop retirement is
+now *unblocked* but recommended after one more clean feature (sample size two).
