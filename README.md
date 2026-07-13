@@ -5,8 +5,9 @@
 Point veriloop at a repository and it generates a bespoke engineering setup for
 *that* repo:
 
-1. **AI reviewer "expert" personas** — a baseline reviewer plus specialists
-   nominated by the repo's actual danger surfaces (security, drift/parity, UX, …).
+1. **AI "expert" personas** — a baseline reviewer plus specialists nominated by the
+   repo's actual danger surfaces (security, drift/parity, UX, …); they review in the
+   gate AND advise/brainstorm via `/advise`.
 2. **A constitution** — the repo's invariants, each one code-cited.
 3. **A per-feature dev-loop workflow** whose gate passes/fails on **REAL command
    exit codes** (your `typecheck` / `lint` / `test`), never the AI's self-assessment.
@@ -88,9 +89,11 @@ blaming your change.
 ```
 .claude/workflows/<repo>-dev-loop.js          the dev-loop workflow (exit-code gate)
 .claude/commands/dev-loop.md                  the /dev-loop slash command
+.claude/commands/advise.md                    the /advise command (experts in ADVISE mode)
+.claude/commands/review.md                    the /review command (lens review, no loop)
 .claude/veriloop/commands.json                detected + verified command surface
 .claude/veriloop/constitution.md              invariants (hand-owned; merged on re-run)
-.claude/veriloop/experts/<name>.md            reviewer personas (machine-owned)
+.claude/veriloop/experts/<name>.md            expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md  manual tweaks (hand-owned; never clobbered)
 .claude/veriloop/veriloop-manifest.json       version, repo SHA, roster, verification
 ```
@@ -170,7 +173,7 @@ Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
 
-**v0.1.2 — deterministic spine complete and self-tested** (detect → verify →
+**v0.3.0 — deterministic spine complete and self-tested** (detect → verify →
 generate → wire gate → lint, with a deterministic `scripts/selftest.mjs` over
 fixtures). Interview answers persist in the manifest and shape the emitted loop
 (cross-model on/off, extra high-risk areas, and repo-specific `extra_checks`). The
@@ -207,6 +210,10 @@ guarantees worth stating up front:
   one-word preset over the same map. Routing sets *how well each layer thinks*; it can
   never drop a check, a lens, or the baseline probe — the cost dial is not allowed to
   weaken the ground truth.
+- **The experts advise as well as review.** The same personas that gate a change also power
+  `/advise` (brainstorm/sanity-check/pressure-test an idea before building, in ADVISE mode)
+  and `/review` (the lenses on a diff without the full loop). Both are read-only and carry
+  **no verdict authority** — advice and findings never stand in for the dev-loop gate.
 
 ## License
 

@@ -3,7 +3,7 @@ name: veriloop
 description: >-
   Use when the user wants to "set up a dev loop", "add a review gate", "scaffold
   veriloop", or "generate a dev-loop / review pipeline" for a repo. Compiles a
-  bespoke, self-verifying engineering setup for ANY repo: AI reviewer personas, a
+  bespoke, self-verifying engineering setup for ANY repo: AI expert personas, a
   code-cited constitution of the repo's invariants, a per-feature workflow whose
   gate passes/fails on REAL command exit codes (never the AI's self-assessment),
   and a /dev-loop slash command to drive it.
@@ -18,9 +18,11 @@ dev-loop). It emits **plain files** into the target repo:
 ```
 .claude/workflows/<repo>-dev-loop.js     the dev-loop workflow (exit-code gate)
 .claude/commands/dev-loop.md             the /dev-loop slash command
+.claude/commands/advise.md               the /advise command (experts in ADVISE mode)
+.claude/commands/review.md               the /review command (lens review, no loop)
 .claude/veriloop/commands.json           detected + verified command surface
 .claude/veriloop/constitution.md         the repo's invariants (hand-owned)
-.claude/veriloop/experts/<name>.md       reviewer personas (machine-owned)
+.claude/veriloop/experts/<name>.md       expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md   manual tweaks (hand-owned, never clobbered)
 .claude/veriloop/veriloop-manifest.json  version, repo SHA, roster, verification results
 ```
@@ -166,8 +168,10 @@ DB-touching changes:
    ```
    This slot-fills the portable template with the verified commands, the roster →
    lens map, risk tiers, and stack-specific worktree-deps setup; writes the
-   workflow, the `/dev-loop` command, STARTER personas + `.overrides` siblings, the
-   STARTER constitution (only if absent), and the manifest. Machine files
+   workflow, the `/dev-loop` command plus the `/advise` and `/review` commands (the
+   experts' second mandate — advise + lens-review, read-only, no gate authority),
+   STARTER personas + `.overrides` siblings, the STARTER constitution (only if
+   absent), and the manifest. Machine files
    regenerate; hand files are preserved (use `--force` only to intentionally
    replace them).
 3. **(Full pipeline) Enrich** the machine persona `.md` files with the bespoke,

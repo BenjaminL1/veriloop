@@ -202,6 +202,13 @@ emit a short pointer section into CLAUDE.md — the community already resents
 constitution-vs-AGENTS.md rival files, and AGENTS.md has 60k-repo adoption; don't
 create a third competing surface.
 
+**Deferred — language-pack checklists (council 2026-07-13):** per-language review
+checklists for the expert personas were council-reviewed and DEFERRED — both council
+seats converged on packs mattering only for (a) frugal-posture review lenses (Sonnet)
+and (b) freshly-compiled repos with thin constitutions. Triggers to revisit: first
+sustained frugal usage, or M4 Rust support (cold-start stack). Budget-neutral if built
+(won back from role prose, never appended; never a roster seat).
+
 **Exit criteria:** both repos re-run through the full pipeline; zero TODOs;
 benchmark ≥80%; lint enforces the referee.
 

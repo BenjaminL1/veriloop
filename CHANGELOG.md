@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 — 2026-07-13
+- Experts gain a second mandate. The same personas that REVIEW in the dev-loop gate now also ADVISE in consultation — two new emitted commands make the mandate explicit: `/advise` (brainstorm/sanity-check/pressure-test an idea BEFORE building, inline, in ADVISE mode) and `/review` (the expert lenses on a working-tree diff or commit range, WITHOUT the full loop). Both are read-only and carry NO gate authority: they produce advice/findings, never a PASS/FAIL verdict, and never substitute for the dev-loop gate.
+- Persona word budget raised 500 → 700 and reframed: it is an accretion tripwire (a persona that grew past 700 words usually carries unreviewed bolt-ons a human should re-read and re-distill), not an instruction-dilution/token claim. Still WARN-only.
+- Language-pack checklists for expert personas were council-reviewed and DEFERRED (packs matter only for frugal-posture review lenses and freshly-compiled repos with thin constitutions; revisit on first sustained frugal usage or M4 Rust cold-start support).
+
 ## 0.2.2 — 2026-07-13
 - Gate fails CLOSED (finding #10): a gate agent that dies or is skipped becomes a blocker — absent evidence is never passing evidence. Only a human waiver may downgrade it.
 - Implementer pre-flight: runs the gate's static checks (typecheck/lint) once before hand-off and reports what it saw — zero authority, the gate re-runs everything; mutating commands are barred (the warm-up-corruption guard).

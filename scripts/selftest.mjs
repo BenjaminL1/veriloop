@@ -7,7 +7,7 @@
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -180,9 +180,10 @@ function assert(cond, desc) {
 
   const fresh = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(fresh.status === 0, 'lint-bundle: a fresh bundle passes');
-  assert(!/budget 500/.test(fresh.stdout || ''), 'lint-bundle: a fresh bundle is within the persona word budget (no warning)');
+  assert(!/grew past 700 words/.test(fresh.stdout || ''), 'lint-bundle: a fresh bundle is within the persona word budget (no accretion warning)');
 
-  // fatten one emitted persona well past the 500-word budget
+  // fatten one emitted persona (~300 words) well past the 700-word accretion
+  // tripwire — ~600 words appended → ~900, still fires
   const persona = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster[0].file;
   const personaName = persona.split('/').pop().replace(/\.md$/, '');
   writeFileSync(join(tmp, persona), readFileSync(join(tmp, persona), 'utf8') + '\n' + 'word '.repeat(600));
@@ -190,9 +191,59 @@ function assert(cond, desc) {
   const fat = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(fat.status === 0, 'lint-bundle: an over-budget persona is a WARN, not a FAIL (still exits 0)');
   assert(
-    new RegExp(`persona ${personaName} is \\d+ words \\(budget 500\\)`).test(fat.stdout || ''),
-    'lint-bundle: the over-budget persona trips a budget warning naming it',
+    new RegExp(`persona ${personaName} grew past 700 words \\(\\d+\\)`).test(fat.stdout || ''),
+    'lint-bundle: the over-budget persona trips the accretion tripwire naming it',
   );
+}
+
+// --- v0.3.0: the experts' second mandate — /advise + /review emitted surfaces,
+//     the dual-mandate persona header, and the linter guarding the new commands ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-advise-'));
+  // a prettier repo so the .prettierignore exemption block is emitted (and must
+  // list both new command paths)
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'adv', scripts: { lint: 'eslint .', 'format:check': 'prettier --check .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+
+  const advisePath = join(tmp, '.claude/commands/advise.md');
+  const reviewPath = join(tmp, '.claude/commands/review.md');
+  assert(existsSync(advisePath), 'generate: /advise command is emitted');
+  assert(existsSync(reviewPath), 'generate: /review command is emitted');
+
+  const advise = readFileSync(advisePath, 'utf8');
+  const review = readFileSync(reviewPath, 'utf8');
+  const descOf = (t) => (t.match(/^description:\s*(.*)$/m) || [])[1] || '';
+  const aDesc = descOf(advise), rDesc = descOf(review);
+  assert(aDesc.startsWith('Use when') && aDesc.length <= 500, '/advise: description is trigger-first ("Use when") and ≤500 chars');
+  assert(rDesc.startsWith('Use when') && rDesc.length <= 500, '/review: description is trigger-first ("Use when") and ≤500 chars');
+
+  // /advise contract: ADVISE mode, read-only, no verdicts (grep-able strings)
+  assert(/MODE: ADVISE/.test(advise), '/advise: adopts MODE: ADVISE');
+  assert(/READ-ONLY/.test(advise), '/advise: states the read-only limit');
+  assert(/never PASS\/FAIL\/approval/.test(advise) && /NEVER\s+substitutes/i.test(advise.replace(/\n/g, ' ')), '/advise: no-verdicts — advice never substitutes for the gate');
+
+  // /review contract: root-cause dedup + not-the-gate/no-verdict
+  assert(/deduped by ROOT CAUSE/.test(review), '/review: merges findings deduped by ROOT CAUSE');
+  assert(/Advisory, NOT the gate/.test(review) && /no verdict/i.test(review) && /never/i.test(review), '/review: advisory, NOT the gate, produces no verdict and never substitutes for it');
+
+  // the .prettierignore exemption block lists both new command paths
+  const pi = readFileSync(join(tmp, '.prettierignore'), 'utf8');
+  assert(pi.includes('.claude/commands/advise.md') && pi.includes('.claude/commands/review.md'), 'generate: the .prettierignore block includes both new command paths');
+
+  // the dual-mandate persona header names both modes
+  const personaFile = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster[0].file;
+  const persona = readFileSync(join(tmp, personaFile), 'utf8');
+  assert(/REVIEW mode/.test(persona) && /ADVISE mode/.test(persona), 'persona header: names both REVIEW mode and ADVISE mode (dual mandate)');
+
+  // the linter guards the new surface: delete /advise after generation → FAIL
+  const before = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(before.status === 0, 'lint-bundle: a fresh v0.3.0 bundle passes (0 fail)');
+  rmSync(advisePath);
+  const after = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(after.status !== 0, 'lint-bundle: FAILS when advise.md is deleted after generation (guards the new command surface)');
 }
 
 // --- #9: machine-owned files are exempted from the target repo's format check,

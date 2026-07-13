@@ -57,8 +57,10 @@ function bundleFiles(root) {
   };
   const vdir = join(root, '.claude/veriloop');
   if (isDir(vdir)) walk(vdir);
-  const cmd = join(root, '.claude/commands/dev-loop.md');
-  if (existsSync(cmd)) out.push(cmd);
+  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+    const cmd = join(root, '.claude/commands', c);
+    if (existsSync(cmd)) out.push(cmd);
+  }
   const wfDir = join(root, '.claude/workflows');
   for (const n of listDir(wfDir) || []) if (n.endsWith('-dev-loop.js')) out.push(join(wfDir, n));
   return out;
@@ -136,12 +138,17 @@ function main() {
     }
   }
 
-  // 4. command frontmatter
-  const cmd = join(args.bundle, '.claude/commands/dev-loop.md');
-  if (existsSync(cmd)) {
-    const t = readFileSync(cmd, 'utf8');
-    if (/^---\n[\s\S]*?\n---/.test(t) && /description:/.test(t)) ok('/dev-loop command has valid frontmatter'); else fail('/dev-loop command missing frontmatter/description');
-  } else fail('no .claude/commands/dev-loop.md emitted');
+  // 4. command frontmatter — all three emitted commands (/dev-loop, /advise,
+  //    /review) must have valid frontmatter with a description; a missing one is
+  //    a FAIL (the new advising surfaces must ship, not silently vanish).
+  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+    const name = `/${c.replace(/\.md$/, '')}`;
+    const cmd = join(args.bundle, '.claude/commands', c);
+    if (existsSync(cmd)) {
+      const t = readFileSync(cmd, 'utf8');
+      if (/^---\n[\s\S]*?\n---/.test(t) && /description:/.test(t)) ok(`${name} command has valid frontmatter`); else fail(`${name} command missing frontmatter/description`);
+    } else fail(`no .claude/commands/${c} emitted`);
+  }
 
   // 5. constitution + manifest integrity
   const con = join(args.bundle, '.claude/veriloop/constitution.md');
@@ -175,22 +182,25 @@ function main() {
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
   } else fail('no veriloop-manifest.json emitted');
 
-  // 6. authoring budget — every gate agent loads its persona and the /dev-loop
-  //    description on each run; oversized ones are a token tax, not a correctness
-  //    bug, so these are WARNs. Scoped to the same emitted-file list as the rest.
+  // 6. authoring budget — the persona word cap is an ACCRETION TRIPWIRE, not a
+  //    token/dilution claim: a persona past 700 words has usually grown unreviewed
+  //    bolt-ons, so a human should re-read and re-distill it. WARN-only (it's a
+  //    smell, not a correctness bug). Scoped to the same emitted-file list.
   for (const f of files) {
     const rel = f.slice(args.bundle.length + 1);
     if (!/\.claude\/veriloop\/experts\/.*\.md$/.test(rel) || rel.endsWith('.overrides.md')) continue;
     const words = readFileSync(f, 'utf8').split(/\s+/).filter(Boolean).length;
-    if (words > 500) {
+    if (words > 700) {
       const persona = rel.split('/').pop().replace(/\.md$/, '');
-      warn(`persona ${persona} is ${words} words (budget 500) — every gate agent loads it; trim the template`);
+      warn(`persona ${persona} grew past 700 words (${words}) — usually unreviewed bolt-ons; a human should re-read and re-distill it`);
     }
   }
-  const cmdBudget = join(args.bundle, '.claude/commands/dev-loop.md');
-  if (files.includes(cmdBudget) && existsSync(cmdBudget)) {
-    const dm = readFileSync(cmdBudget, 'utf8').match(/^description:\s*(.*)$/m);
-    if (dm && dm[1].length > 500) warn(`/dev-loop description is ${dm[1].length} chars (budget 500) — trim the command frontmatter`);
+  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+    const cmdBudget = join(args.bundle, '.claude/commands', c);
+    if (files.includes(cmdBudget) && existsSync(cmdBudget)) {
+      const dm = readFileSync(cmdBudget, 'utf8').match(/^description:\s*(.*)$/m);
+      if (dm && dm[1].length > 500) warn(`/${c.replace(/\.md$/, '')} description is ${dm[1].length} chars (budget 500) — trim the command frontmatter`);
+    }
   }
 
   // report

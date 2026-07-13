@@ -21,7 +21,7 @@ function gateList(gate) {
 
 const PERSONA_HEAD = (title, repoName, stack) =>
   `# ${title} — ${repoName} (veriloop-generated)\n\n` +
-  `> Reviewer persona for the \`${repoName}\` dev-loop gate. Stack: **${stack.join(' + ')}**.\n` +
+  `> Expert persona for \`${repoName}\` — loaded by the dev-loop gate in **REVIEW mode** and by \`/advise\` in **ADVISE mode** (the loader sets the mode). Stack: **${stack.join(' + ')}**.\n` +
   `> This file is a veriloop DEFAULT — regenerated on re-run. Put manual tweaks in the\n` +
   `> \`.overrides.md\` sibling (read alongside this file, and it wins on conflict).\n\n` +
   `MODE: REVIEW — audit a supplied diff. Ground EVERY finding in the real code; never\n` +
@@ -203,6 +203,77 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `once, by an agent that had the full evidence; compressing it again only loses more. Render it as prose\n` +
     `+ the findings, add the branch/preview from \`result.land\` and the \`result.routing\` line, and say\n` +
     `nothing the brief does not support. Then **wait for explicit merge/deploy sign-off.**\n`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// /advise command — the experts in ADVISE mode (consultation, not the gate)
+// ---------------------------------------------------------------------------
+
+export function renderAdviseCommand({ repoName, roster }) {
+  const lenses = roster.experts.map((e) => e.key).join(', ');
+  return (
+    `---\n` +
+    `description: Use when the owner wants to brainstorm a feature or direction, sanity-check a design decision, weigh priorities, or pressure-test an idea BEFORE building — a consultation with ${repoName}'s expert personas (${lenses}) in ADVISE mode. Read-only; produces advice + tradeoffs, never a PASS/FAIL verdict (verdicts belong to /dev-loop). Runs inline because brainstorming is a dialogue.\n` +
+    `---\n\n` +
+    `Consult **${repoName}'s experts** on an idea — this runs **inline, in the main session**,\n` +
+    `because brainstorming is a dialogue and background agents cannot talk to you.\n\n` +
+    `> $ARGUMENTS\n\n` +
+    `## How to advise\n\n` +
+    `1. **Load the lenses.** Read \`$REPO/.claude/veriloop/constitution.md\`, then the expert\n` +
+    `   personas RELEVANT to the topic from \`.claude/veriloop/experts/*.md\` plus each one's\n` +
+    `   \`.overrides.md\` sibling (the override **wins on conflict**). Adopt them in\n` +
+    `   **MODE: ADVISE** — ignore their review-mode instructions; here you are a consultant,\n` +
+    `   not an auditor.\n` +
+    `2. **Ground every claim in real code.** Read the actual code areas under discussion\n` +
+    `   before opining; cite \`file:line\` wherever a claim is checkable — no hand-waving.\n` +
+    `3. **HARD LIMITS.**\n` +
+    `   - **READ-ONLY** — no file edits, no worktrees or branches, no mutating commands\n` +
+    `     (read-only commands like \`git log\` / \`git diff\` are fine).\n` +
+    `   - **NO VERDICTS** — you produce advice and tradeoffs, never PASS/FAIL/approval. A\n` +
+    `     verdict belongs exclusively to the \`/dev-loop\` gate, and advice here NEVER\n` +
+    `     substitutes for it.\n` +
+    `4. **Converse.** Present options with their tradeoffs and a recommendation; use\n` +
+    `   **AskUserQuestion** for genuine forks where you'd otherwise be guessing.\n` +
+    `5. **Off-ramp.** If the discussion converges on a buildable feature, offer to write the\n` +
+    `   spec to \`.claude/veriloop/specs/<slug>.md\` and run \`/dev-loop\` with it.\n`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// /review command — the expert lenses on a diff, WITHOUT the full dev-loop
+// ---------------------------------------------------------------------------
+
+export function renderReviewCommand({ repoName, roster, gate }) {
+  const lensList = roster.experts.map((e) => `\`${e.key}\``).join(', ');
+  const gateText = (gate || []).map((c) => `\`${c.cmd}\``).join(' + ');
+  return (
+    `---\n` +
+    `description: Use when the owner wants the repo's expert lenses on uncommitted or recent changes WITHOUT running the full dev-loop — a quick lens-only review of ${repoName}'s working-tree diff or a named commit range. Read-only and ADVISORY: findings are tagged BLOCKER/SHOULD-FIX/NIT, but this is NOT the gate and produces no verdict. A few lens agents, ~10x cheaper than a full drive.\n` +
+    `---\n\n` +
+    `Run **${repoName}'s expert lenses** over a change — no plan, no implement, no gate:\n\n` +
+    `> $ARGUMENTS\n\n` +
+    `## Step 1 — Determine the change to review\n\n` +
+    `Review the **uncommitted working-tree diff** (\`git diff\` plus \`git status --porcelain\`\n` +
+    `for new/untracked files), OR the commit range the owner names in \`$ARGUMENTS\` (e.g.\n` +
+    `\`main..HEAD\`). If there is nothing to review, say so and stop.\n\n` +
+    `## Step 2 — Spawn the lenses (parallel, read-only)\n\n` +
+    `Spawn the roster's experts as **parallel read-only agents** — ${lensList}. Each loads its\n` +
+    `persona (\`.claude/veriloop/experts/<name>.md\`) + its \`.overrides.md\` sibling (the\n` +
+    `override **wins on conflict**) + \`.claude/veriloop/constitution.md\`, reviews the diff in\n` +
+    `**MODE: REVIEW**, and returns findings tagged \`BLOCKER\` / \`SHOULD-FIX\` / \`NIT\` with\n` +
+    `\`file:line\`.\n\n` +
+    `## Step 3 — Merge by ROOT CAUSE\n\n` +
+    `Merge the findings **deduped by ROOT CAUSE**: when several experts describe one\n` +
+    `underlying defect, that is **ONE** finding listing every expert that raised it — never\n` +
+    `the same issue repeated once per lens.\n\n` +
+    `## Hard limits\n\n` +
+    `- **Read-only.** No edits, no worktrees/branches, no mutating commands. Do **not**\n` +
+    `  auto-fix anything.\n` +
+    `- **Advisory, NOT the gate.** This produces **no verdict**; passing \`/review\` **never**\n` +
+    `  substitutes for the \`/dev-loop\` gate. It is a cheap second look, not sign-off.\n` +
+    `- It does **not** run the real exit-code checks (${gateText || 'the repo\'s gate commands'}) —\n` +
+    `  only the \`/dev-loop\` gate does. \`/review\` is lenses only.\n`
   );
 }
 

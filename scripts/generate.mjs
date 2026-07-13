@@ -18,10 +18,10 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster } from './lib/roster.mjs';
-import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
+import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.2.2';
+const VERILOOP_VERSION = '0.3.0';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -328,6 +328,10 @@ function main() {
   // machine-owned artifacts
   w.machine(P('.claude/workflows', `${repoName}-dev-loop.js`), workflow);
   w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget }));
+  // the experts' second mandate: /advise (consult in ADVISE mode) and /review
+  // (lens review without the loop). Both are read-only and carry NO gate authority.
+  w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, roster }));
+  w.machine(P('.claude/commands/review.md'), renderReviewCommand({ repoName, roster, gate: config.gate }));
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
@@ -349,7 +353,7 @@ function main() {
   if (repoUsesPrettier(args.repo, cj)) {
     w.spliceBlock(
       P('.prettierignore'),
-      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md'],
+      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md', '.claude/commands/advise.md', '.claude/commands/review.md'],
       { createIfMissing: true },
     );
   }
