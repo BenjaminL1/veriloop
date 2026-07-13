@@ -196,9 +196,13 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `  \`fable\`. So "plan on Fable, build on Opus" is \`{ plan: "fable", implement: "opus" }\`.\n` +
     `- \`args.effort = { plan: "xhigh", ... }\` — per-phase reasoning effort (\`low\`…\`max\`).\n\n` +
     `This repo's default routing (posture \`${b.posture}\`): ${routeLine}.\n\n` +
-    `When the workflow returns, present its report: the final **verdict**, the branch + preview link/note,\n` +
-    `remaining **CONCERNS**, the fix-pass history, and the **routing** it actually used. Then **wait for\n` +
-    `explicit merge/deploy sign-off.**\n`
+    `## When it returns\n\n` +
+    `The workflow already compressed itself: \`result.brief\` is a deduplicated, lossless summary written\n` +
+    `inside the loop (headline · what changed · findings merged by ROOT CAUSE with the lenses that agreed ·\n` +
+    `what landed · what you must decide). **Present \`brief\` — do not re-summarize it.** It was compressed\n` +
+    `once, by an agent that had the full evidence; compressing it again only loses more. Render it as prose\n` +
+    `+ the findings, add the branch/preview from \`result.land\` and the \`result.routing\` line, and say\n` +
+    `nothing the brief does not support. Then **wait for explicit merge/deploy sign-off.**\n`
   );
 }
 

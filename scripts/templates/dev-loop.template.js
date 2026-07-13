@@ -141,6 +141,34 @@ const LAND_SCHEMA = {
   required: ['branch', 'commitSha', 'pushed', 'previewUrlOrNote', 'notes'],
   properties: { branch: { type: 'string' }, commitSha: { type: 'string' }, pushed: { type: 'boolean' }, previewUrlOrNote: { type: 'string' }, notes: { type: 'string' } },
 };
+// The run's own summary. Compression happens HERE, inside the loop, not in the
+// owner's session: the raw result (plan + 4 lens reports + checks + probe +
+// screenshot + land) is far too big to read, and shipping it out only to be
+// summarized there wastes the owner's context on text they never see.
+// LOSSLESS on anything decision-relevant; dedup is by ROOT CAUSE, not by lens.
+const BRIEF_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['headline', 'changed', 'findings', 'landed', 'ownerActions'],
+  properties: {
+    headline: { type: 'string' },
+    changed: { type: 'array', items: { type: 'string' } },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['severity', 'issue', 'location', 'raisedBy'],
+        properties: {
+          severity: { type: 'string', enum: ['BLOCKER', 'SHOULD-FIX', 'NIT', 'PRE-EXISTING'] },
+          issue: { type: 'string' },
+          location: { type: 'string' },
+          raisedBy: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+    landed: { type: 'string' },
+    ownerActions: { type: 'array', items: { type: 'string' } },
+  },
+};
 // Re-runs a FAILED gate check against the base tree, so a check that was already
 // RED before the change is not blamed on the change. `newFailures` is the guard:
 // failure units present in the worktree run but NOT on base = a real regression
@@ -442,8 +470,45 @@ if (g.verdict === 'FAIL') {
   );
 }
 
-const GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land'];
+// ---------------- 6. Report (compress the run; no new judgments) ----------------
+phase('Report');
+const evidence = {
+  feature,
+  tier: ctx.tier,
+  verdict: g.verdict,
+  blockers: g.blockers,
+  concerns: g.concerns,
+  waived: g.waived,
+  fixPasses: fixPass,
+  gateHistory: history,
+  filesChanged: impl.filesChanged,
+  implSummary: impl.summary,
+  checks: g.checks ? g.checks.checks : null,
+  baselineProbe: g.baseProbe ? g.baseProbe.probes : null,
+  lenses: (g.lenses || []).map((l) => ({ lens: l.lens, summary: l.summary, findings: l.findings })),
+  screenshot: g.screenshot ? { verdict: g.screenshot.verdict, captured: g.screenshot.captured, defects: g.screenshot.defects } : null,
+  crossModel: g.xmodel && !g.xmodel.skipped ? g.xmodel.findings : null,
+  land,
+  dryRun,
+};
+const brief = await agent(
+  `Compress this dev-loop run into the tightest brief that loses NOTHING the owner needs to decide with. You are summarizing, NOT reviewing: invent no findings, soften no severity, and drop no blocker or concern.\n\n` +
+    `RULES:\n` +
+    `- **Dedup by ROOT CAUSE, not by lens.** Several reviewers usually describe the SAME underlying defect in different words — state it ONCE, in the clearest wording, and list every lens that raised it in \`raisedBy\`. Convergence is signal: it belongs in the brief, not as repetition.\n` +
+    `- Keep every distinct finding. If two findings share a root cause but need different fixes, they are two findings.\n` +
+    `- A \`[pre-existing]\` concern gets severity 'PRE-EXISTING' and must say plainly it was already broken on \`${ctx.baseBranch}\` and is not this change's fault.\n` +
+    `- \`changed\`: one line per file — the file and what changed in it, concretely.\n` +
+    `- \`location\`: a real \`file:line\` or \`file\` from the findings; never invent one.\n` +
+    `- \`ownerActions\`: ONLY what the human must actually decide or do (review the pushed branch, merge, fix a baseline, resolve a blocker). If nothing is needed, return an empty array. Never pad.\n` +
+    `- \`headline\`: ONE sentence — the verdict and what actually happened. Plain words, no hedging, no restating the feature request.\n` +
+    `- Write plain prose. No filler, no "successfully", no restating these instructions.\n\n` +
+    `RUN EVIDENCE (JSON):\n${JSON.stringify(evidence, null, 1)}`,
+  { label: 'report', phase: 'Report', schema: BRIEF_SCHEMA, ...route('report') },
+);
+
+const GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land', 'report'];
 return {
+  brief,
   feature,
   repo: VERILOOP.repoName,
   tier: ctx.tier,

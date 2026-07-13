@@ -21,7 +21,7 @@ import { detectRoster } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.2.0';
+const VERILOOP_VERSION = '0.2.1';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -103,7 +103,7 @@ function repoUsesPrettier(repo, cj) {
 
 // ---- cost/quality routing (phase-group → model + reasoning effort) ----
 // Phase groups, not individual agents: a knob per agent would be unusable.
-const PHASE_GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land'];
+const PHASE_GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land', 'report'];
 const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // Presets are only DEFAULTS for the per-group map — the map is the primitive, so
@@ -119,6 +119,7 @@ const BUDGET_PRESETS = {
     checks: { model: 'haiku', effort: 'low' },
     fix: { model: 'sonnet', effort: 'medium' },
     land: { model: 'haiku', effort: 'low' },
+    report: { model: 'haiku', effort: 'medium' },
   },
   balanced: {
     plan: { model: 'opus', effort: 'high' },
@@ -127,6 +128,7 @@ const BUDGET_PRESETS = {
     checks: { model: 'haiku', effort: 'low' },
     fix: { model: 'opus', effort: 'medium' },
     land: { model: 'sonnet', effort: 'low' },
+    report: { model: 'sonnet', effort: 'high' },
   },
   max: {
     plan: { model: 'opus', effort: 'xhigh' },
@@ -135,6 +137,7 @@ const BUDGET_PRESETS = {
     checks: { model: 'sonnet', effort: 'low' },
     fix: { model: 'opus', effort: 'high' },
     land: { model: 'sonnet', effort: 'medium' },
+    report: { model: 'opus', effort: 'high' },
   },
 };
 
@@ -223,6 +226,7 @@ function buildMeta(repoName, hasUi) {
       { title: 'Gate', detail: 'real exit-code checks + review lenses (depth by tier)' },
       { title: 'Fix', detail: 'bounded auto-fix of blockers (<=3 passes)' },
       { title: 'Land', detail: 'docs sync + push branch/preview (no merge)' },
+      { title: 'Report', detail: 'compress the run into a lossless brief' },
     ],
   };
 }

@@ -112,7 +112,7 @@ posture / per-phase model routing** (below), and any repo-specific gate checks t
 aren't portable commands.
 
 **Budget posture + model routing.** The emitted loop routes each phase group
-(`plan`, `implement`, `review`, `checks`, `fix`, `land`) to its own model and
+(`plan`, `implement`, `review`, `checks`, `fix`, `land`, `report`) to its own model and
 reasoning effort. `budget_posture` (frugal/balanced/max) picks a preset; `phase_models`
 overrides any group individually — so "plan on Fable, build on Opus" is
 `{"phase_models": {"plan": "fable", "implement": "opus"}}`. An unknown model, effort,
@@ -133,7 +133,7 @@ Schema (every field optional):
   "high_risk_areas": string[],      // extra keywords appended to the high-risk tier
   "budget_posture": "frugal" | "balanced" | "max",   // default balanced; cost dial
   "phase_models": {                 // per-phase model — overrides the posture preset
-    "plan"|"implement"|"review"|"checks"|"fix"|"land": "haiku"|"sonnet"|"opus"|"fable" },
+    "plan"|"implement"|"review"|"checks"|"fix"|"land"|"report": "haiku"|"sonnet"|"opus"|"fable" },
   "phase_effort": {                 // per-phase reasoning effort
     "<same groups>": "low"|"medium"|"high"|"xhigh"|"max" },
   "extra_checks": [                 // repo-specific gate checks the checks agent runs

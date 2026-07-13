@@ -193,8 +193,13 @@ guarantees worth stating up front:
   nothing is genuinely ambiguous) about scope, design forks, and acceptance criteria.
   The answers become a binding spec: the reviewers treat a silent deviation from an
   explicit decision as a blocker.
+- **The run summarizes itself, losslessly.** A final Report phase compresses the whole
+  run *inside the loop* — deduplicating findings by **root cause** rather than repeating
+  each one per reviewer, so three lenses converging on one bug reads as one finding with
+  three signatures. It never drops a blocker, softens a severity, or invents a finding.
+  You get a brief, not a transcript.
 - **You choose the model for each phase.** `plan`, `implement`, `review`, `checks`,
-  `fix`, `land` route independently — e.g. `{ plan: "fable", implement: "opus" }`, with
+  `fix`, `land`, `report` route independently — e.g. `{ plan: "fable", implement: "opus" }`, with
   the mechanical run-the-commands agent on `haiku`. `posture: frugal|balanced|max` is a
   one-word preset over the same map. Routing sets *how well each layer thinks*; it can
   never drop a check, a lens, or the baseline probe — the cost dial is not allowed to

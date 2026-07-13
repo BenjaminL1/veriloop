@@ -369,6 +369,16 @@ function assert(cond, desc) {
   assert(agentCalls === routed, `routing covers every agent call (${routed}/${agentCalls} routed)`);
   assert(/label: 'implement'[^\n]*route\('implement'\)/.test(wf), "routing: the implement agent is on the 'implement' group (the execution model)");
 
+  // report phase: the run compresses ITSELF, inside the loop
+  assert(routeFor('report', budget, null, null, null).model === 'sonnet', 'route: balanced report → sonnet (compression, not judgment)');
+  assert(routeFor('report', budget, null, null, 'frugal').model === 'haiku', 'route: frugal report → haiku');
+  assert(/label: 'report'[^\n]*route\('report'\)/.test(wf), 'template: the report agent is routed on its own group');
+  assert(/Dedup by ROOT CAUSE, not by lens/.test(wf), 'report: findings are deduped by root cause, not repeated per lens');
+  assert(/invent no findings, soften no severity, and drop no blocker or concern/.test(wf), 'report: summarizing is not reviewing — lossless on decision-relevant facts');
+  assert(/\bbrief,/.test(wf) && /BRIEF_SCHEMA/.test(wf), 'template: the brief is returned as a structured result field');
+  const cmdBrief = readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8');
+  assert(/do not re-summarize it/i.test(cmdBrief), '/dev-loop: the command presents the brief verbatim (no second lossy compression)');
+
   // spec plumbing
   assert(/OWNER'S SPEC/.test(wf) && /args\.spec|a\.spec/.test(wf), 'template: an owner spec is threaded into the loop');
   assert(/do not re-litigate or silently substitute/.test(wf), 'template: the spec is BINDING on the planner/implementer');
