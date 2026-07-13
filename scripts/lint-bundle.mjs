@@ -175,6 +175,24 @@ function main() {
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
   } else fail('no veriloop-manifest.json emitted');
 
+  // 6. authoring budget — every gate agent loads its persona and the /dev-loop
+  //    description on each run; oversized ones are a token tax, not a correctness
+  //    bug, so these are WARNs. Scoped to the same emitted-file list as the rest.
+  for (const f of files) {
+    const rel = f.slice(args.bundle.length + 1);
+    if (!/\.claude\/veriloop\/experts\/.*\.md$/.test(rel) || rel.endsWith('.overrides.md')) continue;
+    const words = readFileSync(f, 'utf8').split(/\s+/).filter(Boolean).length;
+    if (words > 500) {
+      const persona = rel.split('/').pop().replace(/\.md$/, '');
+      warn(`persona ${persona} is ${words} words (budget 500) — every gate agent loads it; trim the template`);
+    }
+  }
+  const cmdBudget = join(args.bundle, '.claude/commands/dev-loop.md');
+  if (files.includes(cmdBudget) && existsSync(cmdBudget)) {
+    const dm = readFileSync(cmdBudget, 'utf8').match(/^description:\s*(.*)$/m);
+    if (dm && dm[1].length > 500) warn(`/dev-loop description is ${dm[1].length} chars (budget 500) — trim the command frontmatter`);
+  }
+
   // report
   const name = args.name || '(bundle)';
   console.log(`\nveriloop lint — ${name} @ ${args.bundle.split('/').slice(-1)[0]}`);

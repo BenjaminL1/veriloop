@@ -15,7 +15,8 @@
       "source": "./",
       "description": "Compile a self-verifying, per-feature dev-loop for any repo (personas + constitution + exit-code gate + /dev-loop command).",
       "version": "0.2.0",
-      "keywords": ["dev-loop", "code-review", "verification"]
+      "keywords": ["dev-loop", "code-review", "verification"],
+      "strict": true
     }
   ]
 }

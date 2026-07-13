@@ -246,6 +246,9 @@ Distribution fixes (verified against current official specs):
   versions); tag releases `veriloop-vX.Y.Z`; CHANGELOG.
 - Add CI to the veriloop repo itself: `claude plugin validate .` + selftest on push
   (the compiler gets its own exit-code gate — good story, good safety).
+- Cross-tool install adapters precedent — superpowers ships the same skill files into
+  Codex/Cursor/Copilot CLI via per-tool installers; evaluate for launch breadth
+  alongside the official-marketplace listing.
 
 **Trust pack** (make-or-break for a shell-running skill; from documented attack
 patterns):

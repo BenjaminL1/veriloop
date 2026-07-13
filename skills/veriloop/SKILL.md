@@ -1,13 +1,12 @@
 ---
 name: veriloop
 description: >-
-  Generate a tailored, self-verifying dev-loop for ANY repo. Points at a
-  repo/directory and compiles a bespoke engineering setup for it: AI reviewer
-  "expert" personas, a constitution of the repo's invariants, and a per-feature
-  dev-loop workflow whose gate passes/fails on REAL command exit codes (not the
-  AI's self-assessment), plus a /dev-loop slash command to drive it. Use when the
-  user wants to "set up a dev loop", "add a review gate", "scaffold veriloop", or
-  "generate a dev-loop / review pipeline for this repo".
+  Use when the user wants to "set up a dev loop", "add a review gate", "scaffold
+  veriloop", or "generate a dev-loop / review pipeline" for a repo. Compiles a
+  bespoke, self-verifying engineering setup for ANY repo: AI reviewer personas, a
+  code-cited constitution of the repo's invariants, a per-feature workflow whose
+  gate passes/fails on REAL command exit codes (never the AI's self-assessment),
+  and a /dev-loop slash command to drive it.
 ---
 
 # veriloop — compile a self-verifying dev-loop for any repo

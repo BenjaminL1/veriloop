@@ -167,6 +167,34 @@ function assert(cond, desc) {
   assert(!/other-advise/.test((r.stdout || '') + (r.stderr || '')), 'lint-bundle: never inspects the non-emitted sibling file');
 }
 
+// --- authoring-budget WARNs: a fresh bundle is within budget (no warning); a
+//     fattened persona trips a WARN — never a FAIL (budget discipline, not
+//     correctness). ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-budget-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'budget', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+
+  const fresh = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(fresh.status === 0, 'lint-bundle: a fresh bundle passes');
+  assert(!/budget 500/.test(fresh.stdout || ''), 'lint-bundle: a fresh bundle is within the persona word budget (no warning)');
+
+  // fatten one emitted persona well past the 500-word budget
+  const persona = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster[0].file;
+  const personaName = persona.split('/').pop().replace(/\.md$/, '');
+  writeFileSync(join(tmp, persona), readFileSync(join(tmp, persona), 'utf8') + '\n' + 'word '.repeat(600));
+
+  const fat = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(fat.status === 0, 'lint-bundle: an over-budget persona is a WARN, not a FAIL (still exits 0)');
+  assert(
+    new RegExp(`persona ${personaName} is \\d+ words \\(budget 500\\)`).test(fat.stdout || ''),
+    'lint-bundle: the over-budget persona trips a budget warning naming it',
+  );
+}
+
 // --- #9: machine-owned files are exempted from the target repo's format check,
 //     and the backups dir is gitignored — via ONE idempotent marked block in each
 //     owner-owned ignore file (installing veriloop must not break the host gate) ---

@@ -25,6 +25,14 @@ discovered deterministically from `package.json` / `Makefile` / `pyproject.toml`
 (paths, commands, numbers, `file:line` citations); the LLM only handles judgment
 (personas, invariants) — and every mined rule must cite real code.
 
+The popular methodology plugins (superpowers et al.) *instruct* the agent to
+verify its work — prose rules the model may or may not follow on any given turn.
+veriloop **wires** the verification: the gate is generated code that runs your
+repo's own commands and reads their exit codes, and the reviewers are compiled
+*from your repo* (personas cite your actual danger surfaces; the constitution
+cites your actual code), not generic best-practice essays. Instructions can be
+ignored; exit codes can't.
+
 ## Install
 
 veriloop ships as one public repo that is *also* its own plugin marketplace:
@@ -43,6 +51,21 @@ Then, in the repo you want to set up:
 ```
 /veriloop            # runs the pipeline against the current repo
 ```
+
+## Five minutes to first gate
+
+```bash
+cd your-repo
+claude                      # any Claude Code session
+/veriloop                   # detect → verify → scan → interview (≤5 questions) → generate
+/dev-loop fix the typo in the settings page header
+```
+
+That last command runs the full loop on a real (tiny) change: plan → isolated
+worktree → implement → the gate actually runs your `typecheck`/`lint`/`test` and
+reads the exit codes → pushes a preview branch → stops before merge. If a check
+was already red on your base branch, the loop says `[pre-existing]` instead of
+blaming your change.
 
 ## The pipeline (10 phases)
 
