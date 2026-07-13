@@ -314,8 +314,11 @@ function applyWaivers(blockers, waivers) {
   return { blockers: kept, waived };
 }
 
-function verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers) {
+function verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers, missingJobs) {
   let blockers = [], concerns = [];
+  for (const k of (missingJobs || [])) {
+    blockers.push(`gate job '${k}' did not return a result — a verification that does not run cannot pass (fail closed)`);
+  }
   if (checks) {
     // A failed check is a BLOCKER unless the baseline probe proves it was ALREADY
     // failing on the base tree with no new failures added by this change. The
@@ -368,6 +371,11 @@ async function gate(ctx, ph) {
   const out = await parallel(jobs.map((j) => j.run));
   const res = {};
   jobs.forEach((j, i) => { res[j.key] = out[i]; });
+  // FAIL CLOSED: every job scheduled above was REQUIRED for this tier. A null
+  // result means the agent died or was skipped — absent evidence, not passing
+  // evidence. Each missing job becomes a blocker; only a human waiver may
+  // downgrade it.
+  const missingJobs = jobs.filter((j) => res[j.key] == null).map((j) => j.key);
   const checks = res.checks;
   const lenses = jobs.filter((j) => j.key.startsWith('lens:')).map((j) => res[j.key]).filter(Boolean);
   const shot = res.shot || null;
@@ -385,8 +393,8 @@ async function gate(ctx, ph) {
     ? await runBaselineProbe(ctx, failedGate, checks.failingOutput, ph)
     : null;
 
-  const v = verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers);
-  return { verdict: v.verdict, blockers: v.blockers, concerns: v.concerns, waived: v.waived, checks, lenses, screenshot: shot, xmodel, baseProbe };
+  const v = verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers, missingJobs);
+  return { verdict: v.verdict, blockers: v.blockers, concerns: v.concerns, waived: v.waived, checks, lenses, screenshot: shot, xmodel, baseProbe, missingJobs };
 }
 
 const digest = (g) => ({ verdict: g.verdict, blockers: g.blockers.length, concerns: g.concerns.length, waived: g.waived.length });
@@ -409,13 +417,16 @@ log(`Plan OK — tier=${planned.tier}, touches: ${planned.touchedAreas.join(', '
 
 // ---------------- 2. Implement (isolated worktree) ----------------
 phase('Implement');
+const staticChecks = VERILOOP.gate.filter((c) => c.name === 'typecheck' || c.name === 'lint');
+const staticList = staticChecks.length ? staticChecks.map((c) => `\`${c.cmd}\``).join(' and ') : 'none configured — skip the pre-flight';
 const impl = await agent(
   `${RESOLVE}\n` +
     `Implement this slice in an ISOLATED git worktree so the owner's main checkout is never touched.\n` +
     `Steps: pick a branch \`feat/<kebab-slug>\`; determine the base branch (\`git -C $REPO symbolic-ref --short HEAD\` or default main); create a persistent worktree OUTSIDE the repo (e.g. \`git -C $REPO worktree add "$(dirname "$REPO")/.${VERILOOP.repoName}-veriloop/<slug>" -b <branch> <base>\`).\n` +
     `MAKE DEPENDENCIES AVAILABLE so the gate's checks can run: ${VERILOOP.depsSetup}\n` +
-    `Implement the plan below there (edits via the worktree path only); keep changes surgical and constitution-compliant. Do NOT commit, push, or review yet.${specBlock}\n\nPLAN:\n${planned.plan}\n\nReturn the worktree path, the branch, the base branch used, a summary, and the files changed.`,
-  { label: 'implement', phase: 'Implement', schema: { ...IMPL_SCHEMA, properties: { ...IMPL_SCHEMA.properties, baseBranch: { type: 'string' } }, required: [...IMPL_SCHEMA.required, 'baseBranch'] }, ...route('implement') },
+    `Implement the plan below there (edits via the worktree path only); keep changes surgical and constitution-compliant. Do NOT commit, push, or review yet. ` +
+    `Before returning, PRE-FLIGHT your work: run the gate's fast static checks once in the worktree — ${staticList} — judging strictly by exit code. If YOUR new code broke one, fix your code and re-run once. HARD LIMITS: never run a mutating command (no formatters/--write/--fix), never touch files outside your change to silence a check, and if a failure is not caused by your change, LEAVE IT and say so. Report what you finally saw in \`preflight\` (e.g. "typecheck exit 0, lint exit 0"). This report has ZERO authority — the gate re-runs everything itself and ignores your claim; its only purpose is to avoid burning a full gate cycle on a diff that does not compile.${specBlock}\n\nPLAN:\n${planned.plan}\n\nReturn the worktree path, the branch, the base branch used, a summary, and the files changed.`,
+  { label: 'implement', phase: 'Implement', schema: { ...IMPL_SCHEMA, properties: { ...IMPL_SCHEMA.properties, baseBranch: { type: 'string' }, preflight: { type: 'string' } }, required: [...IMPL_SCHEMA.required, 'baseBranch'] }, ...route('implement') },
 );
 const ctx = { wt: impl.worktreePath, branch: impl.branch, baseBranch: impl.baseBranch || 'main', tier: planned.tier, touched: planned.touchedAreas };
 log(`Implemented on ${ctx.branch} (${impl.filesChanged.length} files) in ${ctx.wt}`);
@@ -488,6 +499,8 @@ const evidence = {
   lenses: (g.lenses || []).map((l) => ({ lens: l.lens, summary: l.summary, findings: l.findings })),
   screenshot: g.screenshot ? { verdict: g.screenshot.verdict, captured: g.screenshot.captured, defects: g.screenshot.defects } : null,
   crossModel: g.xmodel && !g.xmodel.skipped ? g.xmodel.findings : null,
+  missingGateJobs: g.missingJobs || [],
+  implPreflight: impl.preflight || null,
   land,
   dryRun,
 };

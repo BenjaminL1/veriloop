@@ -21,7 +21,7 @@ import { detectRoster } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.2.1';
+const VERILOOP_VERSION = '0.2.2';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid

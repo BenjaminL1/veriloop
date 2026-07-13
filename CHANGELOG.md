@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — 2026-07-13
+- Gate fails CLOSED (finding #10): a gate agent that dies or is skipped becomes a blocker — absent evidence is never passing evidence. Only a human waiver may downgrade it.
+- Implementer pre-flight: runs the gate's static checks (typecheck/lint) once before hand-off and reports what it saw — zero authority, the gate re-runs everything; mutating commands are barred (the warm-up-corruption guard).
+
 ## 0.2.1 — 2026-07-13
 - Report phase: the loop compresses its own run into a lossless brief before returning — findings deduped by root cause (not repeated once per lens), every blocker/concern preserved, nothing invented. The owner's session presents the brief rather than re-summarizing a transcript.
 

@@ -188,6 +188,9 @@ guarantees worth stating up front:
   gate check fails, the loop re-runs it against the base tree in a throwaway
   worktree: pre-existing failures become a `[pre-existing]` concern, while any
   *new* failure added on top of a red baseline still blocks.
+- **Absent evidence never passes.** If a gate job (checks, a review lens, the
+  screenshot) dies or is skipped, the loop FAILS closed — a verification that
+  did not run cannot vouch for anything. Only a human waiver can downgrade it.
 - **It asks before it builds — but only what it can't work out itself.** `/dev-loop`
   recons the code first, then interviews you (≤5 questions, skipped entirely when
   nothing is genuinely ambiguous) about scope, design forks, and acceptance criteria.

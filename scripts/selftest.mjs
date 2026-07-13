@@ -285,6 +285,31 @@ function assert(cond, desc) {
   const dirty = verdictFrom(failed, [], null, null, probe('fail', [], false), []);
   assert(dirty.verdict === 'FAIL', 'verdict: probe that did not clean up its worktree is not trusted → FAIL (fail safe)');
 
+  const deadChecks = verdictFrom(passing, [], null, null, null, [], ['checks']);
+  assert(
+    deadChecks.verdict === 'FAIL' && deadChecks.blockers.some((b) => b.includes('did not return a result')),
+    'verdict: a dead checks agent is a BLOCKER, not a silent PASS (fail closed, finding #10)',
+  );
+
+  const deadLens = verdictFrom(passing, [], null, null, null, [], ['lens:ux']);
+  assert(deadLens.verdict === 'FAIL', 'verdict: a dead review lens blocks — absent evidence is not passing evidence');
+
+  const waivedMissing = verdictFrom(passing, [], null, null, null, ['did not return a result'], ['checks']);
+  assert(waivedMissing.verdict === 'WAIVED', 'verdict: only a human waiver may downgrade a missing gate job');
+
+  assert(
+    /missingJobs/.test(wf) && /fail closed/.test(wf),
+    'template: gate computes missing jobs and fails closed',
+  );
+  assert(
+    /PRE-FLIGHT/.test(wf) && /ZERO authority/.test(wf),
+    'template: implementer pre-flight is report-only (the gate ignores its claim)',
+  );
+  assert(
+    /never run a mutating command/.test(wf),
+    'template: pre-flight bars mutating commands (the warm-up-corruption guard)',
+  );
+
   assert(
     /\[pre-existing\][^\n]*OUT OF SCOPE/i.test(wf.replace(/\\n/g, '\n')),
     'template: the fix agent is told [pre-existing] concerns are OUT OF SCOPE',
