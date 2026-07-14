@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 — 2026-07-13
+- interview `roster_add`: the LLM-refined, owner-confirmed roster now actually reaches the generator (finding #11, discovered during veriloop's own self-install: the detector's heuristics missed veriloop's supply-chain/drift surfaces and there was no way to add them).
+
 ## 0.3.0 — 2026-07-13
 - Experts gain a second mandate. The same personas that REVIEW in the dev-loop gate now also ADVISE in consultation — two new emitted commands make the mandate explicit: `/advise` (brainstorm/sanity-check/pressure-test an idea BEFORE building, inline, in ADVISE mode) and `/review` (the expert lenses on a working-tree diff or commit range, WITHOUT the full loop). Both are read-only and carry NO gate authority: they produce advice/findings, never a PASS/FAIL verdict, and never substitute for the dev-loop gate.
 - Persona word budget raised 500 → 700 and reframed: it is an accretion tripwire (a persona that grew past 700 words usually carries unreviewed bolt-ons a human should re-read and re-distill), not an instruction-dilution/token claim. Still WARN-only.

@@ -23,6 +23,15 @@ const SEC_KEYWORDS = /\b(auth|rls|secret|token|password|payment|oauth|jwt|rbac|p
 const DRIFT_FILE_RE = /(conform|parity|golden|oracle|fixture|snapshot)/i;
 const DRIFT_KEYWORDS = /\b(oracle|byte.?parity|source of truth|conformance|golden|reference implementation|must (stay|remain) .*compatible)\b/i;
 
+// The standard title + tiers each specialist gets when IT is elected. Exported so
+// the interview's `roster_add` (generate.mjs) can default an owner-confirmed add to
+// the exact same shape the detector would have used — one source of truth.
+export const SPECIALIST_DEFAULTS = {
+  security: { title: 'Security & Data Reviewer', tiers: ['high'] },
+  drift: { title: 'Drift Sentinel', tiers: ['standard', 'high'] },
+  ux: { title: 'UX / Visual Reviewer', tiers: ['standard', 'high'] },
+};
+
 /** Bounded filename search — shallow, capped, skips heavy dirs. */
 function findFiles(root, re, { maxDepth = 4, limit = 40 } = {}) {
   const skip = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'target', '__pycache__', '.venv', 'venv', 'coverage']);
@@ -91,7 +100,7 @@ export function detectRoster(root, commandsJson) {
   if (secConcrete.length) {
     const secEvidence = [...secConcrete];
     if (SEC_KEYWORDS.test(docs)) secEvidence.push('docs also mention auth/secrets/permissions');
-    experts.push({ key: 'security', title: 'Security & Data Reviewer', tiers: ['high'], evidence: secEvidence });
+    experts.push({ key: 'security', ...SPECIALIST_DEFAULTS.security, evidence: secEvidence });
   } else {
     notes.push('security expert NOT added — no concrete auth/db/secret surface detected (avoids a jobless expert)');
   }
@@ -102,14 +111,14 @@ export function detectRoster(root, commandsJson) {
   if (driftFiles.length) driftEvidence.push(`parity/golden files: ${driftFiles.slice(0, 3).join(', ')}`);
   if (DRIFT_KEYWORDS.test(docs)) driftEvidence.push('docs describe an oracle / source-of-truth / byte-parity contract');
   if (driftEvidence.length) {
-    experts.push({ key: 'drift', title: 'Drift Sentinel', tiers: ['standard', 'high'], evidence: driftEvidence });
+    experts.push({ key: 'drift', ...SPECIALIST_DEFAULTS.drift, evidence: driftEvidence });
   }
 
   // 4. UX / visual
   if (commandsJson.has_ui) {
     const ux = ['repo has a user-facing UI (framework/e2e signals in commands.json)'];
     if (commandsJson.commands.e2e) ux.push(`e2e: ${commandsJson.commands.e2e.cmd}`);
-    experts.push({ key: 'ux', title: 'UX / Visual Reviewer', tiers: ['standard', 'high'], evidence: ux });
+    experts.push({ key: 'ux', ...SPECIALIST_DEFAULTS.ux, evidence: ux });
   }
 
   // cap at 4 (baseline + 3); drop lowest-evidence specialists if over

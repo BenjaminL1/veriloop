@@ -1,0 +1,10 @@
+{
+  "name": "veriloop",
+  "version": "0.3.1",
+  "private": true,
+  "description": "Compile a tailored, self-verifying dev-loop for any repo — command manifest only; the project is deliberately dependency-free.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node scripts/selftest.mjs"
+  }
+}

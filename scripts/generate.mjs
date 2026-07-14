@@ -17,11 +17,11 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from
 import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { detectRoster } from './lib/roster.mjs';
+import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.3.0';
+const VERILOOP_VERSION = '0.3.1';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -163,6 +163,50 @@ function buildBudget(interview) {
     models: pick('phase_models', MODELS),
     effort: pick('phase_effort', EFFORTS),
   };
+}
+
+// The specialist keys an owner may add — exactly the persona bodies render.mjs
+// supports, minus the always-present baseline. (finding #11)
+const ROSTER_ADD_KEYS = Object.keys(SPECIALIST_DEFAULTS); // security | drift | ux
+
+/**
+ * Apply the interview's owner-confirmed roster additions to the detected roster,
+ * IN PLACE, before risk tiers / config are built (so e.g. a drift add engages the
+ * drift-conditional risk keywords). Finding #11: the LLM-refined roster now has a
+ * home in the interview. Fails the BUILD on a bad add — matches buildBudget's throw
+ * style: never emit a loop whose roster silently dropped an owner's expert.
+ */
+function applyRosterAdd(roster, interview) {
+  const adds = interview.roster_add;
+  if (adds === undefined) return;
+  if (!Array.isArray(adds)) throw new Error('interview.roster_add: must be an array of { key, title?, tiers?, evidence }');
+  for (const add of adds) {
+    const key = add && add.key;
+    if (!ROSTER_ADD_KEYS.includes(key)) {
+      throw new Error(`interview.roster_add: '${key}' is not one of ${ROSTER_ADD_KEYS.join(' | ')}`);
+    }
+    // Every expert carries the evidence that nominated it — the roster covenant.
+    if (!Array.isArray(add.evidence) || !add.evidence.some((e) => typeof e === 'string' && e.trim())) {
+      throw new Error(`interview.roster_add.${key}: evidence is required — a non-empty array of strings (what nominated this expert)`);
+    }
+    const evidence = add.evidence.filter((e) => typeof e === 'string' && e.trim());
+    const existing = roster.experts.find((e) => e.key === key);
+    if (existing) {
+      // detector already elected this key — merge, don't duplicate.
+      existing.evidence.push(...evidence.map((e) => `owner-confirmed: ${e}`));
+      continue;
+    }
+    const def = SPECIALIST_DEFAULTS[key];
+    roster.experts.push({
+      key,
+      title: add.title || def.title,
+      tiers: Array.isArray(add.tiers) && add.tiers.length ? add.tiers.map(String) : [...def.tiers],
+      evidence,
+    });
+    if (roster.experts.length > 4) {
+      throw new Error(`interview.roster_add: roster would exceed the cap of 4 experts (baseline + 3 specialists)`);
+    }
+  }
 }
 
 function buildRiskTiers(cj, roster) {
@@ -316,6 +360,9 @@ function main() {
     try { interview = JSON.parse(readFileSync(priorManifestPath, 'utf8')).interview_answers || {}; } catch { /* ignore */ }
   }
   if (args.interview) interview = { ...interview, ...JSON.parse(readFileSync(args.interview, 'utf8')) };
+  // owner-confirmed roster additions (finding #11) — applied BEFORE buildConfig so
+  // roster-conditional risk keywords (e.g. drift) engage.
+  applyRosterAdd(roster, interview);
   const config = buildConfig(cj, roster, repoName, interview);
   const meta = buildMeta(repoName, cj.has_ui);
 

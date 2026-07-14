@@ -7,7 +7,7 @@
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -462,6 +462,72 @@ function assert(cond, desc) {
   assert(/AskUserQuestion/.test(cmd) && /cannot ask the owner anything/.test(cmd), '/dev-loop: the interview runs in the COMMAND layer (the workflow cannot ask questions)');
   assert(/ask nothing and go straight/.test(cmd), '/dev-loop: an unambiguous feature triggers NO interview');
   assert(/plan: "fable", implement: "opus"/.test(cmd), '/dev-loop: documents the per-phase model split');
+}
+
+// --- v0.3.1 (finding #11): interview `roster_add` reaches the generator — the
+//     LLM-refined, owner-confirmed roster the detector missed. Additions default to
+//     roster.mjs's title/tiers, run BEFORE risk tiers, cap at 4, require evidence,
+//     reject unknown keys, and MERGE (never duplicate) a key the detector elected. ---
+{
+  const gen = (dir, interviewObj) => {
+    const cj = detectCommands(dir);
+    const cjPath = join(dir, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    const argv = [generatePath, '--repo', dir, '--commands', cjPath, '--out', dir];
+    if (interviewObj) {
+      const ip = join(dir, 'interview.json');
+      writeFileSync(ip, JSON.stringify(interviewObj));
+      argv.push('--interview', ip);
+    }
+    return spawnSync(process.execPath, argv, { encoding: 'utf8' });
+  };
+
+  // 1. bare node repo (no auth/db/parity signals) — the owner adds security + drift.
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-rosteradd-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'bare', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const r = gen(tmp, { roster_add: [
+    { key: 'security', title: 'Supply-Chain Reviewer', evidence: ['parses untrusted CI text'] },
+    { key: 'drift', evidence: ['machine/hand ownership promises'] },
+  ] });
+  assert(r.status === 0, 'roster_add: a valid add generates cleanly (exit 0)');
+  const manifest = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  const keys = manifest.roster.map((e) => e.key);
+  assert(keys.length === 3 && keys.includes('code-review') && keys.includes('security') && keys.includes('drift'),
+    'roster_add: manifest roster is code-review + security + drift (the two owner-added specialists)');
+  assert(existsSync(join(tmp, '.claude/veriloop/experts/security.md')) && existsSync(join(tmp, '.claude/veriloop/experts/drift.md')),
+    'roster_add: both added persona files exist on disk');
+  const driftEntry = manifest.roster.find((e) => e.key === 'drift');
+  assert(driftEntry.title === 'Drift Sentinel', "roster_add: an add with no title inherits roster.mjs's default (Drift Sentinel)");
+  const wf = readFileSync(join(tmp, `.claude/workflows/${manifest.repo_name}-dev-loop.js`), 'utf8');
+  const riskBlob = wf.slice(wf.indexOf('"riskTiers"'), wf.indexOf('"riskTiers"') + 600);
+  assert(/"(oracle|parity)"/.test(riskBlob),
+    'roster_add: risk tiers carry a drift-conditional keyword — proving roster_add ran BEFORE buildRiskTiers');
+
+  // 2. unknown key → the build FAILS FAST, naming the valid keys.
+  const bad = mkdtempSync(join(tmpdir(), 'veriloop-rosterbad-'));
+  writeFileSync(join(bad, 'package.json'), JSON.stringify({ name: 'bad', scripts: { test: 'vitest run' } }));
+  const rBad = gen(bad, { roster_add: [{ key: 'typescript', evidence: ['x'] }] });
+  assert(rBad.status !== 0 && /security \| drift \| ux/.test(rBad.stderr || ''),
+    'roster_add: an unknown key FAILS THE BUILD and lists the valid keys');
+
+  // 3. missing evidence → the build fails (the roster covenant: every expert carries evidence).
+  const noEv = mkdtempSync(join(tmpdir(), 'veriloop-rosternoev-'));
+  writeFileSync(join(noEv, 'package.json'), JSON.stringify({ name: 'noev', scripts: { test: 'vitest run' } }));
+  const rNoEv = gen(noEv, { roster_add: [{ key: 'security' }] });
+  assert(rNoEv.status !== 0 && /evidence is required/.test(rNoEv.stderr || ''),
+    'roster_add: an add with no evidence FAILS THE BUILD');
+
+  // 4. adding a key the DETECTOR already elected merges (does not duplicate).
+  const dup = mkdtempSync(join(tmpdir(), 'veriloop-rosterdup-'));
+  writeFileSync(join(dup, 'package.json'), JSON.stringify({ name: 'dup', scripts: { test: 'vitest run' } }));
+  mkdirSync(join(dup, 'supabase'), { recursive: true }); // concrete surface → detector self-elects security
+  const rDup = gen(dup, { roster_add: [{ key: 'security', evidence: ['owner reconfirms the auth surface'] }] });
+  assert(rDup.status === 0, 'roster_add: re-adding a self-elected key generates cleanly');
+  const mDup = JSON.parse(readFileSync(join(dup, '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  const secEntries = mDup.roster.filter((e) => e.key === 'security');
+  assert(secEntries.length === 1, 'roster_add: re-adding a detector-elected key does NOT duplicate the expert');
+  assert(secEntries[0].evidence.some((e) => /^owner-confirmed: owner reconfirms the auth surface/.test(e)),
+    'roster_add: the owner evidence is MERGED into the existing entry (prefixed owner-confirmed:)');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

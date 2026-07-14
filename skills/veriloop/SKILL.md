@@ -139,7 +139,10 @@ Schema (every field optional):
   "phase_effort": {                 // per-phase reasoning effort
     "<same groups>": "low"|"medium"|"high"|"xhigh"|"max" },
   "extra_checks": [                 // repo-specific gate checks the checks agent runs
-    { "name": string, "instruction": string, "areaKeywords"?: string[] } ] }
+    { "name": string, "instruction": string, "areaKeywords"?: string[] } ],
+  "roster_add": [              // add experts the detector missed — LLM-refined roster, owner-confirmed
+    { "key": "security"|"drift"|"ux", "title"?: string, "tiers"?: string[],
+      "evidence": string[] } ] } // evidence REQUIRED: what nominated this expert
 ```
 Answers persist in the manifest's `interview_answers` and **merge** over prior
 answers on every re-run — a re-run WITHOUT `--interview` keeps them; a re-run WITH
@@ -161,7 +164,9 @@ DB-touching changes:
    first-pass roster (baseline + specialists nominated by danger surfaces, capped
    at 4). Refine it with your scan: **every constitution rule must be owned by
    exactly one expert; every expert must own ≥ a few rules — cut jobless experts,
-   keep only opposed mandates.** Present the roster + evidence; get a yes.
+   keep only opposed mandates.** Present the roster + evidence; get a yes. Additions
+   the scan justifies go into the interview file as `roster_add` (with evidence) so
+   the generator actually applies them.
 2. Generate the bundle:
    ```
    node SKILL_DIR/../../scripts/generate.mjs --repo "$REPO" --commands "$REPO/.claude/veriloop/commands.json"
