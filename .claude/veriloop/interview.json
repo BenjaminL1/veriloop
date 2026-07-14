@@ -1,0 +1,27 @@
+{
+  "cross_model": true,
+  "budget_posture": "frugal",
+  "phase_models": { "plan": "fable" },
+  "high_risk_areas": ["detector", "hostile", "splice", "template", "emitted", "fixture", "safety", "ownership"],
+  "roster_add": [
+    {
+      "key": "security",
+      "title": "Supply-Chain & Input-Safety Reviewer",
+      "evidence": [
+        "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
+        "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
+        "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
+        "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+      ]
+    },
+    {
+      "key": "drift",
+      "evidence": [
+        "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
+        "splice-marker integrity (scripts/lib/render.mjs:11)",
+        "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
+        "selftest golden expectations — 96 assertions are this repo's only gate"
+      ]
+    }
+  ]
+}

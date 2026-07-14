@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 *.log
 .veriloop-tmp/
+
+# <<< veriloop:auto:start >>>
+.claude/veriloop/.backups/
+# <<< veriloop:auto:end >>>

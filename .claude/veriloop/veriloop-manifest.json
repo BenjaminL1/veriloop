@@ -1,0 +1,294 @@
+{
+  "veriloop_version": "0.3.1",
+  "generated_at": "2026-07-14T02:35:05.718Z",
+  "repo_name": "veriloop",
+  "repo_root": ".",
+  "repo_sha": "a56988dae2786a31121fed21f821a38fb01c0d59",
+  "stack": [
+    "node"
+  ],
+  "package_manager": "npm",
+  "has_ui": false,
+  "polyglot": [],
+  "roster": [
+    {
+      "key": "code-review",
+      "title": "Baseline Reviewer",
+      "tiers": [
+        "trivial",
+        "standard",
+        "high"
+      ],
+      "evidence": [
+        "always included — correctness, conventions, type-safety, test integrity"
+      ],
+      "file": ".claude/veriloop/experts/baseline-reviewer.md"
+    },
+    {
+      "key": "security",
+      "title": "Supply-Chain & Input-Safety Reviewer",
+      "tiers": [
+        "high"
+      ],
+      "evidence": [
+        "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
+        "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
+        "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
+        "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+      ],
+      "file": ".claude/veriloop/experts/security.md"
+    },
+    {
+      "key": "drift",
+      "title": "Drift Sentinel",
+      "tiers": [
+        "standard",
+        "high"
+      ],
+      "evidence": [
+        "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
+        "splice-marker integrity (scripts/lib/render.mjs:11)",
+        "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
+        "selftest golden expectations — 96 assertions are this repo's only gate"
+      ],
+      "file": ".claude/veriloop/experts/drift.md"
+    }
+  ],
+  "roster_notes": [
+    "security expert NOT added — no concrete auth/db/secret surface detected (avoids a jobless expert)"
+  ],
+  "gate_commands": [
+    {
+      "name": "test",
+      "cmd": "npm run test",
+      "verified": true,
+      "ci": false
+    }
+  ],
+  "budget": {
+    "posture": "frugal",
+    "presets": {
+      "frugal": {
+        "plan": {
+          "model": "sonnet",
+          "effort": "high"
+        },
+        "implement": {
+          "model": "sonnet",
+          "effort": "medium"
+        },
+        "review": {
+          "model": "sonnet",
+          "effort": "medium"
+        },
+        "checks": {
+          "model": "haiku",
+          "effort": "low"
+        },
+        "fix": {
+          "model": "sonnet",
+          "effort": "medium"
+        },
+        "land": {
+          "model": "haiku",
+          "effort": "low"
+        },
+        "report": {
+          "model": "haiku",
+          "effort": "medium"
+        }
+      },
+      "balanced": {
+        "plan": {
+          "model": "opus",
+          "effort": "high"
+        },
+        "implement": {
+          "model": "opus",
+          "effort": "medium"
+        },
+        "review": {
+          "model": "opus",
+          "effort": "high"
+        },
+        "checks": {
+          "model": "haiku",
+          "effort": "low"
+        },
+        "fix": {
+          "model": "opus",
+          "effort": "medium"
+        },
+        "land": {
+          "model": "sonnet",
+          "effort": "low"
+        },
+        "report": {
+          "model": "sonnet",
+          "effort": "high"
+        }
+      },
+      "max": {
+        "plan": {
+          "model": "opus",
+          "effort": "xhigh"
+        },
+        "implement": {
+          "model": "opus",
+          "effort": "high"
+        },
+        "review": {
+          "model": "opus",
+          "effort": "xhigh"
+        },
+        "checks": {
+          "model": "sonnet",
+          "effort": "low"
+        },
+        "fix": {
+          "model": "opus",
+          "effort": "high"
+        },
+        "land": {
+          "model": "sonnet",
+          "effort": "medium"
+        },
+        "report": {
+          "model": "opus",
+          "effort": "high"
+        }
+      }
+    },
+    "models": {
+      "plan": "fable"
+    },
+    "effort": {}
+  },
+  "e2e": null,
+  "commands_summary": {
+    "install": {
+      "cmd": "npm install",
+      "safety": "ask",
+      "verified": null,
+      "verified_by_ci": false
+    },
+    "test": {
+      "cmd": "npm run test",
+      "safety": "ask",
+      "verified": true,
+      "verified_by_ci": false
+    },
+    "test_single": {
+      "cmd": "npm run test -- <file>",
+      "safety": "ask",
+      "verified": null,
+      "verified_by_ci": false
+    }
+  },
+  "verified_at": "2026-07-14T02:16:41.064Z",
+  "emitted_files": [
+    {
+      "path": ".claude/workflows/veriloop-dev-loop.js",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/commands/dev-loop.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/commands/advise.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/commands/review.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/veriloop/commands.json",
+      "ownership": "machine",
+      "status": "unchanged"
+    },
+    {
+      "path": ".claude/veriloop/experts/baseline-reviewer.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
+      "ownership": "hand",
+      "status": "written"
+    },
+    {
+      "path": ".claude/veriloop/experts/security.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/veriloop/experts/security.overrides.md",
+      "ownership": "hand",
+      "status": "preserved"
+    },
+    {
+      "path": ".claude/veriloop/experts/drift.md",
+      "ownership": "machine",
+      "status": "written"
+    },
+    {
+      "path": ".claude/veriloop/experts/drift.overrides.md",
+      "ownership": "hand",
+      "status": "preserved"
+    },
+    {
+      "path": ".claude/veriloop/constitution.md",
+      "ownership": "starter",
+      "status": "preserved"
+    },
+    {
+      "path": ".gitignore",
+      "ownership": "shared-block",
+      "status": "written"
+    }
+  ],
+  "interview_answers": {
+    "cross_model": true,
+    "budget_posture": "frugal",
+    "phase_models": {
+      "plan": "fable"
+    },
+    "high_risk_areas": [
+      "detector",
+      "hostile",
+      "splice",
+      "template",
+      "emitted",
+      "fixture",
+      "safety",
+      "ownership"
+    ],
+    "roster_add": [
+      {
+        "key": "security",
+        "title": "Supply-Chain & Input-Safety Reviewer",
+        "evidence": [
+          "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
+          "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
+          "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
+          "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+        ]
+      },
+      {
+        "key": "drift",
+        "evidence": [
+          "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
+          "splice-marker integrity (scripts/lib/render.mjs:11)",
+          "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
+          "selftest golden expectations — 96 assertions are this repo's only gate"
+        ]
+      }
+    ]
+  }
+}

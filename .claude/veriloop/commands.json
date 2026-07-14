@@ -1,0 +1,49 @@
+{
+  "veriloop_schema": 1,
+  "generated_by": "veriloop/scripts/detect.mjs (phase 1)",
+  "repo_root": ".",
+  "package_manager": "npm",
+  "stack": [
+    "node"
+  ],
+  "polyglot": [],
+  "has_ui": false,
+  "warnings": [],
+  "commands": {
+    "install": {
+      "cmd": "npm install",
+      "cwd": ".",
+      "source": "lockfile → npm",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": null,
+      "verify_skipped": "safety=ask — not included (re-run with --include install)"
+    },
+    "test": {
+      "cmd": "npm run test",
+      "cwd": ".",
+      "source": "package.json:8",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": true,
+      "verify_exit": 0,
+      "verify_ms": 1584
+    },
+    "test_single": {
+      "cmd": "npm run test -- <file>",
+      "cwd": ".",
+      "source": "package.json:8",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": null,
+      "verify_skipped": "placeholder command (needs a target file/test)"
+    }
+  },
+  "scopes": [],
+  "ci_commands": [],
+  "ci_files": [],
+  "verified_at": "2026-07-14T02:16:41.064Z"
+}
