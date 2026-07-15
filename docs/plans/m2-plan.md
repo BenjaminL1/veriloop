@@ -284,6 +284,28 @@ ls /Users/benjaminli/my_projects/Torevan/.claude/veriloop/history/*.json | head 
 node scripts/lint-bundle.mjs --bundle /Users/benjaminli/my_projects/Torevan/.claude ; echo $?  # → 0
 ```
 
+**Implementation notes (v0.3.3, veriloop-repo slice as shipped):**
+- **One mechanical substitution vs the sketch:** the record is NOT written with a literal
+  `writeFileSync` in the workflow — `fs`/`Date`/`git` are all harness-forbidden in the
+  emitted loop (`lint-bundle.mjs` FORBIDDEN). Instead the redaction+record-build is a PURE,
+  marker-bounded template region (`veriloop:emit`, mirroring the `veriloop:verdict`
+  precedent) returning `{ relPath, json }`; a single worktree `agent()` step fills three
+  runtime tokens (`__VERILOOP_TS__` / `__VERILOOP_BASE_SHA__` / `__VERILOOP_HEAD_SHA__` — token
+  shapes chosen not to trip the leftover-placeholder regex) and writes the bytes. Redaction
+  therefore runs in testable JS, not inside the agent.
+- **Redaction as shipped:** strip known roots (worktree + repo-root derived from the
+  `<parent>/.veriloop-veriloop/<slug>` layout) → `$REPO`, normalize screenshots to
+  repo-relative, then DROP any line still matching `lint-bundle.mjs:88`'s ABS regex
+  (imperfect root inference degrades to a dropped line, never a leak). `CHECK_SCHEMA` gained
+  optional `exit`/`tail`; `verdictFrom` untouched.
+- **Emission policy:** non-dryRun only; committed+pushed on the feature branch ONLY when the
+  run landed (`land && land.pushed`), otherwise left in the worktree for owner triage.
+  Records are runtime output — NOT in the manifest's `emitted_files`.
+- **Selftest:** the emit region is extracted and executed against synthetic + poisoned
+  evidence (fixture never supplies the evidence under test). Count grew `119 → 131`.
+- **Non-goals honored:** NO Torevan/catan_rl_v2 recommit (owner's merge-time step), NO
+  history pruning/rotation policy, NO gate/lens/verdict changes.
+
 ---
 
 ## Step 6 — Iron rule (holds for every step above)

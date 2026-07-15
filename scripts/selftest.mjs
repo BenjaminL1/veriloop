@@ -7,7 +7,7 @@
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -619,6 +619,78 @@ function assert(cond, desc) {
     joined && joined.source === '.github/workflows/ci.yml:14',
     'ci-adopt parse: backslash line-continuation lines are joined into one command at ci.yml:14',
   );
+}
+
+// --- Step 5: attestation auto-emission. The redaction+record routine is EXTRACTED
+//     from the emitted workflow and EXECUTED against a synthetic evidence object built
+//     inline here (constitution rule 3: the fixture must never supply the evidence under
+//     test). Asserts (a) exactly one history record, (b) it parses with the required spec
+//     keys, (c) a clean record carries no absolute path, and (d) a poisoned input
+//     (/Users, /home, C:\ across tail/summary/screenshots) comes out fully redacted —
+//     constitution rule 7, using the same ABS regex lint-bundle scans committed records with. ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-emit-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'emit', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+  const repoName = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).repo_name;
+  const wf = readFileSync(join(tmp, `.claude/workflows/${repoName}-dev-loop.js`), 'utf8');
+
+  const S = '// <<< veriloop:emit:start >>>';
+  const E = '// <<< veriloop:emit:end >>>';
+  assert(wf.includes(S) && wf.includes(E), 'template: emitted workflow carries the veriloop:emit markers');
+  const attestationFrom = new Function(`${wf.slice(wf.indexOf(S) + S.length, wf.indexOf(E))}; return attestationFrom;`)();
+
+  // synthetic evidence built INLINE — never sourced from a fixture (rule 3)
+  const synth = {
+    feature: 'add a widget', repo: 'demo', tier: 'standard', verdict: 'PASS',
+    blockers: [], concerns: [], waived: [], fixPasses: 0,
+    gateHistory: [{ verdict: 'PASS', blockers: 0, concerns: 0, waived: 0 }],
+    filesChanged: ['src/widget.ts'], implSummary: 'built the widget',
+    checks: [{ name: 'test', command: 'npm test', result: 'pass', exit: 0, tail: 'all green' }],
+    baselineProbe: null,
+    lenses: [{ lens: 'code-review', summary: 'ok', findings: [] }],
+    screenshot: null, crossModel: null, missingGateJobs: [], implPreflight: 'typecheck exit 0',
+    land: { branch: 'feat/widget', commitSha: 'abc1234', pushed: true }, dryRun: false,
+  };
+  const stamps = { ts: '2026-07-14T12-00-00Z', baseSha: 'base0000', headSha: 'head1111' };
+  const clean = attestationFrom(synth, { wt: '/tmp/wt', branch: 'feat/widget' }, stamps, ['/tmp/wt']);
+
+  // (a) exactly one history record, named by the ts
+  assert(clean.relPath === `.claude/veriloop/history/${stamps.ts}.json`, 'emit: relPath is history/<ts>.json');
+  const histDir = join(tmp, '.claude/veriloop/history');
+  mkdirSync(histDir, { recursive: true });
+  writeFileSync(join(histDir, `${stamps.ts}.json`), clean.json);
+  assert(readdirSync(histDir).filter((f) => f.endsWith('.json')).length === 1, 'emit: exactly one history/*.json is written');
+
+  // (b) parses with every required spec key; runtime stamps + normalized land
+  const rec = JSON.parse(clean.json);
+  const requiredKeys = ['ts', 'feature', 'repo', 'tier', 'baseSha', 'headSha', 'verdict', 'checks', 'baselineProbe', 'screenshots', 'screenshotVerdict', 'fixPasses', 'blockers', 'concerns', 'land'];
+  assert(requiredKeys.every((k) => k in rec), 'emit: record has every required spec key');
+  assert(rec.ts === stamps.ts && rec.baseSha === stamps.baseSha && rec.headSha === stamps.headSha, 'emit: ts/baseSha/headSha come from stamps (runtime tokens)');
+  assert(rec.checks.every((c) => 'name' in c && 'command' in c && 'exit' in c && 'tail' in c), 'emit: each check carries name/command/exit/tail');
+  assert(rec.land && rec.land.sha === 'abc1234' && rec.land.pushed === true && rec.land.branch === 'feat/widget', 'emit: land normalized from LAND_SCHEMA to {sha,pushed,branch}');
+
+  // (c) a clean record carries no absolute path
+  const ABS = /(\/Users\/|\/home\/[a-z]|\b[A-Z]:[\\/])/; // === lint-bundle.mjs:88
+  assert(!ABS.test(clean.json), 'emit: a clean record contains no absolute path');
+
+  // (d) a poisoned input comes out fully redacted (constitution rule 7)
+  const poison = {
+    ...synth,
+    implSummary: 'edited /Users/secret/a.ts then C:\\Users\\evil\\b.ts',
+    filesChanged: ['/Users/x/repo/src/only-abs.ts', 'src/rel-ok.ts'],
+    checks: [{ name: 'test', command: 'npm test', result: 'fail', exit: 1, tail: 'FAIL at /Users/x/repo/t.ts:9\nnext /home/bob/z' }],
+    screenshot: { verdict: 'fail', captured: ['/Users/x/repo-wt/shots/a.png', '/Users/x/repo/elsewhere.png', '/home/bob/s2.png'], defects: [] },
+  };
+  const dirty = attestationFrom(poison, { wt: '/Users/x/repo-wt', branch: 'b' }, stamps, ['/Users/x/repo-wt']);
+  assert(!ABS.test(dirty.json), 'emit: a poisoned record (/Users, /home, C:\\) is fully redacted — zero absolute paths');
+  const drec = JSON.parse(dirty.json);
+  assert(drec.filesChanged.includes('src/rel-ok.ts') && !drec.filesChanged.some((f) => /only-abs/.test(f)), 'emit: a bare absolute-path array entry is dropped; the repo-relative one is kept');
+  assert(drec.implSummary === '', 'emit: an implSummary carrying absolute paths is emptied, not leaked');
+  assert(drec.screenshots.length === 1 && drec.screenshots[0] === 'shots/a.png', 'emit: an in-worktree screenshot normalizes to repo-relative; out-of-root paths are dropped');
 }
 
 // --- version-stamp agreement: all five stamp locations must name the same semver.
