@@ -11,7 +11,7 @@ violates one is a **BLOCKER**. Keep this list short and true.
 
 ## Build & correctness
 
-1. **The gate runs on real exit codes.** `npm test` (the 96-assertion selftest,
+1. **The gate runs on real exit codes.** `npm test` (the selftest,
    `scripts/selftest.mjs`) must pass; a red check is a BLOCKER, never waved through on
    "looks right". _(owner: `code-review`)_
 2. **Scripts own facts; the LLM owns judgment.** Paths, commands, numbers, and

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 — 2026-07-14
+- CI adopt-path coverage: the flagship surface — the detector's reconciliation of local commands against CI ground truth — gains its first positive test coverage. A new benign `fixtures/ci-adopt/` (awkward-but-benign YAML: quoted-inline, folded scalar, backslash-continuation, plain `run:`) drives all reconcile paths, and selftest assertions pin each decision (`from` / `verified_by_ci` / `source` / presence). Previously the adopt path was tested only for what it REJECTS (`fixtures/hostile-ci/`); regression insurance for M4's Rust detector, which sits on this path.
+- Version-stamp agreement is now asserted: one selftest checks that `VERILOOP_VERSION`, `package.json`, `.claude-plugin/plugin.json`, both `.claude-plugin/marketplace.json` fields, and the first `CHANGELOG.md` heading all name the same semver (the drift class bit once — M1 bug #4).
+- Docs/map fix: roadmap §11 records the M1 main event as clean-landed 2026-07-12 (code-complete, pending owner sign-off of two Torevan previews); hardcoded assertion counts ("96") dropped from prose (they staled once already) — the selftest is now the single source of that number.
+
 ## 0.3.1 — 2026-07-13
 - interview `roster_add`: the LLM-refined, owner-confirmed roster now actually reaches the generator (finding #11, discovered during veriloop's own self-install: the detector's heuristics missed veriloop's supply-chain/drift surfaces and there was no way to add them).
 

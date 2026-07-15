@@ -1,0 +1,11 @@
+{
+  "name": "ci-adopt",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "prettier:check": "prettier --check .",
+    "test": "vitest run"
+  }
+}

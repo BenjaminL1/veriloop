@@ -1,0 +1,16 @@
+name: CI
+on: [push]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm install
+      - run: "tsc --noEmit"
+      - run: |
+          node node_modules/.bin/eslint .
+      - run: >-
+          prettier --check .
+      - run: |
+          node node_modules/.bin/next build \
+            --no-lint
+      - run: make test-integration

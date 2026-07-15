@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.3.1",
-  "generated_at": "2026-07-14T02:35:05.718Z",
+  "veriloop_version": "0.3.2",
+  "generated_at": "2026-07-15T01:15:27.951Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "a56988dae2786a31121fed21f821a38fb01c0d59",
+  "repo_sha": "6830618e92ce9bf1abac81d1c9c8bceb13c0221c",
   "stack": [
     "node"
   ],
@@ -49,7 +49,7 @@
         "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
         "splice-marker integrity (scripts/lib/render.mjs:11)",
         "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
-        "selftest golden expectations — 96 assertions are this repo's only gate"
+        "selftest golden expectations — the assertions are this repo's only gate"
       ],
       "file": ".claude/veriloop/experts/drift.md"
     }
@@ -190,22 +190,22 @@
     {
       "path": ".claude/workflows/veriloop-dev-loop.js",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/dev-loop.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/advise.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/review.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/commands.json",
@@ -215,17 +215,17 @@
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
       "ownership": "hand",
-      "status": "written"
+      "status": "preserved"
     },
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
@@ -235,7 +235,7 @@
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",
@@ -250,7 +250,7 @@
     {
       "path": ".gitignore",
       "ownership": "shared-block",
-      "status": "written"
+      "status": "unchanged"
     }
   ],
   "interview_answers": {
@@ -286,7 +286,7 @@
           "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
           "splice-marker integrity (scripts/lib/render.mjs:11)",
           "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
-          "selftest golden expectations — 96 assertions are this repo's only gate"
+          "selftest golden expectations — the assertions are this repo's only gate"
         ]
       }
     ]

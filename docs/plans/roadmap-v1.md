@@ -382,7 +382,7 @@ implementation; the emitted loops route by tier × budget posture (from M3 on).
 
 ## Check-offs
 
-### M1 warm-up — DONE (2026-07-11) · main event pending
+### M1 warm-up — DONE (2026-07-11) · main event DONE (2026-07-12), pending owner sign-off
 
 Warm-up completed in one session ([full report](./m1-dogfood-report.md)). Actual vs
 planned:
@@ -403,3 +403,18 @@ planned:
   than auto-merging (owner gate, as designed).
 - **Remaining for M1:** the main event — one standard-tier UI-touching feature
   driven fresh-context; **feature choice is the owner's**.
+
+### M1 main event — DONE (2026-07-12), pending owner sign-off
+
+Clean-landed 2026-07-12 (run `wf_bb6dd006-dff`): a standard-tier UI-touching
+feature driven fresh-context to a PASS-gated preview `feat/lobby-queue-timeout-feedback`
+@ `63bc84a`, recorded in commit `2886602`. Actual vs planned:
+
+- **Exit met:** the loop drove the feature end-to-end and pushed a PASS-gated
+  preview; the e2e command resolved CI-verified through the adopt path (see
+  [dogfood report](./m1-dogfood-report.md) "Main event re-drive").
+- **True position:** M1 is **code-complete**, blocked only on **owner sign-off** of
+  two unmerged Torevan previews — `feat/format-check-green` @ `f264731` (warm-up)
+  and `feat/lobby-queue-timeout-feedback` @ `63bc84a` (main event). Both were pushed
+  by the loop for the owner gate, as designed; neither auto-merges.
+- **M2:** not started.

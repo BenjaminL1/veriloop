@@ -34,7 +34,7 @@ headless, dependency-free by design. ~15 source files under `scripts/`.
 6. **Template splicing.** `scripts/lib/render.mjs:11` (`<<< veriloop:auto:start >>>`
    markers); `spliceAuto` replaces only the marked region. A marker regression
    corrupts every emitted workflow.
-7. **Selftest integrity.** `npm test` = `scripts/selftest.mjs`, 96 assertions —
+7. **Selftest integrity.** `npm test` = `scripts/selftest.mjs` —
    the only exit-code gate this repo has, so anything that weakens it (or lets a
    fixture supply the evidence under test — the v0.1.2 lesson) weakens everything.
 

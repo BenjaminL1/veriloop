@@ -20,7 +20,7 @@
         "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
         "splice-marker integrity (scripts/lib/render.mjs:11)",
         "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
-        "selftest golden expectations — 96 assertions are this repo's only gate"
+        "selftest golden expectations — the assertions are this repo's only gate"
       ]
     }
   ]

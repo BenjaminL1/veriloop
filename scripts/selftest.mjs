@@ -530,5 +530,102 @@ function assert(cond, desc) {
     'roster_add: the owner evidence is MERGED into the existing entry (prefixed owner-confirmed:)');
 }
 
+// --- ci-adopt: the CI adopt path — veriloop's flagship surface — proven by what
+//     it ADOPTS, not only what it rejects (hostile-ci covers rejection). Each
+//     assertion binds to the detector's DECISION (from / verified_by_ci / source /
+//     presence), never merely to parse output.
+//
+// ci-adopt is the ONLY evidence for the adopt path — never cite veriloop's own
+// self-install/manifest as proof it works (see fix-8-9-plan.md v0.1.2 lesson): a
+// fixture supplies INPUT (a CI file); the assertions interrogate the detector's
+// decision. Scan-only — nothing here is ever executed (same covenant as every fixture).
+{
+  const cj = detectCommands(join(fixtures, 'ci-adopt'));
+  const C = cj.commands;
+  const ci = cj.ci_commands;
+  const findCi = (cmd) => ci.find((c) => c.cmd === cmd);
+
+  // path 0 — clean CI line that IS a local script: the local candidate is
+  // preferred (keeps its richer citation), and it is CI-verified.
+  assert(
+    C.install && C.install.cmd === 'npm install' && C.install.from === 'node' && C.install.verified_by_ci === true,
+    "ci-adopt path0 (local-same): install chosen local ('npm install'), from:node, verified_by_ci:true",
+  );
+  // path 0 — clean CI line with NO literal-same local: the CI form is ADOPTED
+  // (ground truth), carrying from:'ci' and a `file:line (CI)` source.
+  assert(
+    C.typecheck && C.typecheck.from === 'ci' && C.typecheck.verified_by_ci === true,
+    'ci-adopt path0 (CI-adopted): typecheck adopts the clean CI form, from:ci, verified_by_ci:true',
+  );
+  assert(
+    C.typecheck && C.typecheck.cmd === 'tsc --noEmit' && C.typecheck.source === '.github/workflows/ci.yml:8 (CI)',
+    "ci-adopt path0 (CI-adopted): typecheck cmd is the CI line 'tsc --noEmit' cited at ci.yml:8 (CI)",
+  );
+  // path 1 — a local candidate that an UNCLEAN (but benign) CI line provably runs
+  // (shares tool): the local form stays chosen, marked CI-verified.
+  assert(
+    C.lint && C.lint.cmd === 'npm run lint' && C.lint.from === 'node' && C.lint.verified_by_ci === true,
+    "ci-adopt path1: lint stays local ('npm run lint'), verified_by_ci:true (unclean CI shares the tool)",
+  );
+  // path 2 — first local candidate; verified_by_ci reflects a sharesTool CI match.
+  assert(
+    C.format && C.format.from === 'node' && C.format.verified_by_ci === true,
+    'ci-adopt path2 (true): format is local but a sharesTool CI line marks it verified_by_ci:true',
+  );
+  assert(
+    C.test && C.test.from === 'node' && C.test.verified_by_ci === false,
+    'ci-adopt path2 (false): test is local with no CI match → verified_by_ci:false',
+  );
+  // path 3 — a category with NO local candidate adopts a clean CI-only line; a
+  // no-local category whose only CI line is UNCLEAN is dropped entirely.
+  assert(
+    C.e2e && C.e2e.from === 'ci' && C.e2e.verified_by_ci === true && C.e2e.cmd === 'make test-integration',
+    "ci-adopt path3 (adopt): e2e (no local) adopts clean CI-only 'make test-integration', from:ci, verified",
+  );
+  assert(
+    C.e2e && C.e2e.source === '.github/workflows/ci.yml:16 (CI)',
+    'ci-adopt path3 (adopt): the adopted e2e command cites its real CI line — ci.yml:16 (CI)',
+  );
+  assert(
+    C.build === undefined,
+    'ci-adopt path3 (reject): a no-local category whose only CI line is unclean is ABSENT from commands',
+  );
+
+  // parsing — the awkward YAML constructs each surface in ci_commands with the
+  // correct file:line (a line-number or parser regression fails here).
+  const q = findCi('tsc --noEmit');
+  assert(
+    q && q.source === '.github/workflows/ci.yml:8' && !ci.some((c) => c.cmd.includes('"')),
+    'ci-adopt parse: quoted-inline run is UNQUOTED in ci_commands at ci.yml:8 (unquote)',
+  );
+  const fld = findCi('prettier --check .');
+  assert(
+    fld && fld.source === '.github/workflows/ci.yml:12',
+    'ci-adopt parse: folded-scalar (>-) command extracted at ci.yml:12 (block scalar)',
+  );
+  const joined = findCi('node node_modules/.bin/next build --no-lint');
+  assert(
+    joined && joined.source === '.github/workflows/ci.yml:14',
+    'ci-adopt parse: backslash line-continuation lines are joined into one command at ci.yml:14',
+  );
+}
+
+// --- version-stamp agreement: all five stamp locations must name the same semver.
+//     The drift class bit once (M1 bug #4: VERILOOP_VERSION stale at 0.1.0). Read
+//     the files (regex on generate.mjs source — do NOT import it). ---
+{
+  const root = join(here, '..');
+  const genVer = (readFileSync(join(here, 'generate.mjs'), 'utf8').match(/VERILOOP_VERSION\s*=\s*'([^']+)'/) || [])[1];
+  const pkgVer = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+  const pluginVer = JSON.parse(readFileSync(join(root, '.claude-plugin/plugin.json'), 'utf8')).version;
+  const mkt = JSON.parse(readFileSync(join(root, '.claude-plugin/marketplace.json'), 'utf8'));
+  const changelogVer = (readFileSync(join(root, 'CHANGELOG.md'), 'utf8').match(/^##\s+(\d+\.\d+\.\d+)/m) || [])[1];
+  const stamps = { genVer, pkgVer, pluginVer, mktMeta: mkt.metadata.version, mktPlugin: mkt.plugins[0].version, changelogVer };
+  assert(
+    genVer && Object.values(stamps).every((v) => v === genVer),
+    `version stamps agree across all five locations (${JSON.stringify(stamps)})`,
+  );
+}
+
 console.log(`\n${pass} ok, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
