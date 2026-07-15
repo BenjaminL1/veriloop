@@ -141,6 +141,8 @@ applicable.
 
 ### M2 · v0.3 "Parity & Convergence" — retire the gold safely (~1–2 sessions)
 
+> Execution plan: [m2-plan.md](./m2-plan.md) *(plan-stable, written 2026-07-14)*
+
 - **Constitution bridge:** the generated constitution file is hand-owned — seed it
   by copying Torevan's hand-built `docs/constitution.md` (14 real rules) into it.
   Rule-parity achieved immediately, without waiting for phase-4 mining.
@@ -164,6 +166,9 @@ applicable.
 deleted; parity checklist archived in the dogfood report.
 
 ### M3 · v0.4 "Intelligence" — phases 3+4+5, evidence-grounded (~3–4 sessions; the biggest lift)
+
+> Execution plan: [m3-plan.md](./m3-plan.md) *(plan-stable; its §0 benchmark freeze is
+> recorded now and must precede M2's bridge)*
 
 **Phase 3 — deep scan:** `scan-notes.md` schema `{surface → file:line evidence →
 nominated expert/rule candidates}`; classification-confirm halt; bounded + resumable.
@@ -196,6 +201,10 @@ budget → model/effort routing wired into the emitted template's agent calls.
 constitution BLIND (hand-built one hidden from the miner), then measure recovery
 of the 14 hand-authored rules. Target ≥80% recovered with citations. Publish the
 eval methodology + results — this is the portfolio-grade proof that mining works.
+**Frozen mining corpus: Torevan @ `4d0e114`** (post-M1-merge, pre-constitution-bridge;
+pinned 2026-07-14 — the M2 bridge copies the gold rules into the live tree, after
+which "recovery" degenerates to copying; blinding protocol + exclusion list in
+[m3-plan §0](./m3-plan.md)).
 
 **Decision item (recommended):** keep the constitution canonical for the loop, and
 emit a short pointer section into CLAUDE.md — the community already resents
@@ -213,6 +222,8 @@ sustained frugal usage, or M4 Rust support (cold-start stack). Budget-neutral if
 benchmark ≥80%; lint enforces the referee.
 
 ### M4 · v0.5 "Rust + hardening" (~2 sessions)
+
+> Execution plan: [m4-plan.md](./m4-plan.md) *(plan-stable, written 2026-07-14)*
 
 Research-informed cargo detector:
 - Detection order: `Cargo.toml` `[workspace]` → `.config/nextest.toml` (runner
@@ -243,6 +254,9 @@ lints clean; 2 OSS repos detect correctly.
 
 ### M5 · v0.6 "Launch machinery" (~2 sessions)
 
+> Execution plan: [m5-plan.md](./m5-plan.md) *(plan-stable; ⟨execution-time⟩ content
+> fills marked inline)*
+
 Distribution fixes (verified against current official specs):
 - SKILL.md frontmatter carries BOTH `name` + `description` (dual compat: Claude
   Code + `npx skills` standard) — already true; keep enforced.
@@ -251,8 +265,11 @@ Distribution fixes (verified against current official specs):
   plugin form — document the rationale. (Alternative if it grates: plugin-root SKILL.md.)
 - `version` in `plugin.json` ONLY (it silently wins over marketplace-entry
   versions); tag releases `veriloop-vX.Y.Z`; CHANGELOG.
-- Add CI to the veriloop repo itself: `claude plugin validate .` + selftest on push
-  (the compiler gets its own exit-code gate — good story, good safety).
+- Add CI to the veriloop repo itself: selftest on push (the compiler gets its own
+  exit-code gate — good story, good safety). Push gate is `npm test` ONLY;
+  `claude plugin validate .` moved to the release checklist (consultation
+  2026-07-14: zero schema drift observed, and it would put the Claude CLI on the
+  runner) — spec in [m5-plan](./m5-plan.md).
 - Cross-tool install adapters precedent — superpowers ships the same skill files into
   Codex/Cursor/Copilot CLI via per-tool installers; evaluate for launch breadth
   alongside the official-marketplace listing.
@@ -382,7 +399,7 @@ implementation; the emitted loops route by tier × budget posture (from M3 on).
 
 ## Check-offs
 
-### M1 warm-up — DONE (2026-07-11) · main event DONE (2026-07-12), pending owner sign-off
+### M1 warm-up — DONE (2026-07-11) · main event DONE (2026-07-12) · signed off 2026-07-14
 
 Warm-up completed in one session ([full report](./m1-dogfood-report.md)). Actual vs
 planned:
@@ -404,7 +421,7 @@ planned:
 - **Then remaining (now done):** the main event — one standard-tier UI-touching
   feature driven fresh-context; it clean-landed 2026-07-12 (see the next section).
 
-### M1 main event — DONE (2026-07-12), pending owner sign-off
+### M1 main event — DONE (2026-07-12) · owner sign-off 2026-07-14 — **M1 CLOSED**
 
 Clean-landed 2026-07-12 (run `wf_bb6dd006-dff`): a standard-tier UI-touching
 feature driven fresh-context to a PASS-gated preview `feat/lobby-queue-timeout-feedback`
@@ -413,8 +430,10 @@ feature driven fresh-context to a PASS-gated preview `feat/lobby-queue-timeout-f
 - **Exit met:** the loop drove the feature end-to-end and pushed a PASS-gated
   preview; the e2e command resolved CI-verified through the adopt path (see
   [dogfood report](./m1-dogfood-report.md) "Main event re-drive").
-- **True position:** M1 is **code-complete**, blocked only on **owner sign-off** of
-  two unmerged Torevan previews — `feat/format-check-green` @ `f264731` (warm-up)
-  and `feat/lobby-queue-timeout-feedback` @ `63bc84a` (main event). Both were pushed
-  by the loop for the owner gate, as designed; neither auto-merges.
-- **M2:** not started.
+- **Owner sign-off (2026-07-14):** both previews merged into Torevan main —
+  `feat/format-check-green` @ `f264731` (warm-up) and
+  `feat/lobby-queue-timeout-feedback` @ `63bc84a` (main event), verified via
+  merge-base ancestry at Torevan `4d0e114`. **M1 closed.** (Optional non-gating
+  leftover: `feat/lobby-queue-timeout-nits`, 1 commit of lobby NIT fixes, unmerged.)
+- **M2:** not started — execution plan written ([m2-plan.md](./m2-plan.md));
+  frozen mining corpus for M3's benchmark pinned at Torevan `4d0e114` first.
