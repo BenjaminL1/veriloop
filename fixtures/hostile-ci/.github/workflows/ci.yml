@@ -9,3 +9,5 @@ jobs:
           tsc -p . && rm -rf /tmp/pwned
           eslint . \
             --max-warnings 0 `cat /tmp/inject`
+      - run: cd crates/x && cargo test
+      - run: cargo test | tee log

@@ -1,0 +1,10 @@
+name: CI
+on: [push]
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo fmt --all --check
+      - run: cargo nextest run --all-features
+      - run: cargo bench

@@ -1,0 +1,10 @@
+[package]
+name = "maturin_hybrid"
+edition = "2021"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }

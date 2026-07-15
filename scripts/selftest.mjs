@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // veriloop deterministic self-test. Runs detectCommands over the checked-in
 // fixtures under fixtures/ and asserts the audit-fix behaviors (pnpm workspaces,
-// headless-backend has_ui, hostile-CI rejection, verify skip/reset semantics).
-// Dependency-free; never executes anything from fixtures/hostile-ci/.
+// headless-backend has_ui, hostile-CI rejection, verify skip/reset semantics,
+// CI adopt path, and the Rust/cargo detector — rust-workspace / rust-maturin).
+// Dependency-free; never executes anything from fixtures/hostile-ci/ or the
+// Rust fixtures (scan-only covenant — the .rs / cargo lines are input, not code).
 //
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
@@ -795,6 +797,115 @@ function assert(cond, desc) {
   const poisonedPemScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(poisonedPemScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a bare PEM END-marker footer line');
   assert(/secret-shaped content in committed attestation record/.test(poisonedPemScan.stdout || ''), 'lint-bundle: the PEM-footer failure names the committed-history secret backstop');
+}
+
+// --- rust/cargo detector (m4-plan §§1-4+7): a fixture supplies INPUT (Cargo.toml /
+//     nextest.toml / rust-toolchain.toml / CI), each assert interrogates the
+//     detector's DECISION (cmd / from / verified_by_ci / source / safety / mutates),
+//     never parse output. Scan-only — nothing here is ever executed. ---
+{
+  // rust-workspace: workspace manifest + nextest + toolchain + clean flagged CI.
+  const cj = detectCommands(join(fixtures, 'rust-workspace'));
+  const C = cj.commands;
+  const findCi = (cmd) => cj.ci_commands.find((c) => c.cmd === cmd);
+
+  assert(cj.stack.includes('rust'), "rust-workspace: stack includes 'rust'");
+
+  // test — the flag-capture verbatim-adoption requirement: the CI line carries
+  // `--all-features`, and reconcile step 0 adopts it EXACTLY (from:'ci'), citing
+  // its real CI line. A bare `cargo nextest run` would lose the flags.
+  const ciTest = findCi('cargo nextest run --all-features');
+  assert(
+    C.test && C.test.cmd === 'cargo nextest run --all-features' && C.test.from === 'ci' && C.test.verified_by_ci === true,
+    "rust-workspace: test adopts the flagged CI line 'cargo nextest run --all-features' verbatim, from:ci, verified",
+  );
+  assert(
+    C.test && ciTest && C.test.source === ciTest.source + ' (CI)',
+    'rust-workspace: the adopted test command cites its real CI line (…ci.yml:N (CI))',
+  );
+
+  // lint — the CI line equals the local candidate, so the local form is kept
+  // (richer rust-toolchain citation) and marked CI-verified.
+  assert(
+    C.lint && C.lint.cmd.includes('-D warnings') && C.lint.from === 'rust' && C.lint.verified_by_ci === true,
+    "rust-workspace: lint stays local (keeps '-D warnings' + toolchain citation), verified_by_ci:true",
+  );
+
+  // format — carries --check (a gate, never a mutator).
+  assert(
+    C.format && C.format.cmd.includes('--check') && C.format.mutates === undefined,
+    "rust-workspace: format carries '--check' and is NOT flagged mutates",
+  );
+
+  // typecheck — no CI `cargo check` line exists, so it stays the local candidate,
+  // NOT CI-verified. This pins that `from`/`verified_by_ci` reflect local-vs-CI.
+  assert(
+    C.typecheck && C.typecheck.cmd === 'cargo check' && C.typecheck.from === 'rust' && C.typecheck.verified_by_ci === false,
+    'rust-workspace: typecheck stays local cargo check, from:rust, verified_by_ci:false (no CI check line)',
+  );
+
+  // bench — the NEW never-tier category: detected + cited from the CI `cargo bench`
+  // line, safety:never, adopted at reconcile STEP 0 (`localSame || {…from:'ci'}`) —
+  // there is NO local bench candidate. §7 guardrail: this must NOT come from the
+  // documented-dead step 3 (detectors.mjs:467-483). It never enters a gate
+  // (generate.mjs gateOrder allowlist) and is never auto-run (verify.mjs safety=never).
+  assert(
+    C.bench && C.bench.cmd === 'cargo bench' && C.bench.safety === 'never' && C.bench.from === 'ci',
+    'rust-workspace: bench is detected + cited (from:ci via reconcile step 0), safety:never — never auto-run',
+  );
+}
+{
+  // rust-maturin: dual-stack surface — python contributes install+build, cargo
+  // contributes lint/format/test/typecheck (§3, no CI, no nextest.toml).
+  const cj = detectCommands(join(fixtures, 'rust-maturin'));
+  const C = cj.commands;
+  assert(
+    cj.stack.includes('python') && cj.stack.includes('rust'),
+    "rust-maturin: stack is dual — includes both 'python' and 'rust'",
+  );
+  assert(C.build && C.build.cmd.includes('maturin'), 'rust-maturin: build stays the python maturin surface');
+  assert(C.lint && C.lint.cmd.includes('cargo clippy'), 'rust-maturin: lint is the cargo surface (cargo clippy)');
+  assert(
+    C.format && C.format.cmd.includes('cargo fmt') && C.format.cmd.includes('--check'),
+    'rust-maturin: format is cargo fmt --check (dual-stack cargo surface)',
+  );
+  assert(C.test && C.test.cmd === 'cargo test', "rust-maturin: test === 'cargo test' (no nextest.toml → plain cargo test)");
+}
+{
+  // hostile extension: compound/piped cargo lines are SEEN (surface in ci_commands)
+  // then REJECTED (isCleanInvocation), so `test` is absent — mirroring the ci-adopt
+  // build-reject assert. Scan-only: nothing from hostile-ci is ever executed.
+  const cj = detectCommands(join(fixtures, 'hostile-ci'));
+  const ci = cj.ci_commands.map((c) => c.cmd);
+  assert(
+    ci.includes('cd crates/x && cargo test') && ci.includes('cargo test | tee log'),
+    'hostile-ci: both compound cargo lines surface in ci_commands (they were parsed)',
+  );
+  assert(
+    cj.commands.test === undefined,
+    'hostile-ci: test is ABSENT — the only cargo lines are compound/piped and never adopted',
+  );
+}
+{
+  // bare-fmt mini-repo (synthesized; scan-only — only detectCommands reads it): a
+  // Makefile `fmt:` recipe running BARE `cargo fmt` (no --check) is a formatter, not
+  // a gate → make wins (Makefile-first) with mutates:true + note. nextest.toml pins
+  // the exact no-CI local test selection.
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-barefmt-'));
+  mkdirSync(join(tmp, '.config'), { recursive: true });
+  writeFileSync(join(tmp, 'Cargo.toml'), '[package]\nname = "barefmt"\nedition = "2021"\nversion = "0.1.0"\n');
+  writeFileSync(join(tmp, 'Makefile'), 'fmt:\n\tcargo fmt\n');
+  writeFileSync(join(tmp, '.config', 'nextest.toml'), '[profile.default]\nretries = 0\n');
+  const C = detectCommands(tmp).commands;
+  assert(
+    C.format && C.format.cmd === 'make fmt' && C.format.mutates === true && typeof C.format.note === 'string',
+    "bare-fmt: a bare `cargo fmt` make recipe wins as 'make fmt' with mutates:true + a note (formatter, not gate)",
+  );
+  assert(
+    C.test && C.test.cmd === 'cargo nextest run',
+    "bare-fmt: test is the exact local nextest selection 'cargo nextest run' (no CI)",
+  );
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 // --- version-stamp agreement: all five stamp locations must name the same semver.

@@ -5,7 +5,7 @@
 //   • safety=safe  (typecheck/lint/format-check) → auto-run
 //   • safety=ask   (test/build/install)          → run ONLY if --include lists it
 //                                                   (SKILL.md asks the user first)
-//   • safety=never (dev/e2e/integration/deploy)  → NEVER run (real side effects)
+//   • safety=never (dev/e2e/integration/bench/deploy) → NEVER run (real side effects)
 // Commands flagged `mutates` (a formatter with no --check) are never run — they
 // would dirty the target repo. Placeholder commands (<file>, <path>::<test>) are
 // skipped. Results (exit code + timing) are written back into commands.json.

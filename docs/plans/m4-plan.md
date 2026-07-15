@@ -81,7 +81,7 @@ Every M4 change lands at one of these seams. `cargo` and `go` are **already** wh
 
 ## 3. maturin hybrid — dual-stack surfaces
 
-**What:** `build-backend = "maturin"` in pyproject ⇒ emit BOTH the python surface (already done: `maturin develop --release` build candidate + polyglot note, detectors.mjs:393-400) AND the cargo surface (typecheck/lint/format/test from §1-2). Today detectPython only pushes a *promissory* polyglot string — "cargo fmt/clippy/test run in CI; see ci_commands" (detectors.mjs:397) — but emits no cargo command slots. M4 makes `detectRust` fire on the same repo so those slots exist.
+**What:** `build-backend = "maturin"` in pyproject ⇒ emit BOTH the python surface (already done: `maturin develop --release` build candidate + polyglot note, detectors.mjs:393-400) AND the cargo surface (typecheck/lint/format/test from §1-2). Before M4, detectPython only pushed a *promissory* polyglot string — "cargo fmt/clippy/test run in CI; see ci_commands" — but emitted no cargo command slots. M4 makes `detectRust` fire on the same repo so those slots exist; detectPython's polyglot note now points at it directly ("detectRust emits the cargo fmt/clippy/test/check surface alongside this build", detectors.mjs:403).
 
 **How:** `detectRust` keys off `Cargo.toml` presence, independent of pyproject. A maturin repo has both files, so both `detectPython` (detectors.mjs:322) and `detectRust` run and add candidates; `reconcile` (detectors.mjs:420) picks one per category across all stacks. Ensure the `build` category stays the python `maturin develop` candidate (it is the dual-stack build), while typecheck/lint/format/test gain cargo candidates. `buildDepsSetup` already handles the compiled-extension worktree case (generate.mjs:72-74) — no change.
 
@@ -170,3 +170,44 @@ The detector surface is orthogonal to mining (M2) and Torevan convergence (M3): 
 ## Non-goals
 
 Go / Java / Gradle detectors; GitLab / CircleCI parsers; any autonomy / auto-land behavior; launch, trust-pack, or demo work (M5-M6); executing anything from any fixture (scan-only covenant, selftest.mjs:5); reviving reconcile step 3 (§7); hand-editing machine-owned `commands.json`.
+
+---
+
+## Implementation notes (§§1-4+7 slice, shipped v0.3.3)
+
+The core slice (§§1-4 + §7) shipped; §§5-6 (overrides escape hatch, OSS/Windows
+validation) and catan dual-stack validation remain deferred as planned.
+
+- **§1-2 detector.** `detectRust(root, out)` lives after `detectPython` in
+  `scripts/lib/detectors.mjs` and is wired into `detectCommands` after it. It gates on
+  `Cargo.toml` `[package]`/`[workspace]`, sets `package_manager='cargo'` when still null,
+  and emits typecheck/lint/format/test/test_single cargo candidates. Rust regexes were
+  added to `CI_SIGNATURES` (incl. new `bench`) and cargo families to `TOOL_FAMILIES`; the
+  now-false "cargo does NOT fill python slots" header comment was rewritten (cargo lines
+  DO fill slots by design for the maturin dual surface). `bench` was added to `CATEGORIES`
+  with `DEFAULT_SAFETY.bench='never'`. Makefile-first ordering is preserved: cargo-driven
+  `make` aliases are registered BEFORE the intrinsic cargo candidates (so a bare-`cargo fmt`
+  recipe wins as a `mutates:true` formatter), deduped by exact cmd against detectPython's
+  make candidates.
+- **Design note (flagged, plan default taken).** No local `bench` candidate is emitted:
+  bench is detected + cited only when CI runs `cargo bench`, adopted `from:'ci'` via
+  reconcile **step 0** — satisfying §7 without touching the documented-dead step 3. No
+  local install/build candidate: a maturin repo's `build` stays the python `maturin develop`
+  surface; pure-rust build is covered by `typecheck=cargo check`.
+- **§3 dual-stack.** Acceptance-2 was resolved with `fixtures/rust-maturin/` (pyproject
+  `build-backend="maturin"` + `Cargo.toml`, no CI, no nextest.toml): the detector emits
+  `build=maturin develop --release` (python) alongside cargo lint/format/test/typecheck —
+  proven by selftest asserts on `stack ⊇ {python,rust}`, `build.cmd` ∋ maturin, and the
+  cargo slots. catan_rl_v2 validation stays post-M2 (untouched).
+- **§4 fixtures.** `fixtures/rust-workspace/` (workspace Cargo.toml + member crate +
+  `.config/nextest.toml` + `rust-toolchain.toml` clippy/rustfmt + clean flagged CI) drives
+  the verbatim flag-capture assert (`cargo nextest run --all-features` adopted `from:'ci'`,
+  `verified_by_ci:true`, cited `…ci.yml:N (CI)`), the local-vs-CI `from` asserts, the
+  `--check`/no-mutates format assert, and the `bench` never-tier assert (commented naming
+  step 0). `fixtures/hostile-ci/` gained `cd crates/x && cargo test` and `cargo test | tee log`
+  → both surface in `ci_commands` but `test` is absent (rejected). A synthesized bare-fmt
+  mini-repo pins `format='make fmt'`/`mutates:true` + `test='cargo nextest run'`. Selftest
+  grew 119 → 135.
+- **§7 guardrail.** `reconcile()`, `matchesCategory`, `isCleanInvocation`, and step 3
+  (detectors.mjs:467-483) are unchanged — verified in the final diff. All cargo CI-only
+  adoption flows through step 0.

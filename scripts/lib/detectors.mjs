@@ -19,6 +19,7 @@ export const CATEGORIES = [
   'build',
   'dev',
   'e2e',
+  'bench',
 ];
 
 // Auto-run safe-list (locked design decision #4): during veriloop's own verify
@@ -34,20 +35,25 @@ const DEFAULT_SAFETY = {
   build: 'ask',
   dev: 'never',
   e2e: 'never',
+  bench: 'never',
 };
 
 // Signatures that identify what an arbitrary command (e.g. a CI run-line) does,
 // so we can (a) mark a chosen command CI-verified and (b) adopt a CI-only command
-// for a category we found no local candidate for. Kept primary-stack-scoped:
-// e.g. `cargo test`/`clippy` intentionally do NOT fill python test/lint slots.
+// for a category we found no local candidate for. Signatures stay stack-scoped by
+// TOOL: python/node tools fill python/node slots, cargo tools fill the cargo slots.
+// cargo lines DO fill lint/format/test/typecheck by design — a maturin repo emits a
+// dual (python + cargo) surface, so `cargo clippy`/`cargo fmt --check`/`cargo test`
+// are real category signals, not noise.
 const CI_SIGNATURES = {
   install: [/\bnpm (ci|install)\b/, /\bpnpm (install|i)\b/, /\byarn( install)?\b/, /\bbun install\b/, /\bpip install\b/, /\buv sync\b/, /\bpoetry install\b/],
-  typecheck: [/\bmypy\b/, /\btsc\b/, /\bpyright\b/, /\bnpm run typecheck\b/, /\bmake typecheck\b/, /\btype-?check\b/],
-  lint: [/\bruff check\b/, /\beslint\b/, /\bnext lint\b/, /\bflake8\b/, /\bpylint\b/, /\bnpm run lint\b/, /\bmake lint\b/],
-  format: [/\bprettier\b[^\n]*(--check|-c)\b/, /\bruff format\b[^\n]*--check/, /\bblack\b[^\n]*--check/, /\bnpm run format:check\b/, /\bmake format-check\b/],
-  test: [/\bpytest\b/, /\bvitest\b/, /\bjest\b/, /\bmocha\b/, /\bnpm run test\b/, /\bnpm test\b/, /\bmake test(-unit)?\b/],
+  typecheck: [/\bmypy\b/, /\btsc\b/, /\bpyright\b/, /\bnpm run typecheck\b/, /\bmake typecheck\b/, /\btype-?check\b/, /\bcargo (check|build)\b/],
+  lint: [/\bruff check\b/, /\beslint\b/, /\bnext lint\b/, /\bflake8\b/, /\bpylint\b/, /\bnpm run lint\b/, /\bmake lint\b/, /\bcargo clippy\b/],
+  format: [/\bprettier\b[^\n]*(--check|-c)\b/, /\bruff format\b[^\n]*--check/, /\bblack\b[^\n]*--check/, /\bnpm run format:check\b/, /\bmake format-check\b/, /\bcargo fmt\b[^\n]*--check/],
+  test: [/\bpytest\b/, /\bvitest\b/, /\bjest\b/, /\bmocha\b/, /\bnpm run test\b/, /\bnpm test\b/, /\bmake test(-unit)?\b/, /\bcargo (nextest run|test)\b/, /\bcargo hack\b/],
   e2e: [/-m integration\b/, /\bplaywright\s+test\b/, /\bcypress\s+(run|open)\b/, /test:e2e/, /\bmake test-integration\b/],
   build: [/\bnpm run build\b/, /\bnext build\b/, /\bmaturin\b/, /python -m build\b/, /\bmake build\b/, /\btsc -p\b/],
+  bench: [/\bcargo bench\b/],
 };
 
 const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -394,7 +400,7 @@ function detectPython(root, out) {
   const backend = toml['build-system']?.['build-backend'];
   if (tool.maturin || (backend && backend.includes('maturin'))) {
     addCandidate(out, 'build', { cmd: 'maturin develop --release', source: pyCite('[tool.maturin]') || pyCite('build-backend'), from: 'python' });
-    out.polyglot.push('rust (maturin extension crate — cargo fmt/clippy/test run in CI; see ci_commands)');
+    out.polyglot.push('rust (maturin extension crate — detectRust emits the cargo fmt/clippy/test/check surface alongside this build)');
   } else if (backend && !backend.includes('maturin')) {
     addCandidate(out, 'build', { cmd: 'python -m build', source: pyCite('build-backend'), from: 'python' });
   }
@@ -403,6 +409,100 @@ function detectPython(root, out) {
   const deps = [...(toml.project?.dependencies || []), ...Object.values(optDeps).flat()].map((d) => norm(String(d)));
   const depBase = (d) => d.split(/[\s\[<>=!~;(]/)[0]; // exact package name, not startsWith
   if (deps.some((d) => PY_UI_SIGNALS.includes(depBase(d)))) out.has_ui = true;
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Rust detector (Cargo.toml + .config/nextest.toml + rust-toolchain.toml + Makefile)
+// ---------------------------------------------------------------------------
+
+function detectRust(root, out) {
+  const cargoPath = join(root, 'Cargo.toml');
+  const cargoText = readText(cargoPath);
+  if (cargoText == null) return false;
+  const cargo = parseToml(cargoText);
+  // Gate: a real crate/workspace manifest carries [package] or [workspace].
+  // (workspace `members` scope emission is out of scope — single crate + one-level
+  // workspace only; justfile/xtask are documented-only, no parser.)
+  if (!cargo.package && !cargo.workspace) return false;
+
+  out.stack.push('rust');
+  if (out.package_manager === null) out.package_manager = 'cargo';
+
+  const anchor = cargo.workspace ? '[workspace]' : '[package]';
+  const cargoCite = () => sourceRef(root, cargoPath, findLine(cargoText, anchor));
+
+  // rust-toolchain.toml: if clippy/rustfmt are pinned as components, cite that file
+  // as the lint/format source (evidence the repo ships those components).
+  const toolchainPath = join(root, 'rust-toolchain.toml');
+  const toolchainText = readText(toolchainPath);
+  const components = (toolchainText ? parseToml(toolchainText).toolchain?.components : null) || [];
+  const comps = components.map((c) => norm(String(c)));
+  const toolchainCite = () => sourceRef(root, toolchainPath, findLine(toolchainText, 'components'));
+  const lintSrc = comps.includes('clippy') ? toolchainCite() : cargoCite();
+  const fmtSrc = comps.includes('rustfmt') ? toolchainCite() : cargoCite();
+
+  // --- Makefile-first (explicit, high-confidence dev interface). Only recipes that
+  //     drive `cargo` are ours; dedupe by exact cmd so we never double-register a
+  //     make candidate detectPython already added (maturin repos run both). ---
+  const makeText = readText(join(root, 'Makefile'));
+  if (makeText) {
+    const make = parseMakefile(makeText);
+    const makeCite = (line) => sourceRef(root, join(root, 'Makefile'), line);
+    // Known edge, documented not fixed: MAKE_TARGET_ALIASES.lint includes 'check'
+    // (Python heritage — `make check` commonly means lint there), but in cargo repos
+    // `make check` conventionally runs `cargo check` (typecheck), not lint. No
+    // fixture exercises this collision and fixing it is a behavior change, so it
+    // stays out of scope here.
+    for (const cat of ['typecheck', 'lint', 'format', 'test', 'bench']) {
+      const aliases = cat === 'bench' ? ['bench'] : MAKE_TARGET_ALIASES[cat];
+      for (const alias of aliases) {
+        const t = make.targets[alias];
+        if (!t) continue;
+        const recipe = t.recipe.join(' ; ');
+        if (!/\bcargo\b/.test(recipe)) continue; // not a cargo-driven target
+        const cmd = `make ${alias}`;
+        if ((out._candidates[cat] || []).some((c) => c.cmd === cmd)) break; // python added it
+        const writesFmt = cat === 'format' && !/--check/.test(recipe);
+        addCandidate(out, cat, {
+          cmd,
+          source: makeCite(t.line),
+          from: 'makefile',
+          mutates: writesFmt || undefined,
+          note: writesFmt ? `make ${alias} writes files (recipe: ${recipe.slice(0, 80)}); use as formatter, not gate` : undefined,
+          recipe,
+        });
+        break; // first matching alias wins per category
+      }
+    }
+  }
+
+  // --- intrinsic cargo candidates (per the §2 category map) ---
+  addCandidate(out, 'typecheck', { cmd: 'cargo check', source: cargoCite(), from: 'rust' });
+  addCandidate(out, 'lint', { cmd: 'cargo clippy --all-targets -- -D warnings', source: lintSrc, from: 'rust' });
+  // detectRust's own format default always carries --check (a gate, never a mutator).
+  addCandidate(out, 'format', { cmd: 'cargo fmt --all --check', source: fmtSrc, from: 'rust' });
+
+  // test — nextest if a .config/nextest.toml is present, else cargo test. parseToml
+  // never returns null (worst case an empty {} for empty/corrupted input), so any
+  // present nextest.toml — including empty/corrupted — routes to `cargo nextest run`.
+  const nextestPath = join(root, '.config', 'nextest.toml');
+  const nextestText = readText(nextestPath);
+  const usesNextest = nextestText != null;
+  if (usesNextest) {
+    addCandidate(out, 'test', { cmd: 'cargo nextest run', source: sourceRef(root, nextestPath, 1), from: 'rust' });
+    addCandidate(out, 'test_single', { cmd: "cargo nextest run -E '<filter>'", source: sourceRef(root, nextestPath, 1), from: 'rust' });
+  } else {
+    addCandidate(out, 'test', { cmd: 'cargo test', source: cargoCite(), from: 'rust' });
+    addCandidate(out, 'test_single', { cmd: 'cargo test -p <crate> -- <name>', source: cargoCite(), from: 'rust' });
+  }
+  // A local `bench` candidate IS possible — the Makefile loop above registers one
+  // when a `bench` target's recipe drives cargo. CI-only bench is separately picked
+  // up via CI-command adoption (reconcile step 0). Either way, safety stays 'never':
+  // bench is detected + cited but never auto-run.
+  // No local install/build candidate: a maturin repo's build stays the python
+  // `maturin develop` surface; pure-rust build is covered by typecheck=cargo check.
 
   return true;
 }
@@ -498,13 +598,14 @@ function reconcile(out, ci) {
 }
 
 const TOOL_FAMILIES = {
-  typecheck: ['mypy', 'tsc', 'pyright', 'typecheck'],
-  lint: ['ruff', 'eslint', 'flake8', 'pylint', 'lint'],
-  format: ['prettier', 'ruff format', 'black', 'format'],
-  test: ['pytest', 'vitest', 'jest', 'mocha', 'test'],
+  typecheck: ['mypy', 'tsc', 'pyright', 'typecheck', 'cargo check'],
+  lint: ['ruff', 'eslint', 'flake8', 'pylint', 'lint', 'clippy'],
+  format: ['prettier', 'ruff format', 'black', 'format', 'cargo fmt'],
+  test: ['pytest', 'vitest', 'jest', 'mocha', 'test', 'nextest'],
   e2e: ['playwright', 'cypress', 'integration'],
   build: ['build', 'maturin', 'next build', 'tsc -p'],
   install: ['install', 'npm ci', 'sync'],
+  bench: ['cargo bench'],
 };
 
 function sharesTool(ciCmd, chosenCmd, category) {
@@ -558,6 +659,7 @@ export function detectCommands(root) {
 
   detectNode(root, out);
   detectPython(root, out);
+  detectRust(root, out);
 
   const ci = extractCiCommands(root);
   out.ci_files = ci.files;
