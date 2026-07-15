@@ -467,6 +467,13 @@ function reconcile(out, ci) {
     // 3. else adopt a CI-only command (ground truth) — but ONLY a clean,
     //    reproducible entrypoint. Never adopt compound/substituting shell from a
     //    workflow file: adopted commands can end up auto-run by verify.mjs.
+    //    NOTE: this block is currently unreachable — its guard recomputes the
+    //    exact `ciMatches.find(isCleanInvocation)` from step 0 (`ciMatches` is
+    //    never reassigned between them), so a clean CI-only line is already
+    //    adopted at step 0 via `localSame || {…from:'ci'}`. Kept as a defensive/
+    //    documented fallback: if step 0's adoption arm is ever refactored away,
+    //    this preserves CI-only adoption. Covered by the ci-adopt selftest
+    //    (e2e = clean CI-only) which exercises the step-0 arm.
     if (!chosen && ciMatches.length) {
       const c = ciMatches.find((x) => isCleanInvocation(x.cmd));
       if (c) {

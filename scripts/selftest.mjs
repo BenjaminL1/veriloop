@@ -576,26 +576,37 @@ function assert(cond, desc) {
     C.test && C.test.from === 'node' && C.test.verified_by_ci === false,
     'ci-adopt path2 (false): test is local with no CI match → verified_by_ci:false',
   );
-  // path 3 — a category with NO local candidate adopts a clean CI-only line; a
-  // no-local category whose only CI line is UNCLEAN is dropped entirely.
+  // CI-only adopt — a category with NO local candidate adopts a clean CI-only
+  // line. This is decided at reconcile() step 0 (`localSame || {…from:'ci'}`),
+  // NOT the step-3 block, which is unreachable (see detectors.mjs:467 note).
+  // Regression protection holds regardless of which arm adopts: both gate on the
+  // same isCleanInvocation predicate, so over-tightening it fails these asserts.
   assert(
     C.e2e && C.e2e.from === 'ci' && C.e2e.verified_by_ci === true && C.e2e.cmd === 'make test-integration',
-    "ci-adopt path3 (adopt): e2e (no local) adopts clean CI-only 'make test-integration', from:ci, verified",
+    "ci-adopt CI-only adopt: e2e (no local) adopts clean CI-only 'make test-integration', from:ci, verified",
   );
   assert(
     C.e2e && C.e2e.source === '.github/workflows/ci.yml:16 (CI)',
-    'ci-adopt path3 (adopt): the adopted e2e command cites its real CI line — ci.yml:16 (CI)',
+    'ci-adopt CI-only adopt: the adopted e2e command cites its real CI line — ci.yml:16 (CI)',
   );
+  // CI-only reject — build has no local candidate and its only CI line
+  // (`node node_modules/.bin/next build …`, ci.yml:14) is UNCLEAN: `node <path>`
+  // is not a recognized clean entrypoint (isCleanInvocation whitelist), so it is
+  // never adopted and build is absent. Deliberately unclean-by-entrypoint, not
+  // compound-shell — this fixture stays free of shell metacharacters (`&&`, `$()`);
+  // rejecting genuinely hostile shell is fixtures/hostile-ci/'s job.
   assert(
     C.build === undefined,
-    'ci-adopt path3 (reject): a no-local category whose only CI line is unclean is ABSENT from commands',
+    'ci-adopt CI-only reject: a no-local category whose only CI line is unclean is ABSENT from commands',
   );
 
   // parsing — the awkward YAML constructs each surface in ci_commands with the
   // correct file:line (a line-number or parser regression fails here).
+  // finding 'tsc --noEmit' (not '"tsc --noEmit"') by exact match already proves
+  // unquote ran — a regression leaves the quotes on and this lookup returns undefined.
   const q = findCi('tsc --noEmit');
   assert(
-    q && q.source === '.github/workflows/ci.yml:8' && !ci.some((c) => c.cmd.includes('"')),
+    q && q.source === '.github/workflows/ci.yml:8',
     'ci-adopt parse: quoted-inline run is UNQUOTED in ci_commands at ci.yml:8 (unquote)',
   );
   const fld = findCi('prettier --check .');

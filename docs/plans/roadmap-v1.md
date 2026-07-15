@@ -401,8 +401,8 @@ planned:
   auto-emitted — the dogfood report + run records serve as v0; auto-emission moved
   to the M1 main event / M2. Warm-up landed as `style:` on a preview branch rather
   than auto-merging (owner gate, as designed).
-- **Remaining for M1:** the main event — one standard-tier UI-touching feature
-  driven fresh-context; **feature choice is the owner's**.
+- **Then remaining (now done):** the main event — one standard-tier UI-touching
+  feature driven fresh-context; it clean-landed 2026-07-12 (see the next section).
 
 ### M1 main event — DONE (2026-07-12), pending owner sign-off
 
