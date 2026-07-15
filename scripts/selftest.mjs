@@ -698,12 +698,16 @@ function assert(cond, desc) {
   //     per pattern class (Deliverable 1): the secret-shaped line is dropped whole-line,
   //     sibling lines survive.
   const SECRET_PATTERNS = new Function(`${wf.slice(wf.indexOf(S) + S.length, wf.indexOf(E))}; return SECRET_PATTERNS;`)();
-  assert(Array.isArray(SECRET_PATTERNS) && SECRET_PATTERNS.length === 7, 'emit: SECRET_PATTERNS is the single source of truth (7 pattern classes) extracted from the emitted workflow');
+  assert(Array.isArray(SECRET_PATTERNS) && SECRET_PATTERNS.length === 8, 'emit: SECRET_PATTERNS is the single source of truth (8 pattern classes) extracted from the emitted workflow');
   const secretCases = [
     ['env-style KEY/TOKEN/SECRET/PASSWORD/CREDENTIALS assignment', 'DB_PASSWORD=hunter2'],
     ['bearer token', 'Authorization: Bearer abcdefgh12345678'],
     ['AWS access key id', 'AKIAIOSFODNN7EXAMPLE'],
-    ['PEM private key block header', '-----BEGIN RSA PRIVATE KEY-----'],
+    // PEM BEGIN alone is intentionally NOT tested here: with no END marker present, the
+    // block-drop rule below drops to the end of the field (by design), which would also
+    // swallow the 'after-line' sibling this loop asserts survives. The dedicated (e2)
+    // block-drop test below covers BEGIN+body+END with the correct termination semantics.
+    ['PEM private key block footer (bare, no BEGIN present)', '-----END RSA PRIVATE KEY-----'],
     ['github token prefix (ghp_/gho_/ghs_/github_pat_)', 'ghp_1234567890abcdefghijklmno'],
     ['sk- token prefix', 'sk-1234567890abcdefghijklmno'],
     ['slack xox- token prefix', 'xoxb-1234567890'],
@@ -719,6 +723,34 @@ function assert(cond, desc) {
       `emit: secret redaction — ${label} line is dropped whole-line, sibling lines survive`,
     );
   }
+
+  // (e2) PEM block-drop (security SHOULD-FIX; owner-amended spec, gate run
+  //      wf_2df5505d-c2a): a poisoned multi-line PEM block — BEGIN header, three fake
+  //      base64 body lines, END footer — embedded in a synthetic check tail must vanish
+  //      IN FULL. A header-only line-drop (the pre-amendment behavior) would leave the
+  //      body + footer readable in the committed record; assert none of the three survive
+  //      and only the sibling lines outside the block do. Synthetic input only — this
+  //      poisoned PEM block is fabricated here, never sourced from a real key.
+  const pemBlockLines = [
+    '-----BEGIN RSA PRIVATE KEY-----',
+    'MIIEpAIBAAKCAQEAxFAKEfakefakefakefakefakefakefakefakefakefakefak',
+    'e2ndlineFAKEfakefakefakefakefakefakefakefakefakefakefakefakefak',
+    'e3rdlineFAKEfakefakefakefakefakefakefakefakefakefakefakefakefak',
+    '-----END RSA PRIVATE KEY-----',
+  ];
+  const pemPoison = {
+    ...synth,
+    checks: [{ name: 'test', command: 'npm test', result: 'fail', exit: 1, tail: ['before-line', ...pemBlockLines, 'after-line'].join('\n') }],
+  };
+  const pemOut = attestationFrom(pemPoison, { wt: '/tmp/wt', branch: 'b' }, stamps, ['/tmp/wt']);
+  const pemTail = JSON.parse(pemOut.json).checks[0].tail;
+  assert(!pemTail.includes('BEGIN RSA PRIVATE KEY'), 'emit: PEM block-drop — the BEGIN header line does not survive');
+  assert(!pemTail.includes('END RSA PRIVATE KEY'), 'emit: PEM block-drop — the END footer line does not survive');
+  assert(
+    !pemBlockLines.slice(1, 4).some((bodyLine) => pemTail.includes(bodyLine)),
+    'emit: PEM block-drop — the base64 body lines do not survive (a header-only line-drop would leak these)',
+  );
+  assert(pemTail.includes('before-line') && pemTail.includes('after-line'), 'emit: PEM block-drop — sibling lines outside the block survive');
 
   // (f) %REPO% sentinel: an in-root absolute path is stripped to the inert %REPO%
   //     placeholder, never the live shell variable $REPO (drift SHOULD-FIX — a live
@@ -749,6 +781,20 @@ function assert(cond, desc) {
   const poisonedScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(poisonedScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a secret-shaped line (API_KEY=...)');
   assert(/secret-shaped content in committed attestation record/.test(poisonedScan.stdout || ''), 'lint-bundle: the failure names the committed-history secret backstop');
+
+  // (i) lint-bundle backstop also fails on a bare PEM END-marker footer line, with no
+  //     BEGIN present (security SHOULD-FIX Deliverable 1: the END-marker regex was added
+  //     to the shared SECRET_PATTERNS array specifically so the backstop, which re-scans
+  //     committed records with that SAME array, catches a leaked footer). Remove the
+  //     API_KEY= poisoned record first so this failure is attributable to the PEM footer
+  //     specifically, not the earlier fixture.
+  rmSync(join(histDir, 'poisoned.json'));
+  const cleanAgainScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(cleanAgainScan.status === 0, 'lint-bundle: passes again once the API_KEY= poisoned record is removed');
+  writeFileSync(join(histDir, 'poisoned-pem-footer.json'), JSON.stringify({ note: '-----END RSA PRIVATE KEY-----' }, null, 2));
+  const poisonedPemScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(poisonedPemScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a bare PEM END-marker footer line');
+  assert(/secret-shaped content in committed attestation record/.test(poisonedPemScan.stdout || ''), 'lint-bundle: the PEM-footer failure names the committed-history secret backstop');
 }
 
 // --- version-stamp agreement: all five stamp locations must name the same semver.

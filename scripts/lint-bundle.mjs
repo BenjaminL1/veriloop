@@ -182,7 +182,7 @@ function main() {
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
   } else fail('no veriloop-manifest.json emitted');
 
-  // 6.5 committed attestation records — defense-in-depth (constitution rule 7). The
+  // 6. committed attestation records — defense-in-depth (constitution rule 7). The
   //     redaction routine already runs at emit time; this backstop re-scans what actually
   //     landed in `.claude/veriloop/history/*.json` (excluding `dry-runs/`, which are
   //     never committed) for the SAME absolute-path regex plus the SAME SECRET_PATTERNS
@@ -229,7 +229,7 @@ function main() {
     if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns');
   }
 
-  // 6. authoring budget — the persona word cap is an ACCRETION TRIPWIRE, not a
+  // 7. authoring budget — the persona word cap is an ACCRETION TRIPWIRE, not a
   //    token/dilution claim: a persona past 700 words has usually grown unreviewed
   //    bolt-ons, so a human should re-read and re-distill it. WARN-only (it's a
   //    smell, not a correctness bug). Scoped to the same emitted-file list.

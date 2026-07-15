@@ -293,16 +293,32 @@ node scripts/lint-bundle.mjs --bundle /Users/benjaminli/my_projects/Torevan/.cla
   runtime tokens (`__VERILOOP_TS__` / `__VERILOOP_BASE_SHA__` / `__VERILOOP_HEAD_SHA__` — token
   shapes chosen not to trip the leftover-placeholder regex) and writes the bytes. Redaction
   therefore runs in testable JS, not inside the agent.
-- **Redaction as shipped:** strip known roots (worktree + repo-root derived from the
-  `<parent>/.veriloop-veriloop/<slug>` layout) → `$REPO`, normalize screenshots to
-  repo-relative, then DROP any line still matching `lint-bundle.mjs:88`'s ABS regex
-  (imperfect root inference degrades to a dropped line, never a leak). `CHECK_SCHEMA` gained
-  optional `exit`/`tail`; `verdictFrom` untouched.
-- **Emission policy:** non-dryRun only; committed+pushed on the feature branch ONLY when the
-  run landed (`land && land.pushed`), otherwise left in the worktree for owner triage.
-  Records are runtime output — NOT in the manifest's `emitted_files`.
+- **Redaction as shipped (hardened):** strip known roots (worktree + repo-root derived from
+  the `<parent>/.veriloop-veriloop/<slug>` layout) → the inert `%REPO%` sentinel (never the
+  literal `$REPO`, which a live shell variable could re-expand back into a real path during
+  the write), normalize screenshots to repo-relative, then DROP any line still matching
+  `lint-bundle.mjs:88`'s ABS regex OR the shared `SECRET_PATTERNS` array (env-style
+  KEY/TOKEN/SECRET/PASSWORD/CREDENTIALS assignments, bearer tokens, AWS access key ids, PEM
+  BEGIN/END markers, common token prefixes) — one exported array both the selftest and
+  `lint-bundle.mjs` extract from the same marker-bounded `veriloop:emit` region, never a
+  re-hardcoded copy. PEM private-key blocks get a RANGE drop (BEGIN line through the
+  matching END line inclusive, or to end of field if END is missing) so the base64 body and
+  footer can't leak past a header-only line-drop. `CHECK_SCHEMA` gained optional
+  `exit`/`tail`; `verdictFrom` untouched.
+- **Emission policy:** every run emits (owner decision, supersedes the original `!dryRun`
+  carve-out) — real runs write the redacted record to `history/<ts>.json`, committed+pushed
+  on the feature branch ONLY when the run landed (`land && land.pushed`); dry runs
+  (`dryRun:true`) write the same redacted record to `history/dry-runs/<ts>.json`, which is
+  local and uncommitted (spliced into the host repo's `.gitignore`). Records are runtime
+  output — NOT in the manifest's `emitted_files`.
+- **Lint-bundle backstop:** `lint-bundle.mjs` re-scans committed `history/*.json` (excluding
+  `dry-runs/`) with the same ABS regex + `SECRET_PATTERNS` array, extracted from the emitted
+  workflow the same way the selftest does — defense-in-depth against a record that escaped
+  redaction and got committed anyway.
 - **Selftest:** the emit region is extracted and executed against synthetic + poisoned
-  evidence (fixture never supplies the evidence under test). Count grew `119 → 131`.
+  evidence (fixture never supplies the evidence under test). Count grew `119 → 131 → 154`
+  (redaction hardening: PEM block-drop, %REPO% sentinel, dry-run routing, lint-bundle
+  backstop).
 - **Non-goals honored:** NO Torevan/catan_rl_v2 recommit (owner's merge-time step), NO
   history pruning/rotation policy, NO gate/lens/verdict changes.
 

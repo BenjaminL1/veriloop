@@ -633,11 +633,21 @@ function verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers, missingJo
 // 9): the selftest and lint-bundle.mjs both extract it from THIS marker-bounded region of
 // the emitted workflow (the same slice-and-`new Function` mechanism already used for
 // `attestationFrom`) rather than re-hardcoding a second copy.
+//
+// PEM_BEGIN/PEM_END are declared once and reused both as SECRET_PATTERNS entries (so a bare
+// header or bare footer line still trips the ordinary line-drop + the lint-bundle backstop)
+// AND by the block-drop loop below (so the base64 body between them — which matches none of
+// these line patterns — never survives). Amended 2026-07-15 with owner authority after gate
+// run wf_2df5505d-c2a found the original header-only line-drop leaked the key body + footer;
+// the code had faithfully implemented the original spec, the spec itself was wrong.
+const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/;
 const SECRET_PATTERNS = [
   /\b[A-Z0-9_]*(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Z0-9_]*\s*[=:]/i,
   /\bbearer\s+[a-z0-9._~+\/=-]{8,}/i,
   /\bAKIA[0-9A-Z]{16}\b/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  PEM_BEGIN,
+  PEM_END,
   /\b(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}/,
   /\bsk-[A-Za-z0-9]{20,}/,
   /\bxox[baprs]-/,
@@ -653,10 +663,24 @@ function attestationFrom(evidence, ctx, stamps, roots) {
     return out;
   };
   // strip known roots, then drop any line STILL carrying an absolute path or a
-  // secret-shaped pattern (the safety net) — whole-line drop only, never partial masking
-  const redactStr = (s) => stripRoots(s).split('\n')
-    .filter((line) => !ABS.test(line) && !SECRET_PATTERNS.some((re) => re.test(line)))
-    .join('\n');
+  // secret-shaped pattern (the safety net) — whole-line drop only, never partial masking.
+  // PEM private-key blocks get a RANGE drop: every line from a PEM_BEGIN match through the
+  // matching PEM_END (inclusive) is dropped, including the base64 body in between, which
+  // matches no single-line SECRET_PATTERNS entry on its own. If PEM_END never appears, the
+  // block drop runs to the end of the field rather than leaking an unterminated key.
+  const redactStr = (s) => {
+    const out = [];
+    let inPemBlock = false;
+    for (const line of stripRoots(s).split('\n')) {
+      if (inPemBlock) {
+        if (PEM_END.test(line)) inPemBlock = false;
+        continue; // every line inside the block, and the END line itself, is dropped
+      }
+      if (PEM_BEGIN.test(line)) { inPemBlock = true; continue; }
+      if (!ABS.test(line) && !SECRET_PATTERNS.some((re) => re.test(line))) out.push(line);
+    }
+    return out.join('\n');
+  };
   const redact = (v) => {
     if (v == null || typeof v === 'number' || typeof v === 'boolean') return v;
     if (typeof v === 'string') return redactStr(v);
