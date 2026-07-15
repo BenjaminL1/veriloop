@@ -182,6 +182,53 @@ function main() {
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
   } else fail('no veriloop-manifest.json emitted');
 
+  // 6.5 committed attestation records — defense-in-depth (constitution rule 7). The
+  //     redaction routine already runs at emit time; this backstop re-scans what actually
+  //     landed in `.claude/veriloop/history/*.json` (excluding `dry-runs/`, which are
+  //     never committed) for the SAME absolute-path regex plus the SAME SECRET_PATTERNS
+  //     array the workflow's `veriloop:emit` region defines — extracted from the emitted
+  //     workflow itself (the same marker-slice-and-`new Function` technique the selftest
+  //     uses), never a second hardcoded copy (constitution rule 9). A hit here means a
+  //     record escaped redaction and got committed anyway.
+  const histDir = join(args.bundle, '.claude/veriloop/history');
+  if (isDir(histDir)) {
+    const wfDirH = join(args.bundle, '.claude/workflows');
+    const wfH = (listDir(wfDirH) || []).find((n) => n.endsWith('-dev-loop.js'));
+    let secretPatterns = [];
+    if (wfH) {
+      const src = readFileSync(join(wfDirH, wfH), 'utf8');
+      const S = '// <<< veriloop:emit:start >>>';
+      const E = '// <<< veriloop:emit:end >>>';
+      const si = src.indexOf(S);
+      const ei = src.indexOf(E);
+      if (si !== -1 && ei !== -1) {
+        try {
+          secretPatterns = new Function(`${src.slice(si + S.length, ei)}; return SECRET_PATTERNS;`)();
+        } catch { /* fall through — treated as no patterns available */ }
+      }
+    }
+    let histHits = 0;
+    const walkHist = (dir, rel) => {
+      for (const name of listDir(dir)) {
+        if (rel === '' && name === 'dry-runs') continue; // dry-run records never commit
+        const abs = join(dir, name);
+        if (isDir(abs)) walkHist(abs, rel ? `${rel}/${name}` : name);
+        else if (name.endsWith('.json')) {
+          const t = readFileSync(abs, 'utf8');
+          const relPath = `.claude/veriloop/history/${rel ? `${rel}/${name}` : name}`;
+          t.split('\n').forEach((line, i) => {
+            if (ABS.test(line)) { histHits++; fail(`absolute path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)}`); return; }
+            for (const re of secretPatterns) {
+              if (re.test(line)) { histHits++; fail(`secret-shaped content in committed attestation record ${relPath}:${i + 1}`); break; }
+            }
+          });
+        }
+      }
+    };
+    walkHist(histDir, '');
+    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns');
+  }
+
   // 6. authoring budget — the persona word cap is an ACCRETION TRIPWIRE, not a
   //    token/dilution claim: a persona past 700 words has usually grown unreviewed
   //    bolt-ons, so a human should re-read and re-distill it. WARN-only (it's a

@@ -390,8 +390,9 @@ function main() {
   w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, roster, gate: config.gate }), 'starter');
 
   // shared owner files: veriloop keeps one marked block in each.
-  // .gitignore — the rolling backups of clobbered machine files are local state.
-  w.spliceBlock(P('.gitignore'), ['.claude/veriloop/.backups/'], { createIfMissing: true });
+  // .gitignore — the rolling backups of clobbered machine files are local state, and so
+  // are dry-run attestation records (owner decision: dry runs emit locally but never commit).
+  w.spliceBlock(P('.gitignore'), ['.claude/veriloop/.backups/', '.claude/veriloop/history/dry-runs/'], { createIfMissing: true });
   // .prettierignore — machine-owned files are EXEMPT from the repo's style, not
   // formatted to it: the generator rewrites them on every re-run, so any
   // repo-style pass over them is undone and the repo's format check flaps back

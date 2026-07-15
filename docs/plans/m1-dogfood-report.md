@@ -83,10 +83,11 @@ emitted bundle). All fixed with selftest coverage (**21 → 26 assertions, all g
   (tier came out `high`, and `game-hud` matched the `hud` UI keyword). Vindicated
   here (high-tier depth caught the corruption), but a formatting-only diff arguably
   shouldn't trigger a visual gate — candidate for M3 tier refinement.
-- **Evidence-bundle auto-emission** — the loop returns its result but does not yet
-  write `.claude/veriloop/history/<ts>.json` attestation records (roadmap M1). This
-  report + the run records below are the v0 attestation; auto-emission is a candidate
-  template enhancement.
+- ~~**Evidence-bundle auto-emission** — the loop returns its result but does not yet
+  write `.claude/veriloop/history/<ts>.json` attestation records (roadmap M1).~~ —
+  **SHIPPED** (v0.3.3): the loop now writes one redacted attestation record per run
+  (dry runs too, locally under `history/dry-runs/`, uncommitted), with deterministic
+  secret redaction and an `%REPO%` sentinel guarding against shell re-expansion.
 - ~~**#10 — gate fails OPEN when a gate agent dies**~~ — **FIXED** (v0.2.2): `gate()`
   now collects every null-resolving job into `missingJobs` and `verdictFrom` turns each
   into a BLOCKER (fail closed) — a verification that does not run cannot pass; only a

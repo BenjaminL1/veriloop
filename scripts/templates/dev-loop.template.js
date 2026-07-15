@@ -365,16 +365,34 @@ function verdictFrom(checks, lenses, shot, xmodel, baseProbe, waivers, missingJo
 // PURE attestation-record builder — no Date, no fs, no process (all harness-forbidden,
 // lint-bundle.mjs). The selftest extracts THIS region and executes it against a
 // synthetic evidence object, so it must stay closure-free. It returns { relPath, json }:
-// exactly ONE redacted `history/<ts>.json` record, a superset of the run's `evidence`
-// fields. `ts/baseSha/headSha` arrive as `stamps` (placeholder tokens at runtime, real
-// synthetic values in the test); the runtime emission step substitutes the tokens and
-// writes the file (fs is forbidden here).
+// exactly ONE redacted record, a superset of the run's `evidence` fields, at
+// `history/<ts>.json` for a real run or `history/dry-runs/<ts>.json` for a dry run (owner
+// decision: dry runs DO emit, locally and uncommitted). `ts/baseSha/headSha` arrive as
+// `stamps` (placeholder tokens at runtime, real synthetic values in the test); the runtime
+// emission step substitutes the tokens and writes the file (fs is forbidden here).
 //
 // REDACTION (constitution rule 7, BINDING — emitted artifacts are portable + secret-free):
 // recursively over every string, (a) replace each known absolute root in `roots`
-// (longest-first) with `$REPO`, then (b) DROP any remaining line that still matches the
-// lint-bundle absolute-path regex. Imperfect root inference therefore degrades to a
-// dropped line, never a leaked path. `.env*` content is never sourced into `evidence`.
+// (longest-first) with `%REPO%` (an inert sentinel — never `$REPO`, which a live shell
+// variable could re-expand back into a real path during the write step), then (b) DROP
+// any remaining line that still matches the lint-bundle absolute-path regex OR any
+// SECRET_PATTERNS entry (deterministic pattern match, never model compliance — constitution
+// rules 2 + 7). Imperfect root inference therefore degrades to a dropped line, never a
+// leaked path or secret. `.env*` content is never sourced into `evidence`.
+//
+// SECRET_PATTERNS is the SINGLE source of truth for secret-shaped lines (constitution rule
+// 9): the selftest and lint-bundle.mjs both extract it from THIS marker-bounded region of
+// the emitted workflow (the same slice-and-`new Function` mechanism already used for
+// `attestationFrom`) rather than re-hardcoding a second copy.
+const SECRET_PATTERNS = [
+  /\b[A-Z0-9_]*(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Z0-9_]*\s*[=:]/i,
+  /\bbearer\s+[a-z0-9._~+\/=-]{8,}/i,
+  /\bAKIA[0-9A-Z]{16}\b/,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  /\b(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}/,
+  /\bsk-[A-Za-z0-9]{20,}/,
+  /\bxox[baprs]-/,
+];
 function attestationFrom(evidence, ctx, stamps, roots) {
   const ABS = /(\/Users\/|\/home\/[a-z]|\b[A-Z]:[\\/])/; // === lint-bundle.mjs absolute-path regex
   const rootList = (roots || [])
@@ -382,11 +400,14 @@ function attestationFrom(evidence, ctx, stamps, roots) {
     .sort((a, b) => b.length - a.length); // longest-first: a worktree prefix before its parent
   const stripRoots = (s) => {
     let out = String(s);
-    for (const r of rootList) out = out.split(r).join('$REPO');
+    for (const r of rootList) out = out.split(r).join('%REPO%');
     return out;
   };
-  // strip known roots, then drop any line STILL carrying an absolute path (the safety net)
-  const redactStr = (s) => stripRoots(s).split('\n').filter((line) => !ABS.test(line)).join('\n');
+  // strip known roots, then drop any line STILL carrying an absolute path or a
+  // secret-shaped pattern (the safety net) — whole-line drop only, never partial masking
+  const redactStr = (s) => stripRoots(s).split('\n')
+    .filter((line) => !ABS.test(line) && !SECRET_PATTERNS.some((re) => re.test(line)))
+    .join('\n');
   const redact = (v) => {
     if (v == null || typeof v === 'number' || typeof v === 'boolean') return v;
     if (typeof v === 'string') return redactStr(v);
@@ -402,7 +423,7 @@ function attestationFrom(evidence, ctx, stamps, roots) {
   // screenshot paths normalize to repo-relative first; the recursive net drops any that
   // could not be rooted (still absolute) rather than leaking them.
   const shot = evidence.screenshot || null;
-  const normShot = (p) => stripRoots(p).replace(/^\$REPO[\\/]+/, '');
+  const normShot = (p) => stripRoots(p).replace(/^%REPO%[\\/]+/, '');
   const screenshots = shot && Array.isArray(shot.captured) ? shot.captured.map(normShot) : [];
   const land = evidence.land
     ? { sha: evidence.land.commitSha || null, pushed: !!evidence.land.pushed, branch: evidence.land.branch || (ctx && ctx.branch) || null }
@@ -441,7 +462,11 @@ function attestationFrom(evidence, ctx, stamps, roots) {
     land,
   };
   const redacted = redact(record);
-  return { relPath: `.claude/veriloop/history/${stamps.ts}.json`, json: JSON.stringify(redacted, null, 2) };
+  // dry runs still emit — LOCALLY, uncommitted, into a dry-run-specific subdirectory
+  // (owner decision: dry-run records are never committed, but redaction/defense applies
+  // identically regardless of commit status).
+  const relPath = `.claude/veriloop/history/${evidence.dryRun ? 'dry-runs/' : ''}${stamps.ts}.json`;
+  return { relPath, json: JSON.stringify(redacted, null, 2) };
 }
 // <<< veriloop:emit:end >>>
 
@@ -609,13 +634,14 @@ const brief = await agent(
 );
 
 // ---------------- 6b. Emit attestation record (redacted; committed only if landed) ----
-// The evidence spine's durable track record: one redacted `history/<ts>.json` per run.
-// dryRun's contract is no persistence side effects, so it emits nothing. The redaction
-// (constitution rule 7) runs HERE in pure JS; the agent below only fills the three
-// runtime tokens (ts/base/head shas) and writes the bytes — fs/Date/git are forbidden
-// in this workflow context, so the write is delegated to a worktree agent.
-if (!dryRun) {
-  // roots the redactor strips to `$REPO`: the worktree, and the repo root derived from
+// The evidence spine's durable track record: one redacted record per run, ALWAYS —
+// including dry runs (owner decision: dry runs emit too, locally, uncommitted, under a
+// dry-run-specific directory — `attestationFrom` routes the path via `evidence.dryRun`).
+// The redaction (constitution rule 7) runs HERE in pure JS; the agent below only fills the
+// three runtime tokens (ts/base/head shas) and writes the bytes — fs/Date/git are
+// forbidden in this workflow context, so the write is delegated to a worktree agent.
+{
+  // roots the redactor strips to `%REPO%`: the worktree, and the repo root derived from
   // the standard `<parent>/.<repo>-veriloop/<slug>` worktree layout. Any absolute path
   // these miss is caught by the drop-net (a line still matching the ABS regex is removed).
   const marker = `/.${VERILOOP.repoName}-veriloop/`;
@@ -628,18 +654,18 @@ if (!dryRun) {
     { ts: '__VERILOOP_TS__', baseSha: '__VERILOOP_BASE_SHA__', headSha: '__VERILOOP_HEAD_SHA__' },
     roots,
   );
-  const landedNow = !!(land && land.pushed);
+  const landedNow = !dryRun && !!(land && land.pushed);
   await agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `Write this run's ATTESTATION RECORD. The JSON is ALREADY REDACTED and final — do NOT edit, reformat, re-key, or add fields; only substitute the three runtime tokens and write the exact bytes.\n` +
       `Steps (run in the worktree):\n` +
       `1. Compute: \`ts=$(date -u +%Y-%m-%dT%H-%M-%SZ)\`; \`headSha=$(git rev-parse HEAD)\`; \`baseSha=$(git rev-parse ${ctx.baseBranch})\`.\n` +
-      `2. In the JSON below, replace every \`__VERILOOP_TS__\` with $ts, \`__VERILOOP_HEAD_SHA__\` with $headSha, \`__VERILOOP_BASE_SHA__\` with $baseSha. Change NOTHING else.\n` +
-      `3. \`mkdir -p $REPO/.claude/veriloop/history\` and write the result to \`$REPO/.claude/veriloop/history/$ts.json\` (exactly one file). Verify it parses as JSON.\n` +
+      `2. In the JSON below, replace every \`__VERILOOP_TS__\` with $ts, \`__VERILOOP_HEAD_SHA__\` with $headSha, \`__VERILOOP_BASE_SHA__\` with $baseSha. Change NOTHING else. The JSON already contains the inert sentinel \`%REPO%\` wherever an absolute root was redacted — leave it exactly as-is, do NOT substitute it with a real path.\n` +
+      `3. Target path: \`$REPO/${att.relPath}\`, with its own \`__VERILOOP_TS__\` token substituted the same way. \`mkdir -p\` its parent directory and write the result there (exactly one file). The write MUST be non-interpolating (a single-quoted heredoc, e.g. \`cat > path <<'EOF'\`, or a file-write tool) so the shell's own \`$REPO\` variable can never re-expand the \`%REPO%\` sentinel back into a real path. Verify the file parses as JSON.\n` +
       (landedNow
         ? `4. This run LANDED — commit the record on branch \`${ctx.branch}\` with a conventional message (e.g. \`chore(veriloop): attestation record for ${ctx.branch}\`), NO AI co-author trailer, then \`git push\`. Leave \`git status\` clean.\n`
-        : `4. This run did NOT land — do NOT commit or push. Leave the record in the worktree for owner triage.\n`) +
-      `HARD LIMITS: never stage or echo \`.env*\`; never add an absolute path back into the record; the record is runtime output — do NOT add it to the manifest's emitted_files.\n\n` +
+        : `4. This run did NOT land (or is a dry run) — do NOT commit or push. Leave the record in the worktree for owner triage.\n`) +
+      `HARD LIMITS: never stage or echo \`.env*\`; never add an absolute path or the literal \`$REPO\` back into the record; the record is runtime output — do NOT add it to the manifest's emitted_files.\n\n` +
       `RECORD JSON (write verbatim, tokens substituted):\n${att.json}`,
     { label: 'emit-attestation', phase: 'Report', ...route('land') },
   );

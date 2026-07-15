@@ -132,8 +132,9 @@ posture). Then drive it:
   re-run. Never hand-patch the emitted bundle.
 - **Evidence bundle v0 (start the attestation spine now, cheaply):** each gate run
   records base/head SHA, exact commands, exit codes, output tails, screenshot
-  paths, verdict, tier → `.claude/veriloop/history/<timestamp>.json`. M1 produces
-  the first real records; post-1.0 autonomy will feed on this format.
+  paths, verdict, tier → `.claude/veriloop/history/<timestamp>.json`. M1 produced
+  the first real records; auto-emission with deterministic secret redaction shipped
+  in v0.3.3, and post-1.0 autonomy will feed on this format.
 
 **Exit criteria:** PASS-gated preview branch pushed by the loop; dogfood report
 written; every discovered compiler bug fixed with a selftest/fixture where

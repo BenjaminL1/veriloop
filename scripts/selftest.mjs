@@ -627,7 +627,8 @@ function assert(cond, desc) {
 //     test). Asserts (a) exactly one history record, (b) it parses with the required spec
 //     keys, (c) a clean record carries no absolute path, and (d) a poisoned input
 //     (/Users, /home, C:\ across tail/summary/screenshots) comes out fully redacted —
-//     constitution rule 7, using the same ABS regex lint-bundle scans committed records with. ---
+//     constitution rule 7, using the same ABS regex AND SECRET_PATTERNS array that
+//     lint-bundle.mjs's committed-history backstop scans committed records with. ---
 {
   const tmp = mkdtempSync(join(tmpdir(), 'veriloop-emit-'));
   writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'emit', scripts: { lint: 'eslint .', test: 'vitest run' } }));
@@ -691,6 +692,63 @@ function assert(cond, desc) {
   assert(drec.filesChanged.includes('src/rel-ok.ts') && !drec.filesChanged.some((f) => /only-abs/.test(f)), 'emit: a bare absolute-path array entry is dropped; the repo-relative one is kept');
   assert(drec.implSummary === '', 'emit: an implSummary carrying absolute paths is emptied, not leaked');
   assert(drec.screenshots.length === 1 && drec.screenshots[0] === 'shots/a.png', 'emit: an in-worktree screenshot normalizes to repo-relative; out-of-root paths are dropped');
+
+  // (e) SECRET_PATTERNS is extracted from the SAME marker-bounded region — never
+  //     re-hardcoded (constitution rule 9) — and reused for one poisoned-tail assert
+  //     per pattern class (Deliverable 1): the secret-shaped line is dropped whole-line,
+  //     sibling lines survive.
+  const SECRET_PATTERNS = new Function(`${wf.slice(wf.indexOf(S) + S.length, wf.indexOf(E))}; return SECRET_PATTERNS;`)();
+  assert(Array.isArray(SECRET_PATTERNS) && SECRET_PATTERNS.length === 7, 'emit: SECRET_PATTERNS is the single source of truth (7 pattern classes) extracted from the emitted workflow');
+  const secretCases = [
+    ['env-style KEY/TOKEN/SECRET/PASSWORD/CREDENTIALS assignment', 'DB_PASSWORD=hunter2'],
+    ['bearer token', 'Authorization: Bearer abcdefgh12345678'],
+    ['AWS access key id', 'AKIAIOSFODNN7EXAMPLE'],
+    ['PEM private key block header', '-----BEGIN RSA PRIVATE KEY-----'],
+    ['github token prefix (ghp_/gho_/ghs_/github_pat_)', 'ghp_1234567890abcdefghijklmno'],
+    ['sk- token prefix', 'sk-1234567890abcdefghijklmno'],
+    ['slack xox- token prefix', 'xoxb-1234567890'],
+  ];
+  for (const [label, secretLine] of secretCases) {
+    const tail = `before-line\n${secretLine}\nafter-line`;
+    const poisonedSecret = { ...synth, checks: [{ name: 'test', command: 'npm test', result: 'fail', exit: 1, tail }] };
+    const secretOut = attestationFrom(poisonedSecret, { wt: '/tmp/wt', branch: 'b' }, stamps, ['/tmp/wt']);
+    const srec2 = JSON.parse(secretOut.json);
+    const outTail = srec2.checks[0].tail;
+    assert(
+      !outTail.includes(secretLine) && outTail.includes('before-line') && outTail.includes('after-line'),
+      `emit: secret redaction — ${label} line is dropped whole-line, sibling lines survive`,
+    );
+  }
+
+  // (f) %REPO% sentinel: an in-root absolute path is stripped to the inert %REPO%
+  //     placeholder, never the live shell variable $REPO (drift SHOULD-FIX — a live
+  //     $REPO could re-expand the placeholder back into a real path during the write).
+  const sentinelSynth = { ...synth, implSummary: 'edited /tmp/sentinel-root/src/a.ts and /tmp/sentinel-root/src/b.ts' };
+  const sentinelOut = attestationFrom(sentinelSynth, { wt: '/tmp/sentinel-root', branch: 'b' }, stamps, ['/tmp/sentinel-root']);
+  const srec = JSON.parse(sentinelOut.json);
+  assert(srec.implSummary.includes('%REPO%'), 'emit: an in-root absolute path is stripped to the inert %REPO% sentinel');
+  assert(!sentinelOut.json.includes('$REPO'), 'emit: the written record never contains the literal $REPO substring');
+  assert(!ABS.test(sentinelOut.json), 'emit: the %REPO%-sentinel record contains no absolute path');
+
+  // (g) dry-run routing: dryRun:true routes the record under history/dry-runs/, never
+  //     history/ directly (owner decision — dry runs emit locally, always uncommitted).
+  const dryRunSynth = { ...synth, dryRun: true };
+  const dryOut = attestationFrom(dryRunSynth, { wt: '/tmp/wt', branch: 'feat/widget' }, stamps, ['/tmp/wt']);
+  assert(dryOut.relPath === `.claude/veriloop/history/dry-runs/${stamps.ts}.json`, 'emit: dryRun:true routes the record to history/dry-runs/<ts>.json');
+  const dryHistDir = join(tmp, '.claude/veriloop/history/dry-runs');
+  mkdirSync(dryHistDir, { recursive: true });
+  writeFileSync(join(dryHistDir, `${stamps.ts}.json`), dryOut.json);
+  assert(existsSync(join(dryHistDir, `${stamps.ts}.json`)), 'emit: dry-run record is written under history/dry-runs/');
+
+  // (h) lint-bundle committed-history backstop (Deliverable 4): a clean committed
+  //     record passes; a committed record carrying a fake secret (API_KEY=...) fails
+  //     the bundle. dry-runs/ (already seeded above) must never trip this scan.
+  const cleanScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(cleanScan.status === 0, 'lint-bundle: passes with only clean committed history records present (dry-runs/ excluded)');
+  writeFileSync(join(histDir, 'poisoned.json'), JSON.stringify({ note: 'API_KEY=abcd1234efgh' }, null, 2));
+  const poisonedScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(poisonedScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a secret-shaped line (API_KEY=...)');
+  assert(/secret-shaped content in committed attestation record/.test(poisonedScan.stdout || ''), 'lint-bundle: the failure names the committed-history secret backstop');
 }
 
 // --- version-stamp agreement: all five stamp locations must name the same semver.

@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.3.2",
-  "generated_at": "2026-07-15T01:15:27.951Z",
+  "veriloop_version": "0.3.3",
+  "generated_at": "2026-07-15T14:26:44.612Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "6830618e92ce9bf1abac81d1c9c8bceb13c0221c",
+  "repo_sha": "ef221eb44f1d0abbebd69bcb342a9183e41dc4c5",
   "stack": [
     "node"
   ],
@@ -190,7 +190,7 @@
     {
       "path": ".claude/workflows/veriloop-dev-loop.js",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/dev-loop.md",
@@ -250,7 +250,7 @@
     {
       "path": ".gitignore",
       "ownership": "shared-block",
-      "status": "unchanged"
+      "status": "written"
     }
   ],
   "interview_answers": {
