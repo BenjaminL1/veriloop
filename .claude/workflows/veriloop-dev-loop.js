@@ -70,7 +70,7 @@ const VERILOOP = {
   "depsSetup": "symlink the main checkout's dependencies into the worktree so checks resolve — `ln -s $REPO/node_modules <wt>/node_modules` at the root and for each workspace that has its own node_modules; fall back to `npm install` inside the worktree only if a symlink won't resolve.",
   "crossModel": true,
   "budget": {
-    "posture": "frugal",
+    "posture": "balanced",
     "presets": {
       "frugal": {
         "plan": {

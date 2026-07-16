@@ -64,7 +64,7 @@ It **STOPS before merge/deploy** — that is the owner gate.
   `fable`. So "plan on Fable, build on Opus" is `{ plan: "fable", implement: "opus" }`.
 - `args.effort = { plan: "xhigh", ... }` — per-phase reasoning effort (`low`…`max`).
 
-This repo's default routing (posture `frugal`): plan=fable · implement=sonnet · review=sonnet · checks=haiku · fix=sonnet · land=haiku.
+This repo's default routing (posture `balanced`): plan=fable · implement=opus · review=opus · checks=haiku · fix=opus · land=sonnet.
 
 ## When it returns
 

@@ -1,6 +1,6 @@
 {
   "cross_model": true,
-  "budget_posture": "frugal",
+  "budget_posture": "balanced",
   "phase_models": { "plan": "fable" },
   "high_risk_areas": ["detector", "hostile", "splice", "template", "emitted", "fixture", "safety", "ownership"],
   "roster_add": [
