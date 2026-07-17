@@ -198,6 +198,17 @@ nominated expert/rule candidates}`; classification-confirm halt; bounded + resum
 **Phase 5 — interview finalized:** ≤5 option-table questions incl. budget posture;
 budget → model/effort routing wired into the emitted template's agent calls.
 
+> **Orthogonal to `/dev-plan` (v0.3.3, the fourth emitted command).** These are two
+> DIFFERENT interviews. Phase 5 finalizes the generator's **INSTALL interview** — the
+> owner-confirm option tables that shape the compiled bundle (budget posture, roster
+> adds, high-risk areas), consumed once by `generate.mjs` at compile time. `/dev-plan`
+> runs a per-**FEATURE** interview at plan time: recon + interleaved spec questions + an
+> expert council, ending in an owner-ratified BINDING spec. `/dev-plan` supersedes the
+> old `/dev-loop` Step 1 FEATURE interview (now shrunk to spec *detection* — provided/on
+> disk → binding, trivial → confirm-and-go, non-trivial → point to `/dev-plan`); it does
+> NOT touch the INSTALL interview Phase 5 owns. veriloop now emits four commands:
+> `/dev-loop`, `/advise`, `/review`, `/dev-plan`.
+
 **The credibility centerpiece — held-out gold benchmark:** mine Torevan's
 constitution BLIND (hand-built one hidden from the miner), then measure recovery
 of the 14 hand-authored rules. Target ≥80% recovered with citations. Publish the

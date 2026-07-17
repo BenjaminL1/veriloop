@@ -1,6 +1,6 @@
 // veriloop renderers — produce the human-readable artifacts (personas, their
-// override siblings, the starter constitution, the /dev-loop command) and the
-// machine-owned config block spliced into the workflow.
+// override siblings, the starter constitution, the /dev-plan / /dev-loop / /advise
+// / /review commands) and the machine-owned config block spliced into the workflow.
 //
 // SPINE NOTE: these personas + constitution are functional *defaults* templated
 // from detected repo facts. veriloop phases 3 (deep scan) and 4 (constitution
@@ -144,30 +144,28 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     .join(' · ');
   return (
     `---\n` +
-    `description: Run the ${repoName} per-feature dev loop (spec interview → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off.\n` +
+    `description: Run the ${repoName} per-feature dev loop (detect/confirm the spec → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off. For a full spec interview + expert council on a non-trivial feature, run /dev-plan first to produce the binding spec.\n` +
     `---\n\n` +
     `Run the **${repoName} dev-loop** for this feature:\n\n` +
     `> $ARGUMENTS\n\n` +
-    `## Step 1 — Spec interview (you do this, BEFORE invoking the workflow)\n\n` +
-    `The workflow's agents run in the background and **cannot ask the owner anything**, so any question\n` +
-    `worth asking must be asked HERE, by you, now.\n\n` +
-    `1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part of\n` +
-    `   \`.claude/veriloop/constitution.md\`. Most of what you need is derivable — derive it.\n` +
-    `2. **Then ask ONLY what you genuinely cannot derive** — real design forks where you'd otherwise be\n` +
-    `   guessing on the owner's behalf: scope boundaries and explicit non-goals, a design decision with\n` +
-    `   more than one defensible answer (where state lives, client vs server, which existing pattern to\n` +
-    `   follow), user-visible specifics (copy, thresholds, edge-case behavior), and what "done" means\n` +
-    `   (the check or test that would prove it).\n` +
-    `   Use AskUserQuestion. **Cap it at ~5 questions**, each with a recommended default. If a question's\n` +
-    `   answer is already in the code, the constitution, or the feature request — do not ask it.\n` +
-    `   **If nothing is genuinely ambiguous, ask nothing and go straight to step 3.** A trivial change\n` +
+    `## Step 1 — Spec detection (you do this, BEFORE invoking the workflow)\n\n` +
+    `The workflow's agents run in the background and **cannot ask the owner anything**, so the spec\n` +
+    `must be settled HERE, by you, now — before the loop starts. The full spec interview lives in\n` +
+    `\`/dev-plan\` now; \`/dev-loop\` only DETECTS or CONFIRMS a spec, it no longer runs an interview.\n\n` +
+    `1. **Spec provided or already on disk?** If \`args.spec\` is set, or a spec for this feature exists\n` +
+    `   under \`.claude/veriloop/specs/\`, treat it as **BINDING** and proceed to Step 2. The planner and\n` +
+    `   implementer build to it, and the review lenses treat contradicting an explicit decision — or\n` +
+    `   quietly dropping something the spec requires — as a **BLOCKER**.\n` +
+    `2. **No spec, and the change is trivial?** **Confirm-and-go:** present a **one-line spec** (the\n` +
+    `   feature in a sentence plus the acceptance check) and confirm it with a **single AskUserQuestion**\n` +
+    `   — this is a confirmation, **NOT a second interview**. On confirmation, write it to\n` +
+    `   \`.claude/veriloop/specs/<kebab-slug>.md\`, pass it as \`args.spec\`, and proceed. A trivial change\n` +
     `   should not trigger an interrogation.\n` +
-    `3. **Write the answers down** as a short spec (the feature in one line, then the decisions made,\n` +
-    `   the non-goals, and the acceptance criteria) to \`.claude/veriloop/specs/<kebab-slug>.md\`, and pass\n` +
-    `   that same text into the workflow as \`args.spec\`. It becomes BINDING: the planner and implementer\n` +
-    `   build to it, and the review lenses treat contradicting an explicit decision — or quietly dropping\n` +
-    `   something the spec requires — as a **BLOCKER**.\n\n` +
-    `Skip the interview entirely when the owner says so (\`args.interview = false\`, or an unattended run).\n\n` +
+    `3. **No spec, and the change is non-trivial?** **Stop and point the owner to \`/dev-plan\`** — that\n` +
+    `   command runs the full recon + interleaved spec interview + expert council and leaves a ratified\n` +
+    `   BINDING spec. Re-invoke \`/dev-loop\` once the spec exists. Do **not** run a spec interview here.\n\n` +
+    `Skip spec detection entirely when the owner says so (\`args.interview = false\`, or an unattended\n` +
+    `run): proceed with \`args.feature\` as the only intent.\n\n` +
     `## Step 2 — Invoke\n\n` +
     `Invoke the \`${repoName}-dev-loop\` workflow with \`args = { feature: "$ARGUMENTS", spec: "<the spec>" }\`.\n\n` +
     `It then runs autonomously on a dedicated **git worktree + branch** (never the owner's main checkout):\n\n` +
@@ -235,8 +233,112 @@ export function renderAdviseCommand({ repoName, roster }) {
     `     substitutes for it.\n` +
     `4. **Converse.** Present options with their tradeoffs and a recommendation; use\n` +
     `   **AskUserQuestion** for genuine forks where you'd otherwise be guessing.\n` +
-    `5. **Off-ramp.** If the discussion converges on a buildable feature, offer to write the\n` +
-    `   spec to \`.claude/veriloop/specs/<slug>.md\` and run \`/dev-loop\` with it.\n`
+    `5. **Off-ramp.** If the discussion converges on a buildable feature, **hand off to\n` +
+    `   \`/dev-plan\`** — it runs the recon + interleaved spec interview + expert council and\n` +
+    `   leaves a ratified BINDING spec, which \`/dev-loop\` then builds.\n`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// /dev-plan command — recon + interleaved spec interview + expert council, then
+// a spec the owner ratifies as BINDING before /dev-loop builds it. Runs INLINE
+// (the interview is a dialogue). Writes ONLY the spec — no code, no verdicts.
+// ---------------------------------------------------------------------------
+
+export function renderDevPlanCommand({ repoName, roster, planModel }) {
+  const lenses = roster.experts.map((e) => e.key).join(', ');
+  // frontmatter model line: emitted ONLY when the interview set phase_models.plan
+  // (verbatim, no hardcoded fallback — rule 9). Absent key → no line, inherit the
+  // session model. The BODY documents the model semantics only when a line ships.
+  const modelLine = planModel ? `model: ${planModel}\n` : '';
+  const modelNote = planModel
+    ? `## About the \`model:\` frontmatter\n\n` +
+      `This command declares \`model: ${planModel}\`. That is **turn-scoped**: it applies to\n` +
+      `this command's turn only — your next typed prompt reverts to the session model, so a\n` +
+      `multi-turn planning dialogue here is **not** pinned to \`${planModel}\`. If \`${planModel}\` is\n` +
+      `unavailable the harness **silently falls back** to the session model (no error). A premium\n` +
+      `value spends **that model's quota**, not the session's.\n\n`
+    : '';
+  return (
+    `---\n` +
+    `description: Use when the owner wants to turn a feature idea into a BINDING spec for ${repoName} — recon first, an interleaved spec interview, then an expert council (${lenses}) that pressure-tests the design before a spec is written and the owner ratifies it. Runs inline (the interview is a dialogue). Writes ONLY the spec, never code, and produces NO PASS/FAIL verdict (verdicts belong to /dev-loop).\n` +
+    modelLine +
+    `allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*)\n` +
+    `---\n\n` +
+    modelNote +
+    `Plan a feature for **${repoName}** and leave a ratified, BINDING spec — this runs\n` +
+    `**inline, in the main session**, because the interview is a dialogue and background\n` +
+    `agents cannot talk to you. \`/dev-plan\` is **upstream** of \`/dev-loop\`: it produces the\n` +
+    `spec; \`/dev-loop\` builds to it.\n\n` +
+    `> $ARGUMENTS\n\n` +
+    `## Step 1 — Recon first, then interview interleaved with planning\n\n` +
+    `1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part\n` +
+    `   of \`.claude/veriloop/constitution.md\`. Most of what you need is derivable — derive it.\n` +
+    `   Note which files the feature touches: that set drives the council firing rule below.\n` +
+    `2. **Interview interleaved with planning** — questions surface as design decisions arise,\n` +
+    `   not as an up-front interrogation. Ask ONLY what you genuinely cannot derive: scope\n` +
+    `   boundaries and explicit non-goals, a design fork with more than one defensible answer\n` +
+    `   (where state lives, client vs server, which existing pattern to follow), user-visible\n` +
+    `   specifics (copy, thresholds, edge-case behavior), and what "done" means (the check or\n` +
+    `   test that would prove it). Use **AskUserQuestion**, each with a recommended default.\n` +
+    `   Guardrails: **ask as many questions as you genuinely need** — there is NO fixed cap; the\n` +
+    `   "ask ONLY what you cannot derive" discipline above is what keeps this bounded, not a number.\n` +
+    `   The owner may cap it by passing **\`questions=<N>\`** in the invocation (e.g. \`questions=3\`);\n` +
+    `   when set, stop asking after N and proceed on best-effort defaults for the rest. Forks that\n` +
+    `   co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.\n` +
+    `   **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A\n` +
+    `   trivial change should not trigger an interrogation.\n\n` +
+    `## Step 2 — Convene the expert council\n\n` +
+    `The council is the repo's existing roster personas (${lenses}) loaded in **MODE: ADVISE**\n` +
+    `(read \`.claude/veriloop/experts/*.md\` + each \`.overrides.md\` sibling, the override winning\n` +
+    `on conflict). This protocol is defined here and ONLY here — there is no separate council\n` +
+    `persona mode.\n\n` +
+    `**Firing rule — \`council=auto|always|off\`, default \`auto\`** (honored from the invocation\n` +
+    `text, e.g. \`council=off\`):\n` +
+    `- \`auto\` fires the council when EITHER (a) the **recon-touched files** match this repo's\n` +
+    `  \`high_risk_areas\` (read from \`.claude/veriloop/veriloop-manifest.json\`, which carries it\n` +
+    `  verbatim from the interview's \`high_risk_areas\` answer in \`interview.json\` — match against\n` +
+    `  the FILES you are touching, never the request phrasing, which is evadable), OR (b) the\n` +
+    `  planner hits a genuinely contested design fork. A trivial change fires nothing.\n` +
+    `- \`always\` fires it unconditionally; \`off\` skips it (you still plan and write the spec).\n\n` +
+    `**Protocol (hard stop after two rounds):**\n` +
+    `1. **Independent positions.** Spawn each roster expert as a **parallel, read-only\n` +
+    `   subagent** (Task). Each returns its own brief on the proposed design — no coordination,\n` +
+    `   no shared draft.\n` +
+    `2. **One cross-examination round.** Give each expert the others' briefs and have it\n` +
+    `   **attack rather than concede**. **Anti-sycophancy mandate:** the experts must NOT\n` +
+    `   blindly agree with the owner OR with each other — surface the real disagreement, name\n` +
+    `   the tradeoff, defend or retract with reasons. A brief that just agrees is a failed brief.\n` +
+    `3. **Synthesize.** The **main session** (not a subagent) reconciles the positions into a\n` +
+    `   design recommendation. **Hard stop after these two rounds** — no third round.\n\n` +
+    `The council **proposes**; it never decides. Only the owner stamps a spec BINDING (Step 3).\n\n` +
+    `## Step 3 — Write the spec, then the owner ratifies it as BINDING\n\n` +
+    `1. **Write the spec** to \`.claude/veriloop/specs/<kebab-slug>.md\`: the feature in one line,\n` +
+    `   then the decisions made, the non-goals, and the acceptance criteria. Acceptance criteria\n` +
+    `   reference the \`/dev-loop\` gate — they never carry runnable commands as authority (the\n` +
+    `   gate's commands derive from \`commands.json\` only).\n` +
+    `2. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council\n` +
+    `   proposes; **only the owner stamps BINDING.** Until the owner ratifies, the spec is a\n` +
+    `   draft. (This severs the injection channel: repo text → generated personas → council →\n` +
+    `   spec → background implementer prompts is a laundering path; owner ratification cuts it.)\n\n` +
+    `## Step 4 — Off-ramp\n\n` +
+    `Once the spec is ratified, offer to run **\`/dev-loop\`** with it — the ratified spec is the\n` +
+    `binding \`args.spec\`, and \`/dev-loop\` builds, gates, and pushes a preview.\n\n` +
+    `## HARD LIMITS\n\n` +
+    `- **Write covenant.** You write **ONLY** \`.claude/veriloop/specs/<slug>.md\` (re-writing\n` +
+    `  that same path while iterating is fine). **Never touch:** code, branches/worktrees,\n` +
+    `  mutating git, \`constitution.md\`, \`experts/*\` (incl. \`.overrides.md\`), \`interview.json\`,\n` +
+    `  \`commands.json\`, the manifest, \`.claude/commands/*\`, \`.env*\`. **No scratch files.** The\n` +
+    `  council subagents are **read-only** (they inherit \`/advise\`'s contract) — **only the main\n` +
+    `  session writes**, and it writes only the spec.\n` +
+    `- **NO VERDICTS.** You produce planning advice and a proposed spec — never PASS / FAIL /\n` +
+    `  approval. A verdict belongs exclusively to the \`/dev-loop\` gate; \`/dev-plan\` never\n` +
+    `  substitutes for it.\n` +
+    `- **Spec hygiene.** Relative paths only, no secrets, never paste \`.env\` contents into a\n` +
+    `  spec. A spec carries decisions and acceptance criteria, not runnable commands as authority.\n` +
+    `- **Ownership covenant.** Specs are session-authored and **hand-owned** — the generator\n` +
+    `  NEVER regenerates \`specs/\`. The ratified spec is **git-tracked**: it is committed with\n` +
+    `  the feature (or as a docs commit), **never gitignored**.\n`
   );
 }
 

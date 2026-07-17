@@ -18,10 +18,10 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
-import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
+import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.3.4';
+const VERILOOP_VERSION = '0.3.5';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -379,6 +379,13 @@ function main() {
   // (lens review without the loop). Both are read-only and carry NO gate authority.
   w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, roster }));
   w.machine(P('.claude/commands/review.md'), renderReviewCommand({ repoName, roster, gate: config.gate }));
+  // /dev-plan — recon + interleaved spec interview + expert council → a spec the
+  // owner ratifies as BINDING before /dev-loop builds it. The plan-phase model is
+  // emitted verbatim from the interview (config.budget.models.plan is exactly the
+  // raw interview key if present, else undefined — no preset fallback); an absent
+  // key emits NO model line (inherit the session model). Runs inline; writes only
+  // the spec; carries NO gate authority.
+  w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan }));
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
@@ -401,7 +408,7 @@ function main() {
   if (repoUsesPrettier(args.repo, cj)) {
     w.spliceBlock(
       P('.prettierignore'),
-      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md', '.claude/commands/advise.md', '.claude/commands/review.md'],
+      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md', '.claude/commands/advise.md', '.claude/commands/review.md', '.claude/commands/dev-plan.md'],
       { createIfMissing: true },
     );
   }

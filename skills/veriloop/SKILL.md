@@ -6,7 +6,8 @@ description: >-
   bespoke, self-verifying engineering setup for ANY repo: AI expert personas, a
   code-cited constitution of the repo's invariants, a per-feature workflow whose
   gate passes/fails on REAL command exit codes (never the AI's self-assessment),
-  and a /dev-loop slash command to drive it.
+  and four slash commands to drive it: /dev-plan (spec interview + expert
+  council), /dev-loop (build loop), /advise (brainstorm), /review (lens-only).
 ---
 
 # veriloop — compile a self-verifying dev-loop for any repo
@@ -17,6 +18,7 @@ dev-loop). It emits **plain files** into the target repo:
 
 ```
 .claude/workflows/<repo>-dev-loop.js     the dev-loop workflow (exit-code gate)
+.claude/commands/dev-plan.md             the /dev-plan command (spec interview + council)
 .claude/commands/dev-loop.md             the /dev-loop slash command
 .claude/commands/advise.md               the /advise command (experts in ADVISE mode)
 .claude/commands/review.md               the /review command (lens review, no loop)
@@ -24,6 +26,7 @@ dev-loop). It emits **plain files** into the target repo:
 .claude/veriloop/constitution.md         the repo's invariants (hand-owned)
 .claude/veriloop/experts/<name>.md       expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md   manual tweaks (hand-owned, never clobbered)
+.claude/veriloop/specs/<slug>.md         feature specs (hand-owned, ratified by owner, git-tracked)
 .claude/veriloop/veriloop-manifest.json  version, repo SHA, roster, verification results
 ```
 
@@ -173,8 +176,9 @@ DB-touching changes:
    ```
    This slot-fills the portable template with the verified commands, the roster →
    lens map, risk tiers, and stack-specific worktree-deps setup; writes the
-   workflow, the `/dev-loop` command plus the `/advise` and `/review` commands (the
-   experts' second mandate — advise + lens-review, read-only, no gate authority),
+   workflow, the four commands — `/dev-plan` (spec interview + expert council),
+   `/dev-loop`, plus `/advise` and `/review` (the experts' second mandate —
+   advise + lens-review, read-only, no gate authority) —
    STARTER personas + `.overrides` siblings, the STARTER constitution (only if
    absent), and the manifest. Machine files
    regenerate; hand files are preserved (use `--force` only to intentionally
@@ -217,7 +221,8 @@ sections, three-way-merges the constitution, and never clobbers `.overrides.md`.
 
 ## The emitted dev-loop's proven shape (do not reinvent)
 
-**spec interview (in the `/dev-loop` command, not the workflow)** → plan-vs-constitution
+**spec detection (in the `/dev-loop` command, not the workflow; the spec itself is
+authored upstream by `/dev-plan`)** → plan-vs-constitution
 review → risk triage (trivial/standard/high) → isolated **worktree** implement → tiered
 **GO/NO-GO gate** (real typecheck/lint/test exit codes + review-lens experts + screenshot
 gate on UI + optional cross-model second opinion → **PASS / CONCERNS / FAIL / WAIVED**) →
@@ -225,16 +230,22 @@ bounded auto-fix (≤3 passes, stop on no-progress) → docs sync → push a bra
 **STOP before merge** (owner gate). Waivers are human-only (`args.waive`); an agent may
 never waive its own finding.
 
-**Why the interview lives in the command, not the workflow:** the workflow's agents are
-background subagents with **no channel to ask the owner anything**. So `/dev-loop` (main
-loop) does the recon, asks only the questions it cannot derive (≤5, skipped entirely when
-nothing is ambiguous), writes `.claude/veriloop/specs/<slug>.md`, and passes it in as
-`args.spec`. The spec is then **binding**: the planner and implementer build to it, and a
-review lens treats contradicting an explicit decision as a BLOCKER.
+**Why the interview lives in a command, not the workflow:** the workflow's agents are
+background subagents with **no channel to ask the owner anything**. So `/dev-plan` (main
+session) does the recon, asks only the questions it cannot derive (≤5, skipped entirely
+when nothing is ambiguous), convenes the expert council, and writes
+`.claude/veriloop/specs/<slug>.md`, which the owner ratifies as BINDING. `/dev-loop`
+detects or confirms that spec (a trivial change gets a confirm-and-go, not a second
+interview) and passes it in as `args.spec`. The spec is then **binding**: the planner and
+implementer build to it, and a review lens treats contradicting an explicit decision as a
+BLOCKER.
 
 ## Guardrails
 - Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`,
-  `.claude/workflows/<repo>-dev-loop.js`, `.claude/commands/dev-loop.md`.
+  `.claude/workflows/<repo>-dev-loop.js`, the four emitted commands
+  `.claude/commands/{dev-plan,dev-loop,advise,review}.md`, and the marked
+  veriloop block in `.gitignore` / `.prettierignore` (owner lines outside the
+  block are never touched).
 - Never run a `safety=never` command during setup. Never auto-run a `mutates`
   command. Ask before `safety=ask`.
 - Never write secrets into any emitted file. Never emit an absolute path.

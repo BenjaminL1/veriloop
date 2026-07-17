@@ -461,8 +461,8 @@ function assert(cond, desc) {
   assert(/OWNER'S SPEC/.test(wf) && /args\.spec|a\.spec/.test(wf), 'template: an owner spec is threaded into the loop');
   assert(/do not re-litigate or silently substitute/.test(wf), 'template: the spec is BINDING on the planner/implementer');
   const cmd = readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8');
-  assert(/AskUserQuestion/.test(cmd) && /cannot ask the owner anything/.test(cmd), '/dev-loop: the interview runs in the COMMAND layer (the workflow cannot ask questions)');
-  assert(/ask nothing and go straight/.test(cmd), '/dev-loop: an unambiguous feature triggers NO interview');
+  assert(/AskUserQuestion/.test(cmd) && /cannot ask the owner anything/.test(cmd), '/dev-loop: the confirmation runs in the COMMAND layer (the workflow cannot ask questions)');
+  assert(/Spec detection/.test(cmd) && /Confirm-and-go/.test(cmd), '/dev-loop: Step 1 is spec detection with a trivial confirm-and-go path (no interview)');
   assert(/plan: "fable", implement: "opus"/.test(cmd), '/dev-loop: documents the per-phase model split');
 }
 
@@ -923,6 +923,103 @@ function assert(cond, desc) {
     genVer && Object.values(stamps).every((v) => v === genVer),
     `version stamps agree across all five locations (${JSON.stringify(stamps)})`,
   );
+}
+
+// --- v0.3.3: /dev-plan — the fourth emitted command (recon + interleaved spec
+//     interview + expert council → an owner-ratified BINDING spec). Companion edits
+//     shrink the other two on-ramps: /dev-loop Step 1 → spec DETECTION (spec-present
+//     / trivial confirm-and-go / non-trivial → point to /dev-plan); /advise off-ramp
+//     → hand off to /dev-plan. lint-bundle's command list is ONE hoisted constant. ---
+{
+  const gen = (interview) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'veriloop-devplan-'));
+    // a prettier repo so the .prettierignore exemption block is emitted (and must
+    // list the new command path)
+    writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'dp', scripts: { lint: 'eslint .', 'format:check': 'prettier --check .', test: 'vitest run' } }));
+    const cj = detectCommands(tmp);
+    const cjPath = join(tmp, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    const argv = [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp];
+    if (interview) {
+      const ip = join(tmp, 'interview.json');
+      writeFileSync(ip, JSON.stringify(interview));
+      argv.push('--interview', ip);
+    }
+    const r = spawnSync(process.execPath, argv, { encoding: 'utf8' });
+    return { tmp, r };
+  };
+
+  // (a) dev-plan.md is emitted (with phase_models.plan set → carries a model line)
+  const { tmp, r } = gen({ budget_posture: 'frugal', phase_models: { plan: 'fable' } });
+  assert(r.status === 0, 'generate: a repo with phase_models.plan generates cleanly');
+  const devPlanPath = join(tmp, '.claude/commands/dev-plan.md');
+  assert(existsSync(devPlanPath), 'generate: /dev-plan command is emitted');
+  const devPlan = readFileSync(devPlanPath, 'utf8');
+
+  // description trigger-first + within the frontmatter budget
+  const dpDesc = (devPlan.match(/^description:\s*(.*)$/m) || [])[1] || '';
+  assert(dpDesc.startsWith('Use when') && dpDesc.length <= 500, '/dev-plan: description is trigger-first ("Use when") and ≤500 chars');
+
+  // allowed-tools ships on /dev-plan ONLY, narrower-than-everything (no bare Bash(*))
+  const dpAllowed = (devPlan.match(/^allowed-tools:\s*(.*)$/m) || [])[1] || '';
+  assert(/\bWrite\b/.test(dpAllowed) && /AskUserQuestion/.test(dpAllowed) && /\bTask\b/.test(dpAllowed), '/dev-plan: allowed-tools lists the write/ask/subagent tools');
+  assert(/Bash\(git log:\*\)/.test(dpAllowed) && !/Bash\(\*\)/.test(dpAllowed), '/dev-plan: allowed-tools scopes Bash to read-only git patterns (no bare Bash(*))');
+
+  // (b) model line PRESENT when phase_models.plan is set (verbatim from the interview)
+  assert(/^model:\s*fable\s*$/m.test(devPlan), '/dev-plan: frontmatter carries `model: fable` when the interview sets phase_models.plan');
+  assert(/turn-scoped/i.test(devPlan) && /silently falls back/i.test(devPlan) && /quota/i.test(devPlan), '/dev-plan: the body documents the model semantics (turn-scoped, silent fallback, spends that model\'s quota)');
+
+  // (b') model line ABSENT when phase_models.plan is unset (both directions)
+  const { tmp: tmp2 } = gen(null);
+  const devPlan2 = readFileSync(join(tmp2, '.claude/commands/dev-plan.md'), 'utf8');
+  assert(!/^model:/m.test(devPlan2), '/dev-plan: NO model line when the interview omits phase_models.plan (inherit the session model)');
+
+  // (g) council protocol: anti-sycophancy mandate + read-only council + owner ratifies BINDING
+  assert(/attack rather than concede/i.test(devPlan) && /not\s+blindly agree/i.test(devPlan), '/dev-plan: the council protocol carries the anti-sycophancy mandate (attack, do not blindly agree)');
+  assert(/subagents are \*\*read-only\*\*/i.test(devPlan) && /only the main\s+session writes/i.test(devPlan), '/dev-plan: the council subagents are read-only — only the main session writes');
+  assert(/owner ratifies it as BINDING/i.test(devPlan) && /AskUserQuestion/.test(devPlan), '/dev-plan: the owner ratifies the spec as BINDING via AskUserQuestion (only the owner stamps BINDING)');
+  assert(/council=auto\|always\|off/.test(devPlan) && /high_risk_areas/.test(devPlan), '/dev-plan: the council firing rule keys off recon-touched files vs high_risk_areas, not request phrasing');
+  // interview: NO fixed question cap; owner may set an optional questions=<N> budget
+  assert(/NO fixed cap/i.test(devPlan) && /questions=<N>/.test(devPlan), '/dev-plan: the interview has no fixed question cap and documents the optional owner-set questions=<N> budget');
+
+  // HARD LIMITS: NO VERDICTS + ownership covenant (hand-owned, git-tracked, never regenerated)
+  assert(/NO VERDICTS/.test(devPlan) && /never PASS/i.test(devPlan.replace(/\n/g, ' ')), '/dev-plan: HARD LIMITS state NO VERDICTS (verdicts belong to /dev-loop)');
+  assert(/never regenerates/i.test(devPlan) && /git-tracked/i.test(devPlan), '/dev-plan: ownership covenant — specs are hand-owned, git-tracked, never regenerated');
+
+  // (e) /advise off-ramp now hands off to /dev-plan (the NEW handoff text, pinned)
+  const advise2 = readFileSync(join(tmp, '.claude/commands/advise.md'), 'utf8').replace(/\n/g, ' ');
+  assert(/hand off to\s+`?\/dev-plan`?/i.test(advise2), '/advise: off-ramp hands off to /dev-plan (the new handoff text is pinned)');
+
+  // (f) /dev-loop Step 1 is spec DETECTION — all three branches present, passthrough preserved
+  const devLoop2 = readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8');
+  assert(/Spec detection/.test(devLoop2), '/dev-loop: Step 1 is spec DETECTION (not an interview)');
+  assert(/treat it as \*\*BINDING\*\*/.test(devLoop2), '/dev-loop: spec-present branch — a provided/on-disk spec is BINDING');
+  assert(/Confirm-and-go/.test(devLoop2) && /NOT a second interview/.test(devLoop2), '/dev-loop: trivial branch is confirm-and-go, NOT a second interview');
+  assert(/point the owner to `\/dev-plan`/.test(devLoop2), '/dev-loop: non-trivial branch stops and points to /dev-plan');
+  assert(/args\.interview = false/.test(devLoop2), '/dev-loop: the unattended / args.interview=false passthrough is preserved');
+
+  // (d) the .prettierignore machine-block lists the new command path
+  const pi = readFileSync(join(tmp, '.prettierignore'), 'utf8');
+  assert(pi.includes('.claude/commands/dev-plan.md'), 'generate: the .prettierignore block includes the /dev-plan command path');
+
+  // manifest emitted_files carries the new command
+  const man = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  assert((man.emitted_files || []).some((e) => e.path === '.claude/commands/dev-plan.md'), 'manifest: emitted_files includes .claude/commands/dev-plan.md');
+
+  // (c) the linter guards the new surface: delete /dev-plan after generation → FAIL
+  const before = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(before.status === 0, 'lint-bundle: a fresh v0.3.3 bundle passes (0 fail)');
+  rmSync(devPlanPath);
+  const after = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(after.status !== 0, 'lint-bundle: FAILS when dev-plan.md is deleted after generation (guards the new command surface)');
+
+  // (h) lint-bundle's command list is ONE hoisted constant covering all four commands
+  const lintSrc = readFileSync(lintPath, 'utf8');
+  const listMatch = lintSrc.match(/EMITTED_COMMANDS\s*=\s*\[([^\]]*)\]/);
+  assert(!!listMatch, 'lint-bundle: EMITTED_COMMANDS is defined as a single constant (rule 9)');
+  const listBody = listMatch ? listMatch[1] : '';
+  assert(['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md'].every((c) => listBody.includes(`'${c}'`)), 'lint-bundle: the single command constant covers all four commands');
+  assert(!/\[\s*'dev-loop\.md'\s*,\s*'advise\.md'\s*,\s*'review\.md'\s*\]/.test(lintSrc), 'lint-bundle: no remaining hardcoded [dev-loop, advise, review] array — every check references EMITTED_COMMANDS');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

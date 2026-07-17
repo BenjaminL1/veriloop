@@ -7,11 +7,12 @@ Point veriloop at a repository and it generates a bespoke engineering setup for
 
 1. **AI "expert" personas** — a baseline reviewer plus specialists nominated by the
    repo's actual danger surfaces (security, drift/parity, UX, …); they review in the
-   gate AND advise/brainstorm via `/advise`.
+   gate, advise/brainstorm via `/advise`, and form an expert council in `/dev-plan`.
 2. **A constitution** — the repo's invariants, each one code-cited.
 3. **A per-feature dev-loop workflow** whose gate passes/fails on **REAL command
    exit codes** (your `typecheck` / `lint` / `test`), never the AI's self-assessment.
-4. **A `/dev-loop` slash command** to drive it.
+4. **Four slash commands:** `/dev-plan` (spec interview + expert council), `/dev-loop`
+   (build loop), `/advise` (brainstorm), and `/review` (lint-only).
 
 > **veriloop is a compiler; the dev-loop it emits is the compiled output.** It
 > automates, for any repo, work that was first done once by hand for a Next.js +
@@ -88,6 +89,7 @@ blaming your change.
 
 ```
 .claude/workflows/<repo>-dev-loop.js          the dev-loop workflow (exit-code gate)
+.claude/commands/dev-plan.md                  the /dev-plan command (spec interview + council)
 .claude/commands/dev-loop.md                  the /dev-loop slash command
 .claude/commands/advise.md                    the /advise command (experts in ADVISE mode)
 .claude/commands/review.md                    the /review command (lens review, no loop)
@@ -95,6 +97,7 @@ blaming your change.
 .claude/veriloop/constitution.md              invariants (hand-owned; merged on re-run)
 .claude/veriloop/experts/<name>.md            expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md  manual tweaks (hand-owned; never clobbered)
+.claude/veriloop/specs/<slug>.md              feature specs (hand-owned, ratified by owner, git-tracked)
 .claude/veriloop/veriloop-manifest.json       version, repo SHA, roster, verification
 ```
 
@@ -173,6 +176,14 @@ Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
 
+**v0.3.3 — `/dev-plan` emitted command (spec interview + expert council)** enables
+binding spec ratification before `/dev-loop` builds. The other two spec on-ramps shrink
+(single-author principle): `/dev-loop` detects/confirms a spec; `/advise` hands off to
+`/dev-plan` for a full spec interview + expert council. The council (existing roster in
+ADVISE mode) runs independent briefs → one cross-examination round with an explicit
+anti-sycophancy mandate → main-session synthesis (hard stop after two rounds). Specs are
+hand-owned, git-tracked, owner-ratified as BINDING.
+
 **v0.3.0 — deterministic spine complete and self-tested** (detect → verify →
 generate → wire gate → lint, with a deterministic `scripts/selftest.mjs` over
 fixtures). Interview answers persist in the manifest and shape the emitted loop
@@ -194,11 +205,13 @@ guarantees worth stating up front:
 - **Absent evidence never passes.** If a gate job (checks, a review lens, the
   screenshot) dies or is skipped, the loop FAILS closed — a verification that
   did not run cannot vouch for anything. Only a human waiver can downgrade it.
-- **It asks before it builds — but only what it can't work out itself.** `/dev-loop`
-  recons the code first, then interviews you (≤5 questions, skipped entirely when
-  nothing is genuinely ambiguous) about scope, design forks, and acceptance criteria.
-  The answers become a binding spec: the reviewers treat a silent deviation from an
-  explicit decision as a blocker.
+- **It asks before it builds — but only what it can't work out itself.** `/dev-plan`
+  recons the code first, then conducts an interleaved spec interview (≤5 questions,
+  skipped entirely when nothing is genuinely ambiguous) about scope, design forks, and
+  acceptance criteria, convenes an expert council that pressure-tests the design, and
+  leaves a spec you ratify as BINDING. The reviewers treat a silent deviation from an
+  explicit decision as a blocker. `/dev-loop` detects or confirms the spec; the spec
+  is upstream of the build loop.
 - **The run summarizes itself, losslessly.** A final Report phase compresses the whole
   run *inside the loop* — deduplicating findings by **root cause** rather than repeating
   each one per reviewer, so three lenses converging on one bug reads as one finding with

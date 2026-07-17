@@ -14,6 +14,12 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { listDir, isDir } from './lib/util.mjs';
 
+// The commands veriloop emits into `.claude/commands/`. ONE source of truth
+// (rule 9) — referenced by every check below (bundle-file collection, frontmatter
+// validation, description-length budget) so a new command is covered everywhere at
+// once. Adding a command means adding it HERE and nowhere else.
+export const EMITTED_COMMANDS = ['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md'];
+
 function parseArgs(argv) {
   const args = { bundle: process.cwd(), name: null };
   for (let i = 2; i < argv.length; i++) {
@@ -57,7 +63,7 @@ function bundleFiles(root) {
   };
   const vdir = join(root, '.claude/veriloop');
   if (isDir(vdir)) walk(vdir);
-  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+  for (const c of EMITTED_COMMANDS) {
     const cmd = join(root, '.claude/commands', c);
     if (existsSync(cmd)) out.push(cmd);
   }
@@ -138,10 +144,10 @@ function main() {
     }
   }
 
-  // 4. command frontmatter — all three emitted commands (/dev-loop, /advise,
-  //    /review) must have valid frontmatter with a description; a missing one is
-  //    a FAIL (the new advising surfaces must ship, not silently vanish).
-  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+  // 4. command frontmatter — every emitted command (/dev-loop, /advise, /review,
+  //    /dev-plan) must have valid frontmatter with a description; a missing one is
+  //    a FAIL (the advising/planning surfaces must ship, not silently vanish).
+  for (const c of EMITTED_COMMANDS) {
     const name = `/${c.replace(/\.md$/, '')}`;
     const cmd = join(args.bundle, '.claude/commands', c);
     if (existsSync(cmd)) {
@@ -242,7 +248,7 @@ function main() {
       warn(`persona ${persona} grew past 700 words (${words}) — usually unreviewed bolt-ons; a human should re-read and re-distill it`);
     }
   }
-  for (const c of ['dev-loop.md', 'advise.md', 'review.md']) {
+  for (const c of EMITTED_COMMANDS) {
     const cmdBudget = join(args.bundle, '.claude/commands', c);
     if (files.includes(cmdBudget) && existsSync(cmdBudget)) {
       const dm = readFileSync(cmdBudget, 'utf8').match(/^description:\s*(.*)$/m);

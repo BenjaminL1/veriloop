@@ -1,34 +1,32 @@
 ---
-description: Run the veriloop per-feature dev loop (spec interview → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off.
+description: Run the veriloop per-feature dev loop (detect/confirm the spec → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off. For a full spec interview + expert council on a non-trivial feature, run /dev-plan first to produce the binding spec.
 ---
 
 Run the **veriloop dev-loop** for this feature:
 
 > $ARGUMENTS
 
-## Step 1 — Spec interview (you do this, BEFORE invoking the workflow)
+## Step 1 — Spec detection (you do this, BEFORE invoking the workflow)
 
-The workflow's agents run in the background and **cannot ask the owner anything**, so any question
-worth asking must be asked HERE, by you, now.
+The workflow's agents run in the background and **cannot ask the owner anything**, so the spec
+must be settled HERE, by you, now — before the loop starts. The full spec interview lives in
+`/dev-plan` now; `/dev-loop` only DETECTS or CONFIRMS a spec, it no longer runs an interview.
 
-1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part of
-   `.claude/veriloop/constitution.md`. Most of what you need is derivable — derive it.
-2. **Then ask ONLY what you genuinely cannot derive** — real design forks where you'd otherwise be
-   guessing on the owner's behalf: scope boundaries and explicit non-goals, a design decision with
-   more than one defensible answer (where state lives, client vs server, which existing pattern to
-   follow), user-visible specifics (copy, thresholds, edge-case behavior), and what "done" means
-   (the check or test that would prove it).
-   Use AskUserQuestion. **Cap it at ~5 questions**, each with a recommended default. If a question's
-   answer is already in the code, the constitution, or the feature request — do not ask it.
-   **If nothing is genuinely ambiguous, ask nothing and go straight to step 3.** A trivial change
+1. **Spec provided or already on disk?** If `args.spec` is set, or a spec for this feature exists
+   under `.claude/veriloop/specs/`, treat it as **BINDING** and proceed to Step 2. The planner and
+   implementer build to it, and the review lenses treat contradicting an explicit decision — or
+   quietly dropping something the spec requires — as a **BLOCKER**.
+2. **No spec, and the change is trivial?** **Confirm-and-go:** present a **one-line spec** (the
+   feature in a sentence plus the acceptance check) and confirm it with a **single AskUserQuestion**
+   — this is a confirmation, **NOT a second interview**. On confirmation, write it to
+   `.claude/veriloop/specs/<kebab-slug>.md`, pass it as `args.spec`, and proceed. A trivial change
    should not trigger an interrogation.
-3. **Write the answers down** as a short spec (the feature in one line, then the decisions made,
-   the non-goals, and the acceptance criteria) to `.claude/veriloop/specs/<kebab-slug>.md`, and pass
-   that same text into the workflow as `args.spec`. It becomes BINDING: the planner and implementer
-   build to it, and the review lenses treat contradicting an explicit decision — or quietly dropping
-   something the spec requires — as a **BLOCKER**.
+3. **No spec, and the change is non-trivial?** **Stop and point the owner to `/dev-plan`** — that
+   command runs the full recon + interleaved spec interview + expert council and leaves a ratified
+   BINDING spec. Re-invoke `/dev-loop` once the spec exists. Do **not** run a spec interview here.
 
-Skip the interview entirely when the owner says so (`args.interview = false`, or an unattended run).
+Skip spec detection entirely when the owner says so (`args.interview = false`, or an unattended
+run): proceed with `args.feature` as the only intent.
 
 ## Step 2 — Invoke
 

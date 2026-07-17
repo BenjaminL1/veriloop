@@ -24,5 +24,6 @@ because brainstorming is a dialogue and background agents cannot talk to you.
      substitutes for it.
 4. **Converse.** Present options with their tradeoffs and a recommendation; use
    **AskUserQuestion** for genuine forks where you'd otherwise be guessing.
-5. **Off-ramp.** If the discussion converges on a buildable feature, offer to write the
-   spec to `.claude/veriloop/specs/<slug>.md` and run `/dev-loop` with it.
+5. **Off-ramp.** If the discussion converges on a buildable feature, **hand off to
+   `/dev-plan`** — it runs the recon + interleaved spec interview + expert council and
+   leaves a ratified BINDING spec, which `/dev-loop` then builds.
