@@ -978,6 +978,32 @@ function assert(cond, desc) {
   );
 }
 
+// --- host-hook cleanliness: emitted text carries NO trailing whitespace (the
+//     catan_rl_v2 lesson, 2026-07-17: a host repo's pre-commit trailing-whitespace
+//     hook rejected generated personas and would flap on every regen — the host's
+//     own gate must never fight machine-owned files). ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-ws-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'ws', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(detectCommands(tmp), null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+  const offenders = [];
+  const walk = (d) => {
+    for (const n of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, n.name);
+      if (n.isDirectory()) walk(p);
+      else if (/\.(md|js|json)$/.test(p) && / +\n/.test(readFileSync(p, 'utf8'))) offenders.push(p.slice(tmp.length + 1));
+    }
+  };
+  walk(join(tmp, '.claude'));
+  assert(
+    offenders.length === 0,
+    `emitted files carry no trailing whitespace — host pre-commit hooks must not flap on regen${offenders.length ? ' (offenders: ' + offenders.join(', ') + ')' : ''}`,
+  );
+  rmSync(tmp, { recursive: true, force: true });
+}
+
 // --- v0.3.3: /dev-plan — the fourth emitted command (recon + interleaved spec
 //     interview + expert council → an owner-ratified BINDING spec). Companion edits
 //     shrink the other two on-ramps: /dev-loop Step 1 → spec DETECTION (spec-present

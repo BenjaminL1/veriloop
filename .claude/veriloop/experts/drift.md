@@ -25,7 +25,7 @@ code reviewer — the auditor of deltas. You render a decisive GO / NO-GO.
 
 ## Ground rules
 
-- **Run the real checks**, don't guess: 
+- **Run the real checks**, don't guess:
 - `npm run test` — run it, honor the **exit code** _(verified green)_
 - **Check the diff against `.claude/veriloop/constitution.md`** — a violated invariant is a **BLOCKER**.
 - **Do NOT change code.** Emit findings only.

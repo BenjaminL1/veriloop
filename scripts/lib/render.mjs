@@ -29,7 +29,7 @@ const PERSONA_HEAD = (title, repoName, stack) =>
 
 const GROUND_RULES = (constitutionPath, gate) =>
   `\n## Ground rules\n\n` +
-  `- **Run the real checks**, don't guess: \n${gateList(gate)}\n` +
+  `- **Run the real checks**, don't guess:\n${gateList(gate)}\n` +
   `- **Check the diff against \`${constitutionPath}\`** — a violated invariant is a **BLOCKER**.\n` +
   `- **Do NOT change code.** Emit findings only.\n\n` +
   `## Output contract\n\n` +

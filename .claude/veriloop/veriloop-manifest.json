@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.3.6",
-  "generated_at": "2026-07-17T01:33:06.893Z",
+  "veriloop_version": "0.3.7",
+  "generated_at": "2026-07-17T07:55:48.371Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "c8b6fd8307f5b811449e8011c47aca94effad30b",
+  "repo_sha": "206dce8099e65d9f1cbc1c6bb9d530d45a1f2596",
   "stack": [
     "node"
   ],
@@ -225,7 +225,7 @@
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
@@ -235,7 +235,7 @@
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
@@ -245,7 +245,7 @@
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",

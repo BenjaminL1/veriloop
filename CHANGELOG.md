@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.7 — 2026-07-17
+- Emitted text is host-hook-clean: the persona ground-rules line carried a trailing space, which a host repo's pre-commit trailing-whitespace hook rejected (discovered installing into catan_rl_v2 — the hook auto-fixed machine-owned files, which would flap on every regen, the same class as the M1 prettier lesson). Fixed at the renderer; a selftest now generates a bundle and asserts NO emitted file carries trailing whitespace.
+
 ## 0.3.6 — 2026-07-16
 - `/posture`: a fifth emitted slash command — change the repo's DEFAULT budget posture (the value baked into the bundle from `interview.json`), NOT a per-run override. `/posture <level>` (frugal|balanced|max) validates the level first, edits only `budget_posture` (preserving `phase_models` and every other key), then regenerates via the skill-relative compiler with a graceful-fail if it is unreachable; `/posture` with no arg shows the current posture + valid levels. First emitted command that writes config — scoped `allowed-tools` + a node-scope covenant; the HARD LIMITS prose is the real boundary. Selftest pins the emitted level list to the real `BUDGET_PRESETS` keys (rule 9).
 
