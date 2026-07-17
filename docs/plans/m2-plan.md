@@ -186,6 +186,23 @@ test -f prompts/senior-web-game.md ; echo $?                            # → 0 
 grep -q 'aa03218' docs/constitution.md || grep -rq 'aa03218' docs/plans # retirement recorded
 ```
 
+**Implementation notes (executed 2026-07-16 — `RETIRE_SHA = dce6a8f`):** all three verify
+commands pass. Preconditions were independently re-verified by a 3-agent workflow
+(`wf_e571ef53-50c`: gold archaeology / active provenance / consumer analysis, all
+CONFIRMED) — gold recoverable and byte-identical at `673991f` (workflow 266 lines +
+command 33 lines; the `.backups/` copies are gitignored/transient, so the record cites
+git history as the durable store); the active paths carry only generated content with a
+clean regeneration lineage; `senior-web-game.md`'s live consumer confirmed at
+`torevan-advise.js:33`; `drift-sentinel.md` confirmed orphaned (flagged in the record,
+not deleted). The record also truth-fixed the two docs still describing the hand-built
+flow (`DESIGN_DECISIONS.md` §1.6 and `.specify/memory/constitution.md` §VIII — the
+latter was outside this plan's sweep scope but covered by the standing doc-sync rule).
+**Sequencing deviation, owner-authorized:** retirement ran BEFORE Step 2's formal parity
+checklist (owner instruction 2026-07-16; de facto evidence at that point: 2 Torevan + 5
+veriloop features through the generated loop). Steps 1, 2, 4 remain open. Torevan's
+bundle is veriloop v0.3.0 — stale vs 0.3.6 (missing /dev-plan, /posture, attestation
+emission); regeneration is a natural Step-1/Step-2 companion, owner's call.
+
 ---
 
 ## Step 4 — Converge catan_rl_v2
