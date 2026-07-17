@@ -164,7 +164,13 @@ const VERILOOP = {
       }
     },
     "models": {
-      "plan": "fable"
+      "plan": "opus",
+      "implement": "opus",
+      "review": "opus",
+      "checks": "opus",
+      "fix": "opus",
+      "land": "opus",
+      "report": "opus"
     },
     "effort": {}
   },

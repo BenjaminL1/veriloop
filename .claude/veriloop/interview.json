@@ -1,8 +1,25 @@
 {
   "cross_model": true,
   "budget_posture": "balanced",
-  "phase_models": { "plan": "fable" },
-  "high_risk_areas": ["detector", "hostile", "splice", "template", "emitted", "fixture", "safety", "ownership"],
+  "phase_models": {
+    "plan": "opus",
+    "implement": "opus",
+    "review": "opus",
+    "checks": "opus",
+    "fix": "opus",
+    "land": "opus",
+    "report": "opus"
+  },
+  "high_risk_areas": [
+    "detector",
+    "hostile",
+    "splice",
+    "template",
+    "emitted",
+    "fixture",
+    "safety",
+    "ownership"
+  ],
   "roster_add": [
     {
       "key": "security",

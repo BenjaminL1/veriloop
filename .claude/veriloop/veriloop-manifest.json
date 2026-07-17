@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.3.7",
-  "generated_at": "2026-07-17T07:55:48.371Z",
+  "generated_at": "2026-07-17T08:00:42.731Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "206dce8099e65d9f1cbc1c6bb9d530d45a1f2596",
+  "repo_sha": "83b24b7bf6938a7599801a6ec8888fb214f14722",
   "stack": [
     "node"
   ],
@@ -160,7 +160,13 @@
       }
     },
     "models": {
-      "plan": "fable"
+      "plan": "opus",
+      "implement": "opus",
+      "review": "opus",
+      "checks": "opus",
+      "fix": "opus",
+      "land": "opus",
+      "report": "opus"
     },
     "effort": {}
   },
@@ -190,12 +196,12 @@
     {
       "path": ".claude/workflows/veriloop-dev-loop.js",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/dev-loop.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/advise.md",
@@ -210,7 +216,7 @@
     {
       "path": ".claude/commands/dev-plan.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/posture.md",
@@ -225,7 +231,7 @@
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
@@ -235,7 +241,7 @@
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
@@ -245,7 +251,7 @@
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",
@@ -267,7 +273,13 @@
     "cross_model": true,
     "budget_posture": "balanced",
     "phase_models": {
-      "plan": "fable"
+      "plan": "opus",
+      "implement": "opus",
+      "review": "opus",
+      "checks": "opus",
+      "fix": "opus",
+      "land": "opus",
+      "report": "opus"
     },
     "high_risk_areas": [
       "detector",

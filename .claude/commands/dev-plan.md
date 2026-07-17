@@ -1,14 +1,14 @@
 ---
 description: Use when the owner wants to turn a feature idea into a BINDING spec for veriloop — recon first, an interleaved spec interview, then an expert council (code-review, security, drift) that pressure-tests the design before a spec is written and the owner ratifies it. Runs inline (the interview is a dialogue). Writes ONLY the spec, never code, and produces NO PASS/FAIL verdict (verdicts belong to /dev-loop).
-model: fable
+model: opus
 allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*)
 ---
 
 ## About the `model:` frontmatter
 
-This command declares `model: fable`. That is **turn-scoped**: it applies to
+This command declares `model: opus`. That is **turn-scoped**: it applies to
 this command's turn only — your next typed prompt reverts to the session model, so a
-multi-turn planning dialogue here is **not** pinned to `fable`. If `fable` is
+multi-turn planning dialogue here is **not** pinned to `opus`. If `opus` is
 unavailable the harness **silently falls back** to the session model (no error). A premium
 value spends **that model's quota**, not the session's.
 
