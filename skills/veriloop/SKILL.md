@@ -22,6 +22,7 @@ dev-loop). It emits **plain files** into the target repo:
 .claude/commands/dev-loop.md             the /dev-loop slash command
 .claude/commands/advise.md               the /advise command (experts in ADVISE mode)
 .claude/commands/review.md               the /review command (lens review, no loop)
+.claude/commands/posture.md              the /posture command (set the repo's default budget posture)
 .claude/veriloop/commands.json           detected + verified command surface
 .claude/veriloop/constitution.md         the repo's invariants (hand-owned)
 .claude/veriloop/experts/<name>.md       expert personas (machine-owned)
@@ -176,9 +177,10 @@ DB-touching changes:
    ```
    This slot-fills the portable template with the verified commands, the roster →
    lens map, risk tiers, and stack-specific worktree-deps setup; writes the
-   workflow, the four commands — `/dev-plan` (spec interview + expert council),
-   `/dev-loop`, plus `/advise` and `/review` (the experts' second mandate —
-   advise + lens-review, read-only, no gate authority) —
+   workflow, the five commands — `/dev-plan` (spec interview + expert council),
+   `/dev-loop`, `/advise` and `/review` (the experts' second mandate —
+   advise + lens-review, read-only, no gate authority), plus `/posture`
+   (change the repo's default budget posture) —
    STARTER personas + `.overrides` siblings, the STARTER constitution (only if
    absent), and the manifest. Machine files
    regenerate; hand files are preserved (use `--force` only to intentionally

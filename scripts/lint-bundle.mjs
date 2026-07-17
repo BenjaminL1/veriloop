@@ -18,7 +18,7 @@ import { listDir, isDir } from './lib/util.mjs';
 // (rule 9) — referenced by every check below (bundle-file collection, frontmatter
 // validation, description-length budget) so a new command is covered everywhere at
 // once. Adding a command means adding it HERE and nowhere else.
-export const EMITTED_COMMANDS = ['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md'];
+export const EMITTED_COMMANDS = ['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md', 'posture.md'];
 
 function parseArgs(argv) {
   const args = { bundle: process.cwd(), name: null };
@@ -145,8 +145,8 @@ function main() {
   }
 
   // 4. command frontmatter — every emitted command (/dev-loop, /advise, /review,
-  //    /dev-plan) must have valid frontmatter with a description; a missing one is
-  //    a FAIL (the advising/planning surfaces must ship, not silently vanish).
+  //    /dev-plan, /posture) must have valid frontmatter with a description; a missing one
+  //    is a FAIL (an emitted surface must ship, not silently vanish).
   for (const c of EMITTED_COMMANDS) {
     const name = `/${c.replace(/\.md$/, '')}`;
     const cmd = join(args.bundle, '.claude/commands', c);

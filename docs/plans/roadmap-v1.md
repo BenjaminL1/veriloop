@@ -449,3 +449,8 @@ feature driven fresh-context to a PASS-gated preview `feat/lobby-queue-timeout-f
   leftover: `feat/lobby-queue-timeout-nits`, 1 commit of lobby NIT fixes, unmerged.)
 - **M2:** not started — execution plan written ([m2-plan.md](./m2-plan.md));
   frozen mining corpus for M3's benchmark pinned at Torevan `4d0e114` first.
+
+### Emitted-command surface increments (post-M1, self-hosted)
+
+- **v0.3.0** — `/advise` + `/review` (the experts' second mandate: consult / lens-review, read-only, no gate authority).
+- **v0.3.5** — `/posture` — change a repo's **default** budget posture from a slash command: validates the level, edits only `budget_posture` in `interview.json` (all other keys preserved), regenerates via the sanctioned compiler (skill-relative, graceful-fail). First emitted command that writes config; `allowed-tools` scoped to `Read, Edit, Bash(node:*)`, no `model:` line. Per-run overrides remain `args.posture` on `/dev-loop`.

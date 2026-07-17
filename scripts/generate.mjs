@@ -18,10 +18,10 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
-import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
+import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.3.5';
+const VERILOOP_VERSION = '0.3.6';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -386,6 +386,10 @@ function main() {
   // key emits NO model line (inherit the session model). Runs inline; writes only
   // the spec; carries NO gate authority.
   w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan }));
+  // /posture — change the repo's DEFAULT budget posture (the value baked into the
+  // bundle from interview.json). The emitted valid-level list derives from the real
+  // BUDGET_PRESETS keys (rule 9 — command text can't drift from the presets).
+  w.machine(P('.claude/commands/posture.md'), renderPostureCommand({ repoName, postures: Object.keys(BUDGET_PRESETS) }));
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
@@ -408,7 +412,7 @@ function main() {
   if (repoUsesPrettier(args.repo, cj)) {
     w.spliceBlock(
       P('.prettierignore'),
-      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md', '.claude/commands/advise.md', '.claude/commands/review.md', '.claude/commands/dev-plan.md'],
+      ['.claude/veriloop/', `.claude/workflows/${repoName}-dev-loop.js`, '.claude/commands/dev-loop.md', '.claude/commands/advise.md', '.claude/commands/review.md', '.claude/commands/dev-plan.md', '.claude/commands/posture.md'],
       { createIfMissing: true },
     );
   }

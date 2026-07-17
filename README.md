@@ -93,6 +93,7 @@ blaming your change.
 .claude/commands/dev-loop.md                  the /dev-loop slash command
 .claude/commands/advise.md                    the /advise command (experts in ADVISE mode)
 .claude/commands/review.md                    the /review command (lens review, no loop)
+.claude/commands/posture.md                   the /posture command (set the repo's default budget posture)
 .claude/veriloop/commands.json                detected + verified command surface
 .claude/veriloop/constitution.md              invariants (hand-owned; merged on re-run)
 .claude/veriloop/experts/<name>.md            expert personas (machine-owned)
@@ -222,7 +223,8 @@ guarantees worth stating up front:
   the mechanical run-the-commands agent on `haiku`. `posture: frugal|balanced|max` is a
   one-word preset over the same map. Routing sets *how well each layer thinks*; it can
   never drop a check, a lens, or the baseline probe — the cost dial is not allowed to
-  weaken the ground truth.
+  weaken the ground truth. `/posture <level>` changes the repo's **default** posture
+  (a per-run override is still `args.posture` on `/dev-loop`).
 - **The experts advise as well as review.** The same personas that gate a change also power
   `/advise` (brainstorm/sanity-check/pressure-test an idea before building, in ADVISE mode)
   and `/review` (the lenses on a diff without the full loop). Both are read-only and carry

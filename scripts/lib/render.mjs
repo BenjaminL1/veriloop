@@ -380,6 +380,76 @@ export function renderReviewCommand({ repoName, roster, gate }) {
 }
 
 // ---------------------------------------------------------------------------
+// /posture command — set the repo's DEFAULT budget posture (not a per-run knob)
+// ---------------------------------------------------------------------------
+
+// `postures` is passed in as Object.keys(BUDGET_PRESETS) so the emitted literal
+// level list derives from the single source of truth (constitution rule 9 — the
+// command text and the real presets cannot drift). Runs INLINE in the repo it's
+// installed in; writes exactly one key in interview.json then regenerates via the
+// sanctioned compiler. NO model: line — posture-setting is mechanical.
+export function renderPostureCommand({ repoName, postures }) {
+  const levels = postures.join(' | ');
+  const levelList = postures.map((p) => `\`${p}\``).join(', ');
+  return (
+    `---\n` +
+    `description: Use when the owner wants to change ${repoName}'s DEFAULT budget posture (the cost/quality dial baked into the bundle) — set it to ${levelList}, or show the current posture. NOT a per-run override (that is \`args.posture\` on /dev-loop); this rewrites the repo's default in \`interview.json\` and regenerates the bundle.\n` +
+    `allowed-tools: Read, Edit, Bash(node:*)\n` +
+    `---\n\n` +
+    `Change **${repoName}'s default budget posture** — the cost/quality dial baked into the\n` +
+    `emitted loop from \`.claude/veriloop/interview.json\`. This runs **inline, in this repo**.\n\n` +
+    `> $ARGUMENTS\n\n` +
+    `The valid levels are **${levels}** (the only postures the compiler accepts).\n\n` +
+    `## \`/posture\` (no argument) — show, change nothing\n\n` +
+    `If \`$ARGUMENTS\` is empty:\n\n` +
+    `1. Read \`budget_posture\` from \`$REPO/.claude/veriloop/interview.json\` (default \`balanced\`\n` +
+    `   if the key or the file is absent).\n` +
+    `2. Print the current posture, the three valid levels (**${levels}**), and the resulting\n` +
+    `   per-phase routing — read it verbatim from the \`This repo's default routing\` line in\n` +
+    `   \`$REPO/.claude/commands/dev-loop.md\` (do NOT recompute the presets — that line already\n` +
+    `   carries them). Change nothing and stop.\n\n` +
+    `## \`/posture <level>\` — set the default\n\n` +
+    `1. **Validate FIRST, before any write.** If \`<level>\` is not one of **${levels}**, print the\n` +
+    `   valid set and STOP. Never leave \`interview.json\` half-edited on a bad level.\n` +
+    `2. **Edit only one key.** In \`$REPO/.claude/veriloop/interview.json\`, set \`budget_posture\` to\n` +
+    `   \`<level>\`. **PRESERVE every other key byte-for-byte** — \`phase_models\` (e.g.\n` +
+    `   \`{ "plan": "fable" }\`), \`cross_model\`, \`high_risk_areas\`, \`roster_add\`, \`extra_checks\`, … Parse\n` +
+    `   the JSON → set the single field → serialize (or make a targeted edit to that one key). NEVER a\n` +
+    `   blind rewrite that could drop keys. (An installed bundle always has \`interview.json\`; if it is\n` +
+    `   genuinely absent, STOP and tell the owner to re-install — this command may not create it.)\n` +
+    `3. **Regenerate via the sanctioned compiler.** Locate veriloop's compiler **relative to the\n` +
+    `   veriloop skill directory** — the directory containing veriloop's \`SKILL.md\` (\`scripts/\` is at\n` +
+    `   \`<skill-dir>/../../scripts\`). Resolve it the way the skill resolves its own dir; **never hardcode\n` +
+    `   an absolute path.** Then run:\n` +
+    "   ```\n" +
+    `   node <skill-dir>/../../scripts/generate.mjs --repo "$REPO" \\\n` +
+    `     --commands "$REPO/.claude/veriloop/commands.json" \\\n` +
+    `     --interview "$REPO/.claude/veriloop/interview.json"\n` +
+    "   ```\n" +
+    `   **FAIL GRACEFULLY** if the compiler is not reachable (e.g. the bundle was installed without the\n` +
+    `   veriloop skill on disk): report that \`interview.json\` **was already updated so no state is lost**,\n` +
+    `   and tell the owner to regenerate manually once the skill is available. Do not fabricate a path.\n` +
+    `4. **Report** the new posture and the resulting per-phase routing — read the regenerated\n` +
+    `   \`This repo's default routing\` line from \`$REPO/.claude/commands/dev-loop.md\` (the compiler also\n` +
+    `   prints \`budget: posture=… — plan:… implement:… …\` to stderr) so the owner sees the effect\n` +
+    `   without opening a file.\n\n` +
+    `## HARD LIMITS\n\n` +
+    `- **Write covenant.** You write **exactly one key** (\`budget_posture\`) in\n` +
+    `  \`$REPO/.claude/veriloop/interview.json\`, then invoke the compiler which regenerates the\n` +
+    `  machine-owned bundle (the normal, sanctioned regeneration — the same files a documented\n` +
+    `  re-run rewrites, honoring the three-way merge / backups / splice markers). **NOTHING else:** no\n` +
+    `  code, no branches, no other \`interview.json\` keys, and never edit \`constitution.md\`,\n` +
+    `  \`experts/*\`, \`commands.json\`, or the manifest by hand, never \`.env*\`.\n` +
+    `- **Validation before mutation.** A bad level changes nothing.\n` +
+    `- **Portability.** No absolute paths — resolve the compiler relative to the skill dir.\n` +
+    `- **Node scope.** The ONLY node invocation permitted is the sanctioned \`generate.mjs\` compiler call\n` +
+    `  above — never \`node -e\`, never an arbitrary script. \`Bash(node:*)\` is granted for that one command;\n` +
+    `  the covenant, not the tool glob, is the real boundary.\n` +
+    `- **No verdicts, no gate authority.** This is a config command, not a review surface.\n`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Machine-owned config block (spliced into the workflow's auto region)
 // ---------------------------------------------------------------------------
 

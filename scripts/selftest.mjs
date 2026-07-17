@@ -248,6 +248,59 @@ function assert(cond, desc) {
   assert(after.status !== 0, 'lint-bundle: FAILS when advise.md is deleted after generation (guards the new command surface)');
 }
 
+// --- v0.3.5: /posture — the emitted command that changes a repo's DEFAULT budget
+//     posture. Asserts the surface is emitted, its frontmatter is scoped + model-less,
+//     the linter guards it, the emitted valid-level list can't drift from BUDGET_PRESETS,
+//     the write-covenant instructions are present in emitted text (not narration), and
+//     all three lint-bundle command-list sites carry posture.md. ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-posture-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'pst', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+
+  // (a) posture.md is emitted
+  const posturePath = join(tmp, '.claude/commands/posture.md');
+  assert(existsSync(posturePath), 'generate: /posture command is emitted');
+  const posture = readFileSync(posturePath, 'utf8');
+
+  // (b) frontmatter carries the scoped allowed-tools and NO model: line
+  const fm = (posture.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+  assert(/description:/.test(fm) && /^description:\s*Use when/m.test(fm), '/posture: frontmatter description is trigger-first ("Use when")');
+  assert(/^allowed-tools:\s*Read, Edit, Bash\(node:\*\)\s*$/m.test(fm), '/posture: frontmatter scopes allowed-tools to Read, Edit, Bash(node:*)');
+  assert(!/^model:/m.test(fm), '/posture: frontmatter carries NO model: line (posture-setting inherits the session model)');
+
+  // (d) the emitted valid-level list equals the REAL BUDGET_PRESETS keys parsed from
+  //     generate.mjs SOURCE (never executed) — the two must not drift (rule 9).
+  const genSrc = readFileSync(generatePath, 'utf8');
+  const presetStart = genSrc.indexOf('const BUDGET_PRESETS = {');
+  const presetBlock = genSrc.slice(presetStart, genSrc.indexOf('\n};', presetStart));
+  const presetKeys = [...presetBlock.matchAll(/^ {2}(\w+): \{/gm)].map((m) => m[1]);
+  assert(presetKeys.length === 3 && presetKeys.join('|') === 'frugal|balanced|max', 'selftest: BUDGET_PRESETS keys parsed from generate.mjs source (frugal|balanced|max)');
+  assert(posture.includes(presetKeys.join(' | ')), '/posture: the emitted valid-level list equals the real BUDGET_PRESETS keys (no drift, rule 9)');
+
+  // (e) the write-covenant instructions live in the emitted command text (grep-able,
+  //     binding to emitted text — not narration).
+  assert(/Validate FIRST, before any write/.test(posture), '/posture: body carries the validate-before-write instruction');
+  assert(/PRESERVE every other key byte-for-byte/.test(posture), '/posture: body carries the preserve-all-other-interview-keys instruction');
+  assert(/relative to the\s+veriloop skill directory/.test(posture) && /FAIL GRACEFULLY/.test(posture), '/posture: body carries the skill-relative compiler-locate + graceful-fail instruction');
+  assert(/exactly one key/.test(posture) && /budget_posture/.test(posture), '/posture: body states the one-key (budget_posture) write covenant');
+
+  // (f) the single hoisted EMITTED_COMMANDS constant (rule 9) includes posture.md
+  const lintSrc = readFileSync(lintPath, 'utf8');
+  const emittedConst = (lintSrc.match(/EMITTED_COMMANDS\s*=\s*\[([^\]]*)\]/) || [])[1] || '';
+  assert(/'posture\.md'/.test(emittedConst), 'lint-bundle: the EMITTED_COMMANDS constant includes posture.md (one source of truth, rule 9)');
+
+  // (c) the linter guards the new surface: a fresh bundle passes; deleting posture.md → FAIL
+  const before = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(before.status === 0, 'lint-bundle: a fresh v0.3.5 bundle passes (0 fail)');
+  rmSync(posturePath);
+  const after2 = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(after2.status !== 0, 'lint-bundle: FAILS when posture.md is deleted after generation (guards the new command surface)');
+}
+
 // --- #9: machine-owned files are exempted from the target repo's format check,
 //     and the backups dir is gitignored — via ONE idempotent marked block in each
 //     owner-owned ignore file (installing veriloop must not break the host gate) ---
