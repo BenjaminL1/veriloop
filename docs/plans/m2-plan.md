@@ -143,6 +143,16 @@ pass condition*. Anchors are in the emitted loop
 **Verify:** the archived table has all 12 rows marked pass, and the `DB_FEATURE` drive shows
 the advisor `extra_check` in its gate output.
 
+**Implementation notes (executed 2026-07-17):** `PARITY_FEATURE` = the lobby-timeout-nits
+re-drive (dryRun PASS after one fix pass, `wf_0dbaca84`); `DB_FEATURE` = Top Climbers
+weekly slice 1 (owner pick over the recommended cosmetics; CONCERNS/0 blockers,
+`feat/top-climbers-weekly` @ `8867cd4`) — **the advisor extra_check fired live and passed
+with zero new WARN/ERROR**. Gold side verified statically (runtime execution of the backup
+script was blocked by the session permission classifier; byte-identity to `673991f`
+verified first). Table archived in `m1-dogfood-report.md` § "M2 parity checklist": 12/12
+pass, 2 rows anchor-verified (plan-halt, cross-model — no live trigger this run), 5 rows
+exceed. Prerequisite regen: Torevan bundle 0.3.0 → 0.3.6 (`9eb5663`) before certification.
+
 ---
 
 ## Step 3 — Retire the gold loop
@@ -231,6 +241,18 @@ node /Users/benjaminli/my_projects/veriloop/scripts/lint-bundle.mjs --bundle .cl
 grep -q 'dev-loop' CLAUDE.md ; echo $?   # → 0 (convention re-pointed)
 ```
 Observable: the `CATAN_SHAKEDOWN` run reaches a gate verdict (PASS/CONCERNS/FAIL) on catan.
+
+**Implementation notes (executed 2026-07-17):** `CATAN_SHA = aad09c2` (bundle v0.3.7 +
+CLAUDE.md re-point; first commit attempt surfaced veriloop compiler bug — trailing
+whitespace in emitted personas rejected by catan's pre-commit hook — fixed at the renderer
+as veriloop v0.3.7 with a selftest assertion, then reinstalled clean). Detection found the
+**dual stack** (python + rust — the M4 detector's first real repo); roster = baseline +
+drift. `CATAN_SHAKEDOWN` = the Makefile bench-drift fix: CONCERNS (only pre-existing
+findings), pushed `veriloop/bench-target-dedrift` @ `6b89ab7` (Makefile + the
+benchmarks/README.md repoint — a run-evidence conflict about the commit's contents was
+resolved by diffing it directly: both files, both in scope). The baseline probe correctly
+attributed catan's pre-existing red `make lint` and a pre-existing test failure as
+concerns, not blockers.
 
 ---
 

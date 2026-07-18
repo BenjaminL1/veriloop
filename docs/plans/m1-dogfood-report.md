@@ -191,3 +191,36 @@ clean land of a real feature. Every v0.2.0 feature was exercised and worked:
 human-only); the warm-up prettier preview (`feat/format-check-green`) remains
 unmerged, so the base stays red until the owner lands it; gold-loop retirement is
 now *unblocked* but recommended after one more clean feature (sample size two).
+
+---
+
+## M2 parity checklist (archived 2026-07-17 — roadmap-v1.md:164)
+
+Generated loop vs the hand-built gold. Gold verified **statically** from its preserved
+script (byte-identical at Torevan `673991f`, agent-extracted with line cites — the
+session's permission classifier declined to execute the backup script; M1's live history
+is the gold's runtime witness). Generated side verified **live** by three drives on
+2026-07-17: the nits parity dry-run (`wf_0dbaca84`, PASS), the Top Climbers DB drive
+(`wf_820f30ec`, CONCERNS/0 blockers, pushed `feat/top-climbers-weekly` @ `8867cd4`),
+and the catan shakedown (`wf_98c251b1`, CONCERNS, pushed `veriloop/bench-target-dedrift`
+@ `6b89ab7`).
+
+| # | item | gold (static, cited) | generated (evidence) | verdict |
+|---|---|---|---|---|
+| 1 | plan-halt | halts pre-worktree on violation (gold L192-195) | identical mechanism (`halted:'plan-violates-constitution'`, template :414); no violating plan fed this run — anchor-verified | pass (anchor) |
+| 2 | tiers | trivial/standard/high, lenses vary (L49, L103-107) | same enum (:90) + `lensesForTier` (:207-208); live: standard assigned, distinct panels | pass (live) |
+| 3 | worktree+deps | isolated worktree, symlinked deps (L200-201) | live in all three drives; checks green in-worktree | pass (live) |
+| 4 | real checks | exit-code verdicts (L124, L145-150) | live: both Torevan drives first-pass FAILed on real red checks (4 blockers each), re-ran green — never narrated | pass (live) |
+| 5 | advisor via extra_checks | hardcoded project + touchesDb regex (L124) | **live flagship**: `supabase-advisor` fired in the Top Climbers gate, zero new WARN/ERROR; config-derived from interview.json | **exceeds (live)** |
+| 6 | lenses by tier | cr always; +drift/ux std; +security high (L103-107) | live standard panels (baseline/drift/ux Torevan; baseline/drift catan); high panel + xmodel anchored (:207-208, :506) | pass (live) |
+| 7 | screenshot | touchesUi → 3 viewports, fail on defect (L129-134) | live: 1440/1280/760 captured + judged in both Torevan drives; ux lens raised real findings | pass (live) |
+| 8 | cross-model | high-only; soft-skip absent Codex (L136-141, L171) | same semantics (:369, :297); standard drives correctly did not schedule it | pass (anchor) |
+| 9 | bounded fix | MAX_FIX=3, no-progress break (L26, L215-228) | live: both Torevan drives cleared first-pass blockers in one fix pass; caps anchored (:441-457) | pass (live) |
+| 10 | land policy | push branch, never merge (L231-247) | live: two preview branches pushed, zero merges | pass (live) |
+| 11 | dryRun | skip docs-sync + push, keep worktree (L34-35, L236-237) | live: nits dry-run left work in worktree, `land=null`, nothing pushed | pass (live) |
+| 12 | waivers (superset) | NO formal waivers — soft-skips only (advisor-na, codex-skip, no-progress escalate, CONCERNS-not-blocking) | all four affordances present PLUS owner `args.waive` (agents never waive own findings) PLUS fail-closed on dead gate agents (0.2.2) | **exceeds** |
+
+**Verdict: generated ⊇ gold on all 12 rows; exceeds on advisor-config, waivers,
+fail-closed, attestation records, and constitution ownership.** Rows 1 and 8 rest on
+code anchors + gold structural identity rather than a live trigger this run — both
+mechanisms are selftest-executed in veriloop and were live-witnessed during M1.

@@ -447,8 +447,33 @@ feature driven fresh-context to a PASS-gated preview `feat/lobby-queue-timeout-f
   `feat/lobby-queue-timeout-feedback` @ `63bc84a` (main event), verified via
   merge-base ancestry at Torevan `4d0e114`. **M1 closed.** (Optional non-gating
   leftover: `feat/lobby-queue-timeout-nits`, 1 commit of lobby NIT fixes, unmerged.)
-- **M2:** not started — execution plan written ([m2-plan.md](./m2-plan.md));
-  frozen mining corpus for M3's benchmark pinned at Torevan `4d0e114` first.
+- **M2:** see the check-off below.
+
+### M2 · v0.3 "Parity & Convergence" — DONE (2026-07-17), pending owner merges
+
+All five steps executed ([m2-plan.md](./m2-plan.md) carries per-step implementation
+notes). Actual vs planned:
+
+- **Step 0** benchmark freeze — recorded before the bridge (corpus Torevan `4d0e114`).
+- **Step 1** constitution bridge — 14 gold rules verbatim + owner assignments, ux
+  lens-only by owner waiver; regen-survival proven (`BRIDGE_SHA a22a2df`).
+- **Step 2** parity checklist — 12/12 pass (2 anchor-verified, 5 exceed), archived in
+  [m1-dogfood-report.md](./m1-dogfood-report.md); the advisor extra_check **fired live**
+  in the Top Climbers gate. Gold side static (classifier blocked runtime; noted).
+- **Step 3** gold retirement — confirm+record (`RETIRE_SHA dce6a8f`), executed
+  2026-07-16 ahead of Step 2 by owner authorization.
+- **Step 4** catan convergence — dual-stack bundle installed (`CATAN_SHA aad09c2`),
+  CLAUDE.md re-pointed, shakedown CONCERNS-clean (`veriloop/bench-target-dedrift`).
+- **Step 5** evidence emission — shipped early as veriloop v0.3.3.
+- **Compiler bugs found by M2 contact, fixed per the iron rule:** trailing-whitespace
+  emission (v0.3.7, catan pre-commit lesson); generate.mjs `--repo` basename
+  limitation (worked around via symlink; backlog NIT).
+- **Exit criteria:** both repos on generated loops as canonical ✓; hand-built loop
+  retired + recorded ✓; parity checklist archived ✓. **Owner merges outstanding:**
+  Torevan `feat/top-climbers-weekly` @ `8867cd4` (merge normally, not rebase-force —
+  branch is one commit behind main) and catan `veriloop/bench-target-dedrift` @
+  `6b89ab7`; the nits dry-run worktree (`feat/lobby-queue-timeout-nits-slice`) is
+  discardable or promotable at will.
 
 ### Emitted-command surface increments (post-M1, self-hosted)
 
