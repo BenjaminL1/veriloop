@@ -1,0 +1,118 @@
+{
+  "ts": "2026-07-21T11-26-20Z",
+  "feature": "M3 §4 referee-as-lint — mechanize the constitution's 'No orphan rules, no jobless experts' invariant (constitution.md Rule-ownership section) as two NEW fail-level checks in scripts/lint-bundle.mjs: (1) no orphan rule — every numbered rule has exactly one _(owner: `key`)_ that is a roster key; (2) no jobless expert — every roster expert owns >=2 rules. BOTH gated on mined-ownership-present: skip when the STARTER banner ('> **veriloop STARTER**', render.mjs:108) or the TODO-owner placeholder strings (render.mjs:114,116) are present, so a pre-mining starter bundle never trips them. Add fixtures/mined-bundle (a complete, fully-owned bundle that lints clean) + selftests (owner-stripped -> fail; expert with 1 rule -> fail; starter bundle -> fails do NOT fire). Branch from main; patch version bump; must not regress lint-bundle exit 0 on veriloop's own bundle.",
+  "repo": "veriloop",
+  "tier": "high",
+  "baseSha": "c4d33c10ef2807eb2016d83730d20d077cb945b8",
+  "headSha": "0b5b48be374f557f9008f1a919d7363421d61840",
+  "verdict": "CONCERNS",
+  "checks": [
+    {
+      "name": "test",
+      "command": "npm run test",
+      "exit": 0,
+      "tail": "ok   - lint-bundle: a fresh STARTER bundle passes — the referee skips pre-mining (gate regression guard)\nok   - lint-bundle: the starter reports the referee was skipped (pre-mining gate fired)\n\n220 ok, 0 failed\n\n> veriloop@0.3.8 test\n> node scripts/selftest.mjs"
+    }
+  ],
+  "baselineProbe": null,
+  "screenshots": [],
+  "screenshotVerdict": null,
+  "fixPasses": 0,
+  "blockers": [],
+  "concerns": [
+    "[baseline-reviewer (MODE: REVIEW) — senior-engineer correctness & craft, veriloop node bundle] The 0.3.8 changelog entry states \"veriloop's own hand-owned constitution (code-review 1/2/3, security 4/5/6/7, drift 8/9/10) passes the new fails.\" That ownership layout is the NEW fixture's scheme, not veriloop's own. I verified the actual tags in .claude/veriloop/constitution.md are code-review = rules 1,2,10; security = 4,5,6,7; drift = 3,8,9 — which matches the OWNER'S SPEC (\"code-review 1/2/10 ... drift 3/8/9\"). The changelog therefore misdescribes the very artifact the MUST-NOT-REGRESS clause is about (it claims drift owns 8/9/10 when drift owns 3/8/9, and code-review owns 1/2/3 when it owns 1/2/10). This is a shipped, user-facing doc inaccuracy — CLAUDE.md §6 treats inaccurate behavior descriptions as block-merge. The code itself is correct (own bundle lints exit 0); only the prose is wrong. Note: the m3-plan.md implementation note correctly uses this same 1/2/3 // 8/9/10 layout to describe the FIXTURE, so the error is confined to the changelog's mislabeling of it as veriloop's own."
+  ],
+  "waived": [],
+  "filesChanged": [
+    "scripts/lint-bundle.mjs",
+    "scripts/selftest.mjs",
+    "fixtures/mined-bundle/ (new — 16 files: .claude/ bundle + .gitignore)",
+    "package.json",
+    ".claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "scripts/generate.mjs",
+    "CHANGELOG.md",
+    ".claude/veriloop/veriloop-manifest.json",
+    "docs/plans/m3-plan.md"
+  ],
+  "implSummary": "Implemented M3 §4 (referee-as-lint) on a worktree branched from main (c4d33c1, v0.3.7 → patch-bumped to 0.3.8). No commit/push.\n\nWHAT SHIPPED:\n- scripts/lint-bundle.mjs: new \"section 8\" (after the section-5 manifest block, before the report). Builds rosterKeys from the manifest, reads .claude/veriloop/constitution.md, and GATES on preMining = STARTER banner (render.mjs:108) OR either TODO-owner placeholder (render.mjs:114,116). Pre-mining → one ok('rule-ownership referee skipped — pre-mining STARTER bundle'), neither strict fail runs (the section-5 jobless-EVIDENCE warn is untouched). Once mined, two NEW fail-level checks: (a) NO ORPHAN RULE — the constitution is split into numbered-rule blocks (open on /^\\d+\\.\\s/, close on the next such line or a heading/hr /^(#{1,6}\\s|---\\s*$)/, which correctly attributes owner tags on a rule's continuation line); each block must carry exactly one /_\\(owner:\\s*`([^`]+)`\\)_/ tag whose key is a roster expert (zero / >1 / off-roster → fail). (b) NO JOBLESS EXPERT — every roster key owning <2 rules → fail. The existing gate-equality FAIL and jobless-evidence WARN are unchanged.\n- fixtures/mined-bundle/ (NEW, 16 files): a complete, fully-owned post-mining bundle that lints clean. Built by generating a starter for a 3-expert roster {code-review, security, drift} (via interview.roster_add) then replacing only its constitution with a fully-owned 10-rule form (code-review 1/2/3, security 4/5/6/7, drift 8/9/10; no STARTER banner, no TODO placeholders). Its manifest veriloop_version stays 0.3.7 (truthful — the version that generated it).\n- scripts/selftest.mjs: +cpSync import and 4 new tests (8 assertions) — positive fixture lints clean + reports referee ran; tmp copy with one owner tag stripped → exit 1 + /orphan rule/; tmp copy reassigning two drift tags → exit 1 + /jobless expert/; fresh STARTER bundle → exit 0 + /rule-ownership referee skipped/. Failure paths mutate tmp copies, never a committed broken fixture (constitution rule 3). Count 212 → 220.\n- Version bump 0.3.7 → 0.3.8 across all five stamped locations (generate.mjs VERILOOP_VERSION, package.json, .claude-plugin/plugin.json, marketplace.json metadata+plugins[0]) + new CHANGELOG.md '## 0.3.8 — 2026-07-21' entry; also bumped repo-root .claude/veriloop/veriloop-manifest.json veriloop_version for truthfulness.\n- docs/plans/m3-plan.md §4: appended an Implementation-notes paragraph reflecting what shipped.\n\nNO-REGRESSION CONFIRMED: node scripts/lint-bundle.mjs on veriloop's own hand-owned bundle → exit 0 (referee RUNS and PASSES: roster {code-review,security,drift}, ownership 3/4/3, no banner). Fresh starter still skips. Did not touch mine.mjs/scan.mjs/generate.mjs roster logic.",
+  "lenses": [
+    {
+      "lens": "baseline-reviewer (MODE: REVIEW) — senior-engineer correctness & craft, veriloop node bundle",
+      "summary": "The implementation is correct and spec-faithful; no blockers. I ran the real gate: `npm test` → 220 ok / 0 failed (baseline 207 → 215 assert() calls, count grew as required); `node scripts/lint-bundle.mjs` on veriloop's own bundle → exit 0 with the new \\\"rule-ownership referee — every rule owned...\\\" line firing (so the strict fails genuinely run and pass, not skip); `--bundle fixtures/mined-bundle` → exit 0. Verified correct: (1) both fail-level checks read the constitution's inline _(owner:`key`)_ tags against manifest roster keys; the orphan check splits the constitution into numbered-rule blocks on /^\\\\d+\\\\.\\\\s/ closing on the next rule or a heading/hr, which correctly attributes owner tags on continuation lines and never mis-reads the bottom \\\"### Rule ownership\\\" summary (those lines carry no _(owner:...)_ tags and sit past the closing ---). (2) The mined-ownership gate ORs the STARTER banner (render.mjs:108) and both TODO-owner placeholders (render.mjs:114/116) exactly as spec'd, so a pre-mining starter is exempt. (3) The hardcoded-literal coupling to render.mjs is genuinely guarded — the gate-skip selftest GENERATES a fresh starter and asserts the referee skips, so any drift in the banner/placeholder text would flip that starter to running-and-failing and break the test. (4) The two failure paths mutate tmp COPIES (orphan: strip rule 1's code-review tag → code-review still owns 2, only orphan fires; jobless: reassign 2 drift tags → drift drops to 1) rather than committing a second broken fixture, honoring constitution rule 3. (5) Existing jobless-evidence WARN and gate-equality FAIL are untouched; generate.mjs change is only the version constant, not roster logic (non-goal respected). (6) All veriloop version stamps agree at 0.3.8 (plugin.json, marketplace.json, manifest, package.json, generate.mjs). The only issue is a factual mislabel in the CHANGELOG describing veriloop's own constitution with the fixture's ownership scheme.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "CHANGELOG.md:4",
+          "issue": "The 0.3.8 changelog entry states \"veriloop's own hand-owned constitution (code-review 1/2/3, security 4/5/6/7, drift 8/9/10) passes the new fails.\" That ownership layout is the NEW fixture's scheme, not veriloop's own. I verified the actual tags in .claude/veriloop/constitution.md are code-review = rules 1,2,10; security = 4,5,6,7; drift = 3,8,9 — which matches the OWNER'S SPEC (\"code-review 1/2/10 ... drift 3/8/9\"). The changelog therefore misdescribes the very artifact the MUST-NOT-REGRESS clause is about (it claims drift owns 8/9/10 when drift owns 3/8/9, and code-review owns 1/2/3 when it owns 1/2/10). This is a shipped, user-facing doc inaccuracy — CLAUDE.md §6 treats inaccurate behavior descriptions as block-merge. The code itself is correct (own bundle lints exit 0); only the prose is wrong. Note: the m3-plan.md implementation note correctly uses this same 1/2/3 // 8/9/10 layout to describe the FIXTURE, so the error is confined to the changelog's mislabeling of it as veriloop's own.",
+          "fix": "In CHANGELOG.md:4 change the parenthetical to veriloop's real ownership: \"(code-review 1/2/10, security 4/5/6/7, drift 3/8/9)\"."
+        },
+        {
+          "severity": "NIT",
+          "location": "fixtures/mined-bundle/.claude/veriloop/veriloop-manifest.json:2",
+          "issue": "The committed fixture's manifest is stamped \"veriloop_version\": \"0.3.7\" while this change bumps the repo to 0.3.8 (it was generated by the pre-bump generator). No check couples the fixture version to VERILOOP_VERSION, so lint/selftest stay green and there is no functional impact — but the spec's \"all version stamps agree\" intent reads slightly against a frozen fixture pinned to the prior version.",
+          "fix": "Optional: regenerate/edit the fixture manifest to 0.3.8 for tidiness, or leave as-is and treat the fixture as an intentionally frozen artifact. Harmless either way."
+        }
+      ]
+    },
+    {
+      "lens": "security — supply-chain & input-safety reviewer (REVIEW mode)",
+      "summary": "PASS — no BLOCKER, no SHOULD-FIX from the security/supply-chain lens. The change is tightly scoped to scripts/lint-bundle.mjs (adds section 8, a pure read-only referee: readFileSync + regex, zero execution), a new selftest block, and version/doc stamps. Constitution rules 4–7 (the reviewer's beat) are untouched: detectors.mjs sanitization, verify.mjs safety tiers, and the hostile-ci scan-only covenant are not modified, and the new code executes nothing — the pre-existing workflow check uses `node --check` (static parse), so the new mined-bundle fixture's workflow is never run. Verified live in the worktree: (1) the three gate literals in the code match render.mjs:108/114/116 byte-for-byte; (2) `lint-bundle --bundle fixtures/mined-bundle` → exit 0 with the referee reported as RUN (not skipped); (3) `lint-bundle` on veriloop's own hand-owned bundle → exit 0 (code-review 1/2/10, security 4/5/6/7… all ≥2 owners, no self-regression); (4) `npm test` → exit 0, 220 ok / 0 failed, count grew from the 212 baseline (+8); (5) both negative selftests target the correct failure (orphan test strips rule 1's tag while code-review keeps 2 rules; jobless test reassigns 2 of drift's 3 tags leaving drift at 1) and mutate tmp copies, never a committed broken fixture (honors constitution rule 3); (6) the starter gate-skip is guarded by a live generate.mjs run, so a future render.mjs banner change would trip the selftest; (7) no secrets or .env files in the fixture. Two NITs, both in the fixture manifest metadata and non-load-bearing.",
+      "findings": [
+        {
+          "severity": "NIT",
+          "location": "fixtures/mined-bundle/.claude/veriloop/veriloop-manifest.json:53",
+          "issue": "The fixture manifest's roster_notes says \"security expert NOT added — no concrete auth/db/secret surface detected (avoids a jobless expert)\", yet the roster (line ~14) DOES include the security expert with evidence, and the fixture constitution gives security rules 4/5/6/7. This is a stale artifact from the fixture's construction (generate a 1-expert starter, then hand-add security+drift and rewrite the constitution). No lint check cross-validates roster_notes against roster, so tests stay green — but the spec asks for a \"complete, well-formed\" bundle and this note self-contradicts the roster it ships beside. Not load-bearing for the referee.",
+          "fix": "Edit fixtures/mined-bundle/.claude/veriloop/veriloop-manifest.json to remove or correct the stale roster_notes entry so it matches the 3-expert roster the fixture actually ships (e.g. note that security was added for the auth/db/secret surface)."
+        },
+        {
+          "severity": "NIT",
+          "location": "fixtures/mined-bundle/.claude/veriloop/veriloop-manifest.json:2",
+          "issue": "The committed fixture's internal veriloop_version is \"0.3.7\" while this change bumps the repo to 0.3.8. Harmless — the fixture is a frozen snapshot and lint-bundle does not check its version — but it means the fixture was captured one release behind and does not reflect a bundle a current veriloop would emit.",
+          "fix": "Optional: regenerate the fixture (or bump its manifest stamp) at 0.3.8 so the snapshot matches the emitting version. Leave as-is if fixtures are intentionally frozen artifacts."
+        }
+      ]
+    },
+    {
+      "lens": "drift (MODE: REVIEW) — divergence from spec, plan, constitution, and prior work",
+      "summary": "GO. The M3 §4 referee-as-lint change faithfully implements the owner's spec: two new fail-level checks (no orphan rule / no jobless expert) read the constitution's inline _(owner: `key`)_ tags against manifest roster keys, both gated on mined-ownership-present via the exact render.mjs:108/114/116 starter literals, with the existing jobless-evidence WARN and gate-equality FAIL untouched. Verified end-to-end: the mined fixture lints clean with the referee running (not skipped); stripping an owner tag → exit 1 (orphan); dropping an expert to 1 rule → exit 1 (jobless); a fresh STARTER bundle → exit 0 (gate skips); and veriloop's own hand-owned bundle → exit 0 with the referee running and passing (no self-regression). npm selftest is green (220 ok, 0 failed; assert count 207→215, grows from baseline). All version stamps agree at 0.3.8 (patch bump), and CHANGELOG + m3-plan.md are updated to match what shipped. No constitution invariant is violated; scope non-goals (mine/scan/generate roster logic, the WARN, the gate FAIL) are all respected. No BLOCKER or SHOULD-FIX; three NITs are latent-fragility / cosmetic only.",
+      "findings": [
+        {
+          "severity": "NIT",
+          "location": "scripts/lint-bundle.mjs:294",
+          "issue": "The block parser treats every line matching /^\\d+\\.\\s/ as a new numbered rule. A constitution rule whose body contained an ordered sub-list (e.g. an indented \"1. first sub-point\") would be misparsed as a fresh top-level rule, corrupting ownership counts. Not triggered by any current bundle (the fixture and veriloop's own constitution have no ordered sub-lists), so it is a latent fragility, not an active bug.",
+          "fix": "Optional hardening: only open a new block on a line with no leading indentation (anchor with /^\\d+\\.\\s/ against a de-indented line, or require column 0). Leave as-is if sub-lists are considered out of convention."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/lint-bundle.mjs:277",
+          "issue": "When a mined bundle has a non-empty constitution but an EMPTY roster (rosterKeys.size === 0), the referee block runs neither branch — it emits no ok and no fail, staying silent. Exit code is still 1 because section 5 already fails on an empty roster, so behavior is correct, but the referee produces no signal in that case.",
+          "fix": "Acceptable as-is (section 5 covers it). If desired, add an explicit branch that notes the referee could not run on an empty roster."
+        },
+        {
+          "severity": "NIT",
+          "location": "fixtures/mined-bundle/.claude/veriloop/veriloop-manifest.json:1",
+          "issue": "Fixture manifest is internally contradictory: roster_notes says 'security expert NOT added — no concrete auth/db/secret surface detected (avoids a jobless expert)', yet the roster DOES include a security expert, and emitted_files marks constitution.md ownership as 'starter' though its content is fully mined. Leftover copy-paste from the starter-then-rewrite construction. Not checked by any lint rule and does not affect the change, but it is a stale/misleading claim inside a committed artifact.",
+          "fix": "Trim the roster_notes line and set constitution ownership to 'hand' in the fixture manifest so the artifact reads truthfully."
+        }
+      ]
+    }
+  ],
+  "gateHistory": [
+    {
+      "verdict": "CONCERNS",
+      "blockers": 0,
+      "concerns": 1,
+      "waived": 0
+    }
+  ],
+  "crossModel": null,
+  "missingGateJobs": [],
+  "implPreflight": "npm test (node scripts/selftest.mjs) → 220 ok, 0 failed (exit 0; baseline was 212, so count grew +8). node scripts/lint-bundle.mjs --bundle <worktree> (veriloop's own bundle) → exit 0. node scripts/lint-bundle.mjs --bundle fixtures/mined-bundle → exit 0. version-stamp agreement assertion → all six locations report 0.3.8. node --check on lint-bundle.mjs, selftest.mjs, generate.mjs → all clean. No mutating commands run.",
+  "dryRun": false,
+  "land": {
+    "sha": "0b5b48be374f557f9008f1a919d7363421d61840",
+    "pushed": true,
+    "branch": "feat/m3-referee-as-lint"
+  }
+}
