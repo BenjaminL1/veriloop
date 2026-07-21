@@ -1,0 +1,135 @@
+{
+  "ts": "2026-07-21T00-39-06Z",
+  "feature": "M3 §1 — scripts/scan.mjs: a new deterministic compiler-side deep-scan script that walks a repo's danger surfaces and emits scan-notes.md (surface → file:line evidence → nominated roster expert/rule), then STOPS for owner review. Bounded (--max), resumable (frontmatter scanned_paths cursor), scan-only (never executes scanned content). First buildable slice of M3; downstream mine.mjs (§2) consumes its output. Spec at .claude/veriloop/specs/m3-scan.md (binding); authority is docs/plans/m3-plan.md §1.",
+  "repo": "veriloop",
+  "tier": "high",
+  "baseSha": "c4d33c10ef2807eb2016d83730d20d077cb945b8",
+  "headSha": "7fff18e1a2cc4741dfef788a329665e30fde022e",
+  "verdict": "CONCERNS",
+  "checks": [
+    {
+      "name": "test",
+      "command": "npm run test",
+      "exit": 0,
+      "tail": "scan: a second run adds NO duplicate surface headers (header count === unique count)\nscan: a second run adds NO new surface blocks at all (cursor skips completed paths)\n\n224 ok, 0 failed"
+    }
+  ],
+  "baselineProbe": null,
+  "screenshots": [],
+  "screenshotVerdict": null,
+  "fixPasses": 0,
+  "blockers": [],
+  "concerns": [
+    "[Baseline Reviewer (correctness & craft) — MODE: REVIEW] `--max` silently and PERMANENTLY drops surfaces, contradicting the spec's framing of BOUNDED + RESUMABLE as complementary. Every invocation walks the WHOLE tree and marks ALL walked paths into the cursor (line 257), regardless of how many surface blocks `--max` allowed. Because resumption is keyed on scanned PATHS, not on un-emitted surfaces, a capped run can never be resumed to emit the rest — the excess surfaces are lost forever. Demonstrated: `scan --repo . --out f --max 2` emits 2 headers and marks all 73 paths scanned; a second identical run stays at 2 headers (the other ~4 surfaces are gone, not deferred). The spec says '--max cap per invocation' + 're-run skips completed paths', which reads as 'run again to get the rest' — but that is impossible here. Latent under the default (max 12 > 7 catalog entries) but reachable with any `--max` below the number of hit surfaces.",
+    "[Baseline Reviewer (correctness & craft) — MODE: REVIEW] The per-surface 12-evidence cap combined with the alphabetical walk and scanning of markdown/docs evicts real code evidence in favor of prose mentions. Scanning veriloop itself, the `shell-string execution` block's 12 slots fill from CHANGELOG.md:4, docs/plans/m3-plan.md (x4), fixtures/scan-target/run-check.mjs, generate.mjs, lint-bundle.mjs, scan.mjs:56 (its own catalog regex), and selftest.mjs — all doc/self-referential mentions of the pattern string, not spawn sites. The spec's own named smoke-test surface, `verify.mjs:64 shell:true`, is therefore NOT cited as evidence anywhere (verify.mjs appears only in the scanned_paths cursor at output line 74). The surface block exists, but the flagship real code hit is dropped, and the noisy citations are exactly what mine.mjs (§2) will consume downstream.",
+    "[security (Supply-Chain & Input-Safety Reviewer) — MODE: REVIEW] BOUNDED (--max) and RESUMABLE (path cursor) — two spec-required features — interact to PERMANENTLY DROP nominated danger surfaces. When --max caps the number of emitted surface blocks in a run, the cursor merge at :255-257 still marks EVERY walked path as scanned. On the next run, `fresh` (:238) is empty, collectEvidence returns nothing, and the surfaces that were capped out at :247 (`if (emitted >= args.max) break`) can never be emitted — the owner never sees them. Reproduced: `--max 2` on fixtures/scan-target emits shell + secret surfaces, marks all 3 paths scanned; a second run (no --max) emits 0 and the `parity/golden-fixture` surface (golden.fixture.json) is lost forever. Security impact: the whole point of the deep scan is not to MISS a danger surface, and a bounded run silently discards them instead of deferring to a resumable re-run. Only hidden by the default --max 12 exceeding the 7-entry catalog, so it never fires by default — but the bound is broken the moment it is exercised.",
+    "[security (Supply-Chain & Input-Safety Reviewer) — MODE: REVIEW] The plan's shipped implementation-note claims 'pointed at veriloop itself it surfaces verify.mjs shell: true', but MAX_EVIDENCE_PER_SURFACE=12 (:156) combined with the alphabetical walk fills the shell-string surface's 12 evidence slots with prose/doc false-positives (CHANGELOG.md:4, docs/plans/m3-plan.md:72/89/126/222 — markdown literally containing the text 'shell:') and fixtures, crowding out the REAL production hit scripts/verify.mjs:64 (`shell: true`, confirmed present). The shell-string SURFACE is still nominated, so no surface is missed, but verify.mjs:64 is NOT among the cited evidence — so the plan's factual claim is now false (CLAUDE.md rule 6: existing docs must stay truthful), and for a security tool, prose/self-fixture matches consuming the evidence budget ahead of real code sites is a precision regression.",
+    "[drift (Drift Sentinel — REVIEW mode)] BOUNDED (--max) and RESUMABLE (scanned_paths cursor) are mutually destructive. The emit loop stops after --max NEW surface blocks (line 247), but the cursor merge unconditionally marks EVERY walked path as scanned (line 257: `for (const p of allPaths) scannedPaths.add(...)`). On a re-run, `fresh` (line 238) is empty because all paths are in the cursor, so any surface that was capped out on the first invocation can never be emitted — it is dropped permanently, not deferred. The spec lists both BOUNDED and RESUMABLE as first-class required behaviors; their intended combination is incremental progress across invocations, not silent permanent loss. Reproduced against veriloop itself: `scan --repo . --out /tmp/vlm.md --max 2` emits 2 surfaces and writes 73 paths to the cursor; a follow-up `--max 12` run reports `0 new this run` and the 3 remaining real surfaces (DB/SQL/RLS, filesystem writes, parity/golden) are never emitted. Latent under the default (max 12 > 7 catalog entries) so the acceptance path passes, but --max is a data-loss footgun in exactly the scenario it exists for."
+  ],
+  "waived": [],
+  "filesChanged": [
+    "%REPO%/scripts/scan.mjs",
+    "%REPO%/fixtures/scan-target/run-check.mjs",
+    "%REPO%/fixtures/scan-target/config.mjs",
+    "%REPO%/fixtures/scan-target/golden.fixture.json",
+    "%REPO%/scripts/selftest.mjs",
+    "%REPO%/scripts/generate.mjs",
+    "%REPO%/package.json",
+    "%REPO%/.claude-plugin/plugin.json",
+    "%REPO%/.claude-plugin/marketplace.json",
+    "%REPO%/CHANGELOG.md",
+    "%REPO%/docs/plans/m3-plan.md"
+  ],
+  "implSummary": "Implemented M3 §1 — scripts/scan.mjs, the deterministic phase-3 deep scan, exactly to the binding spec: scan-and-stop only, no mining/scoring/execution.\n\nscripts/scan.mjs (new, compiler-side, NOT emitted): CLI mirrors detect.mjs (--repo/--out/--max default 12/--help, reusing the reqVal shape). A hardcoded danger-surface CATALOG of { name, expert, rule, line?/path? matcher, uiOnly? } matched IN PROCESS (regex over file text and/or relative path) — minimum catalog per spec: shell-string exec, secret/env, DB/SQL/RLS, untrusted-input→sink, fs-writes/machine-owned-emission (splice markers), parity/golden-fixture, and a UI-rendering surface gated on a cheap self-contained package.json-deps UI check. Every expert key is one of SPECIALIST_DEFAULTS (security|drift|ux) so a nomination maps 1:1 onto applyRosterAdd. Sorted recursive walk (stable output) skipping node_modules/.git/.claude/veriloop/.backups; reads files as TEXT only and spawns NOTHING (SCAN-ONLY covenant; git-history mining stays in §2). Emits scan-notes.md — scanned_paths: frontmatter cursor + one `## surface:` block per hit with real file:line evidence + `nominates: expert=<key> | rule=\"...\"`. BOUNDED (--max new surfaces/invocation) and RESUMABLE (re-run skips completed paths, adds no duplicate headers, preserves owner-reviewed body byte-for-byte). CLASSIFICATION-CONFIRM HALT: writes, prints `review scan-notes.md, then run mine.mjs`, exits 0 — never chains to mining, never runs/compiles a nominated check. Smoke-tested against veriloop itself: surfaces verify.mjs shell:true, .gitignore splice markers, golden-fixture surfaces.\n\nfixtures/scan-target/ (new, INPUT ONLY, no pre-seeded scan-notes.md): run-check.mjs (shell:true), config.mjs (process.env.FOO_KEY + SERVICE_ROLE), golden.fixture.json.\n\nselftest: added a scan block (+12 assertions, 212→224) asserting (a) expected surface blocks emitted, (b) each nomination cites a real in-range file:line + valid expert key, (c) a second run adds no duplicate/new headers (writes --out to an mkdtemp path never inside fixtures/), (d) scan classified run-check.mjs rather than executing it — interrogating scan's DECISION per the ci-adopt rule-3 discipline.\n\nVersion bumped 0.3.7→0.3.8 (patch, not the 0.4.0 milestone stamp) across all six locations; version-stamp-agreement selftest green. Docs: appended an implementation-notes paragraph to docs/plans/m3-plan.md §1; SKILL.md:103 scan-notes.md reference confirmed truthful (no change). No changes to detect/verify/generate/lint-bundle behavior; no LLM in scan.mjs. NOT committed/pushed/reviewed per instructions.",
+  "lenses": [
+    {
+      "lens": "Baseline Reviewer (correctness & craft) — MODE: REVIEW",
+      "summary": "No BLOCKERs. The scan-only covenant, no-LLM discipline, six-stamp version agreement, manifest exclusion, lint-bundle exit 0, and selftest (224 > 212, green) all hold; the fixture selftest correctly interrogates scan's decision without executing fixture content. Two SHOULD-FIX correctness/precision issues: (1) `--max` permanently drops surfaces rather than deferring them because the cursor advances over the whole tree every run — bounded and resumable are wired to contradict each other (latent under default max=12, reachable with a lower --max); (2) the 12-evidence cap plus alphabetical walk plus scanning docs evicts real code evidence with doc/self-referential prose mentions, so the spec's own named smoke-test surface verify.mjs:64 shell:true is never cited when scanning veriloop itself, polluting what mine.mjs will consume. One NIT on a colliding magic constant.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/scan.mjs:255-257 (interaction with :237,:247)",
+          "issue": "`--max` silently and PERMANENTLY drops surfaces, contradicting the spec's framing of BOUNDED + RESUMABLE as complementary. Every invocation walks the WHOLE tree and marks ALL walked paths into the cursor (line 257), regardless of how many surface blocks `--max` allowed. Because resumption is keyed on scanned PATHS, not on un-emitted surfaces, a capped run can never be resumed to emit the rest — the excess surfaces are lost forever. Demonstrated: `scan --repo . --out f --max 2` emits 2 headers and marks all 73 paths scanned; a second identical run stays at 2 headers (the other ~4 surfaces are gone, not deferred). The spec says '--max cap per invocation' + 're-run skips completed paths', which reads as 'run again to get the rest' — but that is impossible here. Latent under the default (max 12 > 7 catalog entries) but reachable with any `--max` below the number of hit surfaces.",
+          "fix": "Only advance the cursor for paths actually consumed toward emitted surfaces, OR (simpler) do not mark paths scanned when `emitted >= args.max` truncated output — persist scanned paths only up to the point the bound was hit so a re-run can emit the deferred surfaces. Alternatively, if --max is meant purely as a hard per-run ceiling with no deferral, document that capped surfaces are dropped, not resumable, and warn on stderr when truncation occurs."
+        },
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/scan.mjs:156 (MAX_EVIDENCE_PER_SURFACE) + :168-187 walk order",
+          "issue": "The per-surface 12-evidence cap combined with the alphabetical walk and scanning of markdown/docs evicts real code evidence in favor of prose mentions. Scanning veriloop itself, the `shell-string execution` block's 12 slots fill from CHANGELOG.md:4, docs/plans/m3-plan.md (x4), fixtures/scan-target/run-check.mjs, generate.mjs, lint-bundle.mjs, scan.mjs:56 (its own catalog regex), and selftest.mjs — all doc/self-referential mentions of the pattern string, not spawn sites. The spec's own named smoke-test surface, `verify.mjs:64 shell:true`, is therefore NOT cited as evidence anywhere (verify.mjs appears only in the scanned_paths cursor at output line 74). The surface block exists, but the flagship real code hit is dropped, and the noisy citations are exactly what mine.mjs (§2) will consume downstream.",
+          "fix": "Bias evidence selection toward higher-signal hits before truncating: e.g. exclude `.md`/doc files from the code-pattern (`line`) matchers, or rank real spawn/code hits above prose mentions, or raise/lift the per-surface cap so known surfaces like verify.mjs:64 survive. At minimum, ensure the owner-named smoke-test surfaces (verify.mjs:64 shell:true) actually appear in a self-scan so the catalog demonstrably 'finds veriloop's OWN known surfaces' as the spec requires."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/scan.mjs:156",
+          "issue": "MAX_EVIDENCE_PER_SURFACE is hardcoded to 12, coincidentally identical to the default `--max` (surface cap). Two unrelated bounds sharing the literal 12 invites confusion when tuning either.",
+          "fix": "Give the constant a value distinct from the --max default, or add a one-line comment clarifying these are independent axes (evidence-per-surface vs. surfaces-per-run)."
+        }
+      ]
+    },
+    {
+      "lens": "security (Supply-Chain & Input-Safety Reviewer) — MODE: REVIEW",
+      "summary": "No BLOCKERs. The core security property this milestone must not weaken — the scan-only covenant (constitution rules 4/5) — is upheld: scan.mjs imports only node:fs/node:path, spawns nothing, and reads all scanned content (including hostile fixtures) as TEXT; verified by grep and by the self-scan classifying run-check.mjs without executing it. Emitted-artifact hygiene (rule 7) holds (relative paths only; scan.mjs not emitted). Selftest green (224, up from 212), lint-bundle exit 0, six version stamps agree at 0.3.8, and the acceptance run reproduces (real :line citations, no duplicate headers on re-run). Two SHOULD-FIXes: (1) a latent data-loss bug where --max (bounded) plus the path cursor (resumable) permanently drops capped-out danger surfaces — reproduced with --max 2, hidden only because default max 12 > 7 catalog entries; (2) the 12-evidence cap plus alphabetical walk lets markdown prose false-positives crowd real production hits (verify.mjs:64 shell:true) out of the cited evidence, making the plan's shipped implementation-note inaccurate. One NIT: manifest veriloop_version stale at 0.3.7.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/scan.mjs:255-257 (with :238, :246-253)",
+          "issue": "BOUNDED (--max) and RESUMABLE (path cursor) — two spec-required features — interact to PERMANENTLY DROP nominated danger surfaces. When --max caps the number of emitted surface blocks in a run, the cursor merge at :255-257 still marks EVERY walked path as scanned. On the next run, `fresh` (:238) is empty, collectEvidence returns nothing, and the surfaces that were capped out at :247 (`if (emitted >= args.max) break`) can never be emitted — the owner never sees them. Reproduced: `--max 2` on fixtures/scan-target emits shell + secret surfaces, marks all 3 paths scanned; a second run (no --max) emits 0 and the `parity/golden-fixture` surface (golden.fixture.json) is lost forever. Security impact: the whole point of the deep scan is not to MISS a danger surface, and a bounded run silently discards them instead of deferring to a resumable re-run. Only hidden by the default --max 12 exceeding the 7-entry catalog, so it never fires by default — but the bound is broken the moment it is exercised.",
+          "fix": "Make the cursor surface-aware, not just path-aware: when the --max cap is hit (more surfaces had hits than were emitted), do NOT advance the path cursor to include paths whose surfaces were deferred — or track emitted-vs-pending surfaces so a re-run re-scans and emits the deferred ones. Add a selftest asserting a low --max run followed by a re-run eventually emits ALL surfaces."
+        },
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/scan.mjs:156; docs/plans/m3-plan.md:89",
+          "issue": "The plan's shipped implementation-note claims 'pointed at veriloop itself it surfaces verify.mjs shell: true', but MAX_EVIDENCE_PER_SURFACE=12 (:156) combined with the alphabetical walk fills the shell-string surface's 12 evidence slots with prose/doc false-positives (CHANGELOG.md:4, docs/plans/m3-plan.md:72/89/126/222 — markdown literally containing the text 'shell:') and fixtures, crowding out the REAL production hit scripts/verify.mjs:64 (`shell: true`, confirmed present). The shell-string SURFACE is still nominated, so no surface is missed, but verify.mjs:64 is NOT among the cited evidence — so the plan's factual claim is now false (CLAUDE.md rule 6: existing docs must stay truthful), and for a security tool, prose/self-fixture matches consuming the evidence budget ahead of real code sites is a precision regression.",
+          "fix": "Either correct the m3-plan.md note to state which real sites are actually cited, or improve precision so production code hits are not evicted by doc-prose matches (e.g. de-prioritize .md files for the shell-string line regex, or raise/rebalance the per-surface evidence cap)."
+        },
+        {
+          "severity": "NIT",
+          "location": ".claude/veriloop/veriloop-manifest.json:2",
+          "issue": "The self-host bundle manifest still stamps veriloop_version 0.3.7 while VERILOOP_VERSION and the six checked stamps moved to 0.3.8. This is a self-host bundle artifact (not one of the six enumerated stamps, and lint-bundle passes), so it does not fail the gate, but it is stale drift that a self-host regen would surface. Drift-owned; flagged only for visibility.",
+          "fix": "Regenerate the self-host bundle (or leave until the M3 0.4.0 milestone stamp lands, per spec §7) — confirm this is the intended deferral, not an oversight."
+        }
+      ]
+    },
+    {
+      "lens": "drift (Drift Sentinel — REVIEW mode)",
+      "summary": "Plan/spec fidelity is high and the selftest is green (224 ok, 212→224 growth). I verified the load-bearing invariants hold: no LLM and zero spawns inside scan.mjs (constitution rules 2/4/5), the scan-target fixture is read as TEXT and never executed (the selftest interrogates scan's DECISION, not fixture output — rule 3), the classification-confirm halt writes-then-exits 0 without chaining into mining, the six version stamps all agree at 0.3.8, and scan.mjs is correctly compiler-side (absent from the emitted manifest; lint-bundle stays green). A live smoke of scan against veriloop itself correctly surfaced verify.mjs shell:true, the .gitignore splice markers, and the golden-fixture surfaces. One real correctness flaw: the two spec-required properties BOUNDED (--max) and RESUMABLE (path cursor) are mutually destructive — capping surfaces permanently drops the un-emitted ones because the cursor marks ALL walked paths scanned regardless of the cap. Latent under the default (max 12 > 7 catalog entries) but a data-loss footgun the moment --max is set below the number of hitting surfaces, which is exactly what --max is for. Two minor doc-drift nits.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/scan.mjs:247,257",
+          "issue": "BOUNDED (--max) and RESUMABLE (scanned_paths cursor) are mutually destructive. The emit loop stops after --max NEW surface blocks (line 247), but the cursor merge unconditionally marks EVERY walked path as scanned (line 257: `for (const p of allPaths) scannedPaths.add(...)`). On a re-run, `fresh` (line 238) is empty because all paths are in the cursor, so any surface that was capped out on the first invocation can never be emitted — it is dropped permanently, not deferred. The spec lists both BOUNDED and RESUMABLE as first-class required behaviors; their intended combination is incremental progress across invocations, not silent permanent loss. Reproduced against veriloop itself: `scan --repo . --out /tmp/vlm.md --max 2` emits 2 surfaces and writes 73 paths to the cursor; a follow-up `--max 12` run reports `0 new this run` and the 3 remaining real surfaces (DB/SQL/RLS, filesystem writes, parity/golden) are never emitted. Latent under the default (max 12 > 7 catalog entries) so the acceptance path passes, but --max is a data-loss footgun in exactly the scenario it exists for.",
+          "fix": "Decouple the cursor from the cap: only mark a path as scanned once ALL its surfaces have been emitted, OR make --max bound paths/evidence processed per invocation (advancing the cursor by that many paths) rather than post-hoc capping emitted blocks. Minimal alternative: when `emitted >= args.max` truncates emission, do NOT add the still-unscanned paths to the cursor so the next run re-collects them. Add a selftest that caps below the surface count and asserts a second run emits the remainder."
+        },
+        {
+          "severity": "NIT",
+          "location": ".claude/veriloop/veriloop-manifest.json:2",
+          "issue": "The self-hosted bundle manifest still stamps `veriloop_version: 0.3.7` while the six canonical stamps moved to 0.3.8. This is consistent with the spec's decision to leave the self-host bundle unregenerated for this slice (scan.mjs is not emitted), so it is not a gate violation — but the committed self-host bundle now lags the compiler by one patch.",
+          "fix": "Acceptable per spec (self-host bundle regenerates when M3's exit criteria land at 0.4.0). No action required for this slice; noted so the lag is intentional, not forgotten."
+        },
+        {
+          "severity": "NIT",
+          "location": "docs/plans/m3-plan.md (implementation note, added line)",
+          "issue": "The added implementation note claims 'the SKILL.md:103 reference to scan-notes.md is now truthful.' SKILL.md phase 3 describes the LLM-driven dev-loop scan writing to `$REPO/.claude/veriloop/scan-notes.md`; deterministic scan.mjs defaults to stdout and its acceptance/selftest write to /tmp — it does not itself write that path by default. The two mechanisms coexist; the note slightly conflates them.",
+          "fix": "Soften the note to state that scan.mjs is the deterministic counterpart of the SKILL.md phase-3 flow, rather than asserting the SKILL.md path reference is fulfilled by this script."
+        }
+      ]
+    }
+  ],
+  "gateHistory": [
+    {
+      "verdict": "CONCERNS",
+      "blockers": 0,
+      "concerns": 5,
+      "waived": 0
+    }
+  ],
+  "crossModel": null,
+  "missingGateJobs": [],
+  "implPreflight": "npm test (the repo's only gate; this project is deliberately dependency-free, so there is no separate lint/typecheck) exit 0 — 224 ok, 0 failed (grew from the 212 baseline). node -c on scripts/scan.mjs and scripts/selftest.mjs exit 0. node scripts/lint-bundle.mjs --bundle <generated> exit 0 (scan.mjs is compiler-side, not emitted; 0 in bundle, 0 in manifest). Acceptance: scan --repo fixtures/scan-target --out /tmp/sn.md exit 0, schema + :line citations present, second run headers==unique (no duplicate headers).",
+  "dryRun": false,
+  "land": {
+    "sha": "7fff18e1a2cc4741dfef788a329665e30fde022e",
+    "pushed": true,
+    "branch": "feat/m3-scan-deep-scan"
+  }
+}
