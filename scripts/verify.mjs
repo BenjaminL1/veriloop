@@ -47,8 +47,8 @@ function parseArgs(argv) {
 
 const hasPlaceholder = (cmd) => /<[^>]+>/.test(cmd);
 
-/** Decide whether/why to run a command, honoring the safe-list. */
-function plan(cat, c, include) {
+/** Decide whether/why to run a command, honoring the safe-list. (Exported so the M3 §3 mined-query contract reuses this rule-6 gate instead of reinventing it.) */
+export function plan(cat, c, include) {
   if (!c || !c.cmd) return { run: false, reason: 'not detected' };
   if (hasPlaceholder(c.cmd)) return { run: false, reason: 'placeholder command (needs a target file/test)' };
   if (c.mutates) return { run: false, reason: 'mutates working tree (formatter without --check)' };
@@ -136,4 +136,8 @@ function main() {
   process.exitCode = failed > 0 ? 1 : 0;
 }
 
-main();
+// Run only when invoked as the entry script — importing plan() (the M3 §3 mined-query
+// execution contract) must NOT trigger a verify run. Compare file URLs without importing
+// url helpers, so this guard adds no line above and keeps every verify.mjs:<line> citation
+// (constitution.md, the §3 spec, m3-plan.md) accurate.
+if (process.argv[1] && new URL(`file://${resolve(process.argv[1])}`).href === import.meta.url) main();

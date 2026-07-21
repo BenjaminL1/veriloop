@@ -14,6 +14,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
+import { compileMinedQuery, runMinedQuery } from './lib/mined-query.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', 'fixtures');
@@ -1384,6 +1385,61 @@ function assert(cond, desc) {
   assert(!/\brequire\s*\(|\bimport\s*\(|\beval\s*\(|\bnew Function\b/.test(mineSrc), 'mine: no dynamic require/import()/eval/Function (the source grep cannot be obfuscation-evaded)');
 
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// --- v0.3.10: M3 §3 — the mined-query EXECUTION CONTRACT (scripts/lib/mined-query.mjs).
+//     mine.mjs stays IN-PROCESS (spawns nothing — asserted in the mine block above); THIS
+//     is the separate, red-teamed contract governing whether/how an UNTRUSTED candidate
+//     may compile to a runnable (spawned) check. Feed it adversarial candidates and assert
+//     REFUSAL — refusal is EXECUTABLE here, never asserted in prose. ---
+{
+  const codeProv = 'scan-surface:shell-string execution'; // a legit code-provenance tag
+
+  // (1) LAUNDERING GUARD (e) — provenance inside a scan-only fixture dir is scan-only
+  //     FOREVER: even a perfectly safe command compiles to NO runnable query (rule 4).
+  const hostile = compileMinedQuery({ provenance: 'fixtures/hostile-ci/hostile.yml:3', command: { cmd: 'grep -rn shell scripts', safety: 'safe' } });
+  assert(hostile.runnable === null, 'mined-query (e): a fixtures/hostile-ci/ candidate compiles to NO runnable query (scan-only forever — rule-4 laundering guard)');
+  assert(/scan-only/.test(hostile.reason), 'mined-query (e): the refusal names the scan-only laundering guard');
+  assert(compileMinedQuery({ provenance: 'docs:fixtures/hostile-ci/x.yml:1', command: { cmd: 'grep -rn x scripts', safety: 'safe' } }).runnable === null, 'mined-query (e): a docs:-tagged path INTO a scan-only dir is still refused (a tag prefix cannot launder)');
+  const hostileRun = runMinedQuery(hostile);
+  assert(hostileRun.ran === false && hostileRun.refused === true, 'mined-query (e): the runner REFUSES a scan-only candidate — it never spawns');
+
+  // (2) TIER GATE (c) — a candidate classifying safety=never / mutates is non-runnable;
+  //     routed through verify.mjs's OWN plan() (rule-6). The runner refuses it.
+  const neverCand = compileMinedQuery({ provenance: 'docs:CLAUDE.md:1', command: { cmd: 'npm run dev', safety: 'never' } });
+  assert(neverCand.runnable === null && /never/.test(neverCand.reason), 'mined-query (c): a safety=never candidate is non-runnable (rule-6 tier gate via verify.mjs plan())');
+  assert(runMinedQuery(neverCand).refused === true, 'mined-query (c): the runner REFUSES a safety=never candidate (non-runnable)');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'npm test' } }).runnable === null, 'mined-query (c): an unclassified command defaults READ-ONLY (ask-tier, not included) → refused');
+
+  // (3) SHELL-INJECTION (a/b) — NO shell string is ever synthesized. Every named vector is
+  //     refused (argv-only); a shell interpreter as argv[0] (`sh -c <str>`) is refused too.
+  for (const cmd of ['grep x scripts ; rm -rf /', 'echo $(whoami)', 'ls `pwd`', 'a && b', 'find . | xargs rm', 'x=1 grep y']) {
+    assert(compileMinedQuery({ provenance: codeProv, command: { cmd, safety: 'safe' } }).runnable === null, `mined-query (a): shell-injection "${cmd}" is refused — never synthesized into a shell string`);
+  }
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'sh -c grep', safety: 'safe' } }).runnable === null, 'mined-query (b): a `sh -c` executable is refused — never hand a string to a shell');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: '/bin/bash -c evil', safety: 'safe' } }).runnable === null, 'mined-query (b): a /bin/bash -c executable is refused (basename shell-interpreter denylist)');
+  // No shell-true option ever reaches spawn — assert on the module's OWN SOURCE (source grep,
+  // like the mine covenant). `\s*` keeps the assertion itself off `grep "shell: *true"`.
+  const mqSrc = readFileSync(join(here, 'lib', 'mined-query.mjs'), 'utf8');
+  assert(!/shell:\s*true/.test(mqSrc), 'mined-query (a): the module source contains no shell-true spawn option (argv-array only by construction)');
+  assert(/shell:\s*false/.test(mqSrc), 'mined-query (a): the runner sets the shell option false (never a shell string)');
+
+  // (4) MUTATING / WRITE candidate → refused (read-only default, rule-6 `mutates`).
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'prettier --write .', safety: 'safe', mutates: true } }).runnable === null, 'mined-query (c): a mutating (write) candidate is refused — read-only default');
+
+  // (5) POSITIVE — a legit safe-tier, code-provenance candidate compiles to a non-null argv
+  //     ARRAY and RUNS read-only (shell-option-false spawn, exit 0).
+  const mqTmp = mkdtempSync(join(tmpdir(), 'veriloop-mq-'));
+  writeFileSync(join(mqTmp, 'code.mjs'), "export const r = () => spawnSync('git', ['status'], { shell: false });\n");
+  const good = compileMinedQuery({ provenance: codeProv, command: { cmd: `grep -rn spawnSync ${mqTmp}`, safety: 'safe' } });
+  assert(Array.isArray(good.runnable) && good.runnable[0] === 'grep' && good.runnable.length === 4, 'mined-query (+): a legit safe-tier code-provenance candidate compiles to a non-null argv ARRAY');
+  const goodRun = runMinedQuery(good, { cwd: mqTmp });
+  assert(goodRun.ran === true && goodRun.refused === false && goodRun.ok === true && goodRun.exit === 0, 'mined-query (+): the compiled argv RUNS read-only via a shell-option-false spawn (exit 0)');
+  rmSync(mqTmp, { recursive: true, force: true });
+
+  // (6) COVENANT (kept) — mine.mjs stays IN-PROCESS; execution lives ONLY in this contract.
+  const mineSrc2 = readFileSync(minePath, 'utf8');
+  assert(!/child_process|\bspawnSync\b|\bexecFile/.test(mineSrc2), 'mined-query: mine.mjs still spawns nothing — the execution contract is the ONLY spawn surface (covenant preserved)');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);
