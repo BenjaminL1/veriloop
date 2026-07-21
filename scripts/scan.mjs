@@ -9,17 +9,25 @@
 // imports, or evals anything from the scanned repo — it reads files as TEXT only.
 // This slice spawns nothing at all (git-history mining is §2, a non-goal).
 //
+// BOUNDED + RESUMABLE, with NO data loss: --max caps NEW surface blocks emitted
+// per invocation; the frontmatter `emitted_surfaces:` cursor records what is
+// already in the doc. Every run re-walks the WHOLE tree and re-collects evidence,
+// then emits up to --max surfaces NOT yet in the cursor — so a surface over the
+// --max budget is DEFERRED to the next run, never dropped. Resume keys on
+// SURFACES, not walked paths: the whole point of a danger scan is to never
+// silently MISS a surface.
+//
 // Usage:
 //   node scan.mjs --repo <path> [--out <file>] [--max <N>]
 //     --repo   repo root to scan (default: cwd)
-//     --out    write scan-notes.md here (default: print to stdout — no cursor)
-//     --max    cap NEW surfaces emitted per invocation (default: 12)
+//     --out    write scan-notes.md here (default: print to stdout — no cursor/resume)
+//     --max    cap NEW surface blocks emitted per invocation (default: 12)
 //
 // scan-notes.md is consumed by mine.mjs (phase 4). This slice scans and STOPS:
 // it NEVER mines, scores, or runs/compiles any nominated check.
 
 import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname, resolve, relative } from 'node:path';
+import { join, dirname, resolve, relative, extname } from 'node:path';
 
 function reqVal(argv, i, flag) {
   const v = argv[i];
@@ -44,8 +52,10 @@ function parseArgs(argv) {
 
 // --- Danger-surface catalog (DETERMINISTIC; v1 scope, extensible). --------------
 // Each entry is matched IN PROCESS — a regex over file text (`line`) and/or over
-// the relative path (`path`). Nothing is ever spawned. The nominated `expert` key
-// MUST be one of SPECIALIST_DEFAULTS (security|drift|ux, generate.mjs:170) so a
+// the relative path (`path`). Nothing is ever spawned. `line` matchers apply ONLY
+// to code files (see CODE_EXTS): matching `shell:true` or `child_process` inside a
+// CHANGELOG or a plan doc is prose noise, not a spawn site. The nominated `expert`
+// key MUST be one of SPECIALIST_DEFAULTS (security|drift|ux, generate.mjs:170) so a
 // nomination maps 1:1 onto applyRosterAdd (generate.mjs:179-210). `uiOnly` entries
 // nominate only when the detected stack has a UI.
 const CATALOG = [
@@ -99,6 +109,19 @@ const CATALOG = [
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 // The one nested skip: .claude/veriloop/.backups (machine backups, not a surface).
 const SKIP_REL = new Set(['.claude/veriloop/.backups']);
+// The scanner's OWN source DEFINES the catalog regexes; scanning it yields
+// self-referential false positives (e.g. the literal `child_process` inside a
+// pattern). Skip it — harmless on any repo that isn't veriloop itself.
+const SKIP_FILES = new Set(['scripts/scan.mjs']);
+
+// `line` (code-pattern) matchers fire only on these extensions. `path` matchers
+// (e.g. *.fixture.json, migrations/) are unaffected and match any path.
+const CODE_EXTS = new Set([
+  '.mjs', '.cjs', '.js', '.mts', '.cts', '.ts', '.tsx', '.jsx', '.vue', '.svelte',
+  '.py', '.rs', '.go', '.rb', '.java', '.kt', '.php', '.c', '.h', '.cpp', '.cc',
+  '.sql', '.sh', '.bash',
+]);
+const isCode = (relPosix) => CODE_EXTS.has(extname(relPosix).toLowerCase());
 
 /** Cheap self-contained UI detection (reads package.json deps; no execution). */
 function stackHasUi(repo) {
@@ -113,8 +136,8 @@ function stackHasUi(repo) {
 
 /**
  * Walk the tree with STABLE (sorted) order — deterministic output is load-bearing
- * for resumability dedup and a non-flaky selftest. Returns relative paths only.
- * Reads nothing here; the caller reads each file as TEXT.
+ * for a non-flaky selftest. Returns relative POSIX paths only. Reads nothing here;
+ * the caller reads each file as TEXT.
  */
 function walk(repo) {
   const out = [];
@@ -128,12 +151,12 @@ function walk(repo) {
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const e of entries) {
       const abs = join(dir, e.name);
-      const rel = relative(repo, abs);
+      const rel = relative(repo, abs).split(/[\\/]/).join('/');
       if (e.isDirectory()) {
         if (SKIP_DIRS.has(e.name) || SKIP_REL.has(rel)) continue;
         recur(abs);
       } else if (e.isFile()) {
-        out.push(rel);
+        if (!SKIP_FILES.has(rel)) out.push(rel);
       }
     }
   };
@@ -141,7 +164,7 @@ function walk(repo) {
   return out;
 }
 
-/** Read a file as text; skip anything unreadable or binary (null byte). */
+/** Read a file as text; skip anything unreadable, oversized, or binary (null byte). */
 function readTextSafe(abs) {
   try {
     if (statSync(abs).size > 2 * 1024 * 1024) return null; // skip huge files
@@ -153,11 +176,15 @@ function readTextSafe(abs) {
   }
 }
 
-const MAX_EVIDENCE_PER_SURFACE = 12;
+// Bounds citations PER SURFACE so one noisy surface can't flood the notes. Kept
+// distinct from the default --max (surface cap) to avoid conflating the two bounds.
+const MAX_EVIDENCE_PER_SURFACE = 8;
 
 /**
- * Collect evidence per catalog surface over the given (not-yet-scanned) paths.
- * @returns Map<surfaceName, string[]>  evidence "path:line" entries (bounded).
+ * Collect evidence per catalog surface over `paths`. `line` matchers fire only on
+ * code files (isCode); `path` matchers fire on any path. Text is read at most once
+ * per file, and only for code files.
+ * @returns Map<surfaceName, string[]>  bounded "path:line" evidence entries.
  */
 function collectEvidence(repo, paths, hasUi) {
   const evidence = new Map();
@@ -165,11 +192,10 @@ function collectEvidence(repo, paths, hasUi) {
     if (entry.uiOnly && !hasUi) continue;
     evidence.set(entry.name, []);
   }
-  for (const rel of paths) {
-    const relPosix = rel.split(/[\\/]/).join('/');
-    const text = readTextSafe(join(repo, rel));
-    if (text === null) continue;
-    const lines = text.split('\n');
+  for (const relPosix of paths) {
+    const code = isCode(relPosix);
+    const text = code ? readTextSafe(join(repo, relPosix)) : null;
+    const lines = text === null ? null : text.split('\n');
     for (const entry of CATALOG) {
       if (entry.uiOnly && !hasUi) continue;
       const hits = evidence.get(entry.name);
@@ -179,8 +205,8 @@ function collectEvidence(repo, paths, hasUi) {
         hits.push(`${relPosix}:1`);
         if (hits.length >= MAX_EVIDENCE_PER_SURFACE) continue;
       }
-      // line match → cite the first matching line(s)
-      if (entry.line) {
+      // line match → cite matching lines (CODE files only)
+      if (entry.line && lines) {
         for (let i = 0; i < lines.length && hits.length < MAX_EVIDENCE_PER_SURFACE; i++) {
           if (entry.line.test(lines[i])) hits.push(`${relPosix}:${i + 1}`);
         }
@@ -190,24 +216,27 @@ function collectEvidence(repo, paths, hasUi) {
   return evidence;
 }
 
-/** Parse an existing scan-notes.md: its scanned_paths cursor + emitted headers. */
+/**
+ * Parse an existing scan-notes.md into the set of already-emitted surface names
+ * (from the `emitted_surfaces:` frontmatter cursor AND the body `## surface:`
+ * headers — belt and suspenders) plus the body to preserve.
+ */
 function parseExisting(text) {
-  const scanned = new Set();
-  const headers = new Set();
+  const emitted = new Set();
   let body = text;
   const fm = text.match(/^---\n([\s\S]*?)\n---\n?/);
   if (fm) {
-    for (const m of fm[1].matchAll(/^\s*-\s+(.+)$/gm)) scanned.add(m[1].trim());
+    for (const m of fm[1].matchAll(/^\s*-\s+(.+)$/gm)) emitted.add(m[1].trim());
     body = text.slice(fm[0].length);
   }
-  for (const m of body.matchAll(/^## surface:\s*(.+)$/gm)) headers.add(m[1].trim());
-  return { scanned, headers, body: body.replace(/^\n+/, '') };
+  for (const m of body.matchAll(/^## surface:\s*(.+)$/gm)) emitted.add(m[1].trim());
+  return { emitted, body: body.replace(/^\n+/, '') };
 }
 
-function renderFrontmatter(scannedPaths) {
-  const sorted = [...scannedPaths].sort();
-  const lines = ['---', 'scanned_paths:'];
-  for (const p of sorted) lines.push(`  - ${p}`);
+function renderFrontmatter(emittedNames) {
+  const sorted = [...emittedNames].sort();
+  const lines = ['---', 'emitted_surfaces:'];
+  for (const n of sorted) lines.push(`  - ${n}`);
   lines.push('---');
   return lines.join('\n');
 }
@@ -226,50 +255,49 @@ function main() {
     return;
   }
 
-  // Resumability: load an existing cursor so a re-run skips completed paths and
-  // adds NO duplicate `## surface:` headers, preserving owner-reviewed content.
-  let prior = { scanned: new Set(), headers: new Set(), body: '' };
-  if (args.out && existsSync(args.out)) {
-    prior = parseExisting(readFileSync(args.out, 'utf8'));
-  }
+  // Resumability: load prior emitted surfaces so a re-run skips completed surfaces
+  // (no duplicate `## surface:` headers) and preserves owner-reviewed content.
+  let prior = { emitted: new Set(), body: '' };
+  if (args.out && existsSync(args.out)) prior = parseExisting(readFileSync(args.out, 'utf8'));
 
   const hasUi = stackHasUi(args.repo);
   const allPaths = walk(args.repo);
-  const fresh = allPaths.filter((p) => !prior.scanned.has(p.split(/[\\/]/).join('/')));
+  // Re-collect over the WHOLE tree every run — this is what makes --max a DEFER,
+  // not a drop: a surface capped out last run is re-found and emitted next run.
+  const evidence = collectEvidence(args.repo, allPaths, hasUi);
 
-  const evidence = collectEvidence(args.repo, fresh, hasUi);
-
-  // Emit a block per catalog surface with >=1 NEW hit whose header is not already
-  // present. BOUNDED: at most --max new surface blocks this invocation.
   const newBlocks = [];
-  let emitted = 0;
+  const newlyEmitted = [];
+  let deferred = 0;
   for (const entry of CATALOG) {
-    if (emitted >= args.max) break;
-    if (prior.headers.has(entry.name)) continue;
+    if (entry.uiOnly && !hasUi) continue;
+    if (prior.emitted.has(entry.name)) continue; // already in the doc — resume past it
     const hits = evidence.get(entry.name);
     if (!hits || hits.length === 0) continue;
+    if (newlyEmitted.length >= args.max) {
+      deferred++; // hit, but over the --max budget → defer to a re-run (never dropped)
+      continue;
+    }
     newBlocks.push(renderSurfaceBlock(entry, hits));
-    emitted++;
+    newlyEmitted.push(entry.name);
   }
 
-  // Merge cursor: every walked path is now scanned.
-  const scannedPaths = new Set(prior.scanned);
-  for (const p of allPaths) scannedPaths.add(p.split(/[\\/]/).join('/'));
-
+  const emittedNames = new Set([...prior.emitted, ...newlyEmitted]);
   const bodyParts = [];
   if (prior.body.trim()) bodyParts.push(prior.body.trimEnd());
   bodyParts.push(...newBlocks);
-  const doc = `${renderFrontmatter(scannedPaths)}\n\n${bodyParts.join('\n\n')}\n`;
+  const doc = `${renderFrontmatter(emittedNames)}\n\n${bodyParts.filter(Boolean).join('\n\n')}\n`;
 
   if (args.out) {
     mkdirSync(dirname(args.out), { recursive: true });
     writeFileSync(args.out, doc);
     console.error(`veriloop scan — ${args.repo}`);
-    console.error(`  scanned ${allPaths.length} files (${fresh.length} new this run), has_ui=${hasUi}`);
-    console.error(`  ${emitted} new surface block(s); ${scannedPaths.size} paths in cursor`);
-    console.error(`  wrote ${args.out}`);
+    console.error(`  ${allPaths.length} files scanned, has_ui=${hasUi}`);
+    console.error(`  ${newlyEmitted.length} new surface block(s); ${emittedNames.size} total in ${args.out}`);
+    if (deferred > 0) console.error(`  ${deferred} more surface(s) hit but deferred by --max ${args.max} — re-run to emit them`);
   } else {
     process.stdout.write(doc);
+    if (deferred > 0) console.error(`\n${deferred} surface(s) deferred by --max ${args.max}; pass --out to persist + resume`);
   }
 
   // CLASSIFICATION-CONFIRM HALT: write scan-notes.md and STOP. Never chain into

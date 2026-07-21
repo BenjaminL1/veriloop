@@ -1123,8 +1123,8 @@ function assert(cond, desc) {
   assert(headers.includes('secret / env handling'), 'scan: emits the secret/env surface (config.mjs process.env.FOO_KEY)');
   assert(headers.includes('parity / golden-fixture surfaces'), 'scan: emits the parity/golden surface (golden.fixture.json)');
 
-  // frontmatter cursor persists the scanned paths.
-  assert(/^---\nscanned_paths:\n(?:\s*-\s+.+\n)+---/m.test(notes), 'scan: frontmatter carries a scanned_paths resumability cursor');
+  // frontmatter cursor persists the emitted surfaces (surface-keyed resume).
+  assert(/^---\nemitted_surfaces:\n(?:\s*-\s+.+\n)+---/m.test(notes), 'scan: frontmatter carries an emitted_surfaces resumability cursor');
 
   // (b) every nomination cites a REAL file:line and names a valid expert key.
   //     Parse each surface block; verify the cited file exists and the line is in range,
@@ -1157,6 +1157,11 @@ function assert(cond, desc) {
   //     shell-string nomination citing run-check.mjs IS the decision-not-execution proof.
   assert(shellCitesRunCheck, 'scan: classified run-check.mjs as shell-string execution — read-and-decided, never executed (rule-4 scan-only covenant)');
 
+  // (e) EVIDENCE-EVICTION FIX: code-pattern (`line`) matchers are scoped to CODE files,
+  //     so the .md prose mention of "shell: true" in notes.md is NOT cited — the real
+  //     code hit (run-check.mjs) survives instead of being evicted by documentation noise.
+  assert(!/^- evidence:\s*notes\.md:/m.test(notes), 'scan: code-pattern surfaces exclude .md prose (notes.md not cited) — real code hit survives, no doc-noise eviction');
+
   // (c) a second run adds NO duplicate surface headers (resumability cursor).
   const r2 = spawnSync(process.execPath, [scanPath, '--repo', target, '--out', out], { encoding: 'utf8' });
   assert(r2.status === 0, 'scan: second run exits 0 (resumable)');
@@ -1164,7 +1169,21 @@ function assert(cond, desc) {
   const headers2 = (notes2.match(/^## surface:/gm) || []).length;
   const uniqueHeaders2 = new Set((notes2.match(/^## surface:\s*(.+)$/gm) || [])).size;
   assert(headers2 === uniqueHeaders2, 'scan: a second run adds NO duplicate surface headers (header count === unique count)');
-  assert(headers2 === headers.length, 'scan: a second run adds NO new surface blocks at all (cursor skips completed paths)');
+  assert(headers2 === headers.length, 'scan: a second run adds NO new surface blocks at all (cursor skips completed surfaces)');
+
+  // (f) --max DEFERS, never DROPS: cap at 1 surface/run over a FRESH doc; each run
+  //     emits the NEXT surface, prior surfaces preserved, none lost. This is the
+  //     security-tool invariant — never silently miss a surface (the earlier path-keyed
+  //     cursor DROPPED capped-out surfaces; under it this progression was 1→1→1).
+  const out3 = join(tmp, 'scan-max1.md');
+  const progression = [];
+  for (let k = 0; k < 3; k++) {
+    spawnSync(process.execPath, [scanPath, '--repo', target, '--out', out3, '--max', '1'], { encoding: 'utf8' });
+    progression.push((readFileSync(out3, 'utf8').match(/^## surface:/gm) || []).length);
+  }
+  assert(progression.join('→') === '1→2→3', `scan: --max 1 DEFERS surfaces across re-runs (1→2→3, none dropped) — got ${progression.join('→')}`);
+  const finalNames = new Set((readFileSync(out3, 'utf8').match(/^## surface:\s*(.+)$/gm) || []));
+  assert(finalNames.size === 3, 'scan: after --max-1 re-runs every fixture surface is emitted exactly once (no loss, no duplication)');
 
   rmSync(tmp, { recursive: true, force: true });
 }
