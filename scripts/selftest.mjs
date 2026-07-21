@@ -1261,6 +1261,59 @@ function assert(cond, desc) {
   assert(dropRun.status === 0, 'mine: exits 0 even when every candidate is dropped');
   assert(JSON.parse(readFileSync(dropOut, 'utf8')).candidates.length === 0, 'mine: a candidate with only 1 citation is DROPPED (witness-or-drop, <2 citations)');
 
+  // (k) HYPOTHESIS-DROP by ratio: a surface whose invariant holds at only 3 of 7 sites
+  //     (ratio 0.43 < 0.9) is a hypothesis, not an invariant — DROPPED even though it has
+  //     ≥2 conforming citations. Locks the deterministic re-verification gate (mine.mjs:309),
+  //     the branch that the 1-citation case above can never exercise.
+  const mixRepo = join(fixtures, 'mine-drop');
+  const mixNotes = join(tmp, 'mix-notes.md');
+  const mixScan = spawnSync(process.execPath, [scanPath, '--repo', mixRepo, '--out', mixNotes], { encoding: 'utf8' });
+  assert(mixScan.status === 0, 'mine: scan.mjs nominates the shell surface for fixtures/mine-drop (real pipeline)');
+  const mixOut = join(tmp, 'mix-mined.json');
+  const mixRun = spawnSync(process.execPath, [minePath, '--repo', mixRepo, '--scan', mixNotes, '--out', mixOut], { encoding: 'utf8' });
+  assert(mixRun.status === 0, 'mine: exits 0 on the mixed-conformance repo');
+  assert(JSON.parse(readFileSync(mixOut, 'utf8')).candidates.length === 0, 'mine: a surface conforming at only 3/7 sites (ratio < 0.9) is DROPPED as a hypothesis, not surfaced as an invariant');
+
+  // (l) PROTOTYPE-KEY SAFETY: a scan-notes surface literally named "__proto__" / "constructor"
+  //     must not crash the MINE_QUERIES lookup (Object.hasOwn guard, mine.mjs:297) — a bracket
+  //     lookup would otherwise return an inherited function and blow up verify().
+  const protoNotes = join(tmp, 'proto-notes.md');
+  writeFileSync(protoNotes, '## surface: __proto__\n- evidence: only.mjs:1\n- nominates: expert=security | rule="x"\n\n## surface: constructor\n- evidence: only.mjs:1\n- nominates: expert=security | rule="y"\n');
+  const protoOut = join(tmp, 'proto-mined.json');
+  const protoRun = spawnSync(process.execPath, [minePath, '--repo', dropRepo, '--scan', protoNotes, '--out', protoOut], { encoding: 'utf8' });
+  assert(protoRun.status === 0, 'mine: a surface named "__proto__"/"constructor" does not crash the query lookup (prototype-key guard)');
+  assert(JSON.parse(readFileSync(protoOut, 'utf8')).candidates.length === 0, 'mine: a prototype-key surface yields 0 candidates (no OWN query → refused, not inherited)');
+
+  // (m) POPULATED corpus_sha — readHeadSha resolves HEAD both in a normal repo (.git is a DIR)
+  //     and in a linked WORKTREE (.git is a FILE → gitdir), the layout self-host actually runs
+  //     under. Regression lock: the worktree path returned null before the fix, blanking
+  //     confirmed_at_sha on every real run. corpus_sha resolves regardless of candidate count.
+  const shaDir = 'a'.repeat(40);
+  const dirRepo = join(tmp, 'sha-dir');
+  mkdirSync(join(dirRepo, '.git', 'refs', 'heads'), { recursive: true });
+  writeFileSync(join(dirRepo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  writeFileSync(join(dirRepo, '.git', 'refs', 'heads', 'main'), shaDir + '\n');
+  writeFileSync(join(dirRepo, 'note.txt'), 'no rule-shaped prose here\n');
+  const dirNotes = join(tmp, 'sha-dir-notes.md');
+  writeFileSync(dirNotes, '---\nemitted_surfaces: []\n---\n');
+  const dirShaOut = join(tmp, 'sha-dir-mined.json');
+  const dirShaRun = spawnSync(process.execPath, [minePath, '--repo', dirRepo, '--scan', dirNotes, '--out', dirShaOut], { encoding: 'utf8' });
+  assert(dirShaRun.status === 0 && JSON.parse(readFileSync(dirShaOut, 'utf8')).corpus_sha === shaDir, 'mine: corpus_sha resolves HEAD in a normal .git-dir repo (populated-sha path)');
+
+  const shaWt = 'b'.repeat(40);
+  const wtRepo = join(tmp, 'sha-wt');
+  const wtGitdir = join(tmp, 'sha-wt-gitdir');
+  mkdirSync(wtRepo, { recursive: true });
+  mkdirSync(join(wtGitdir, 'refs', 'heads'), { recursive: true });
+  writeFileSync(join(wtRepo, '.git'), `gitdir: ${wtGitdir}\n`); // .git is a FILE (linked worktree)
+  writeFileSync(join(wtGitdir, 'HEAD'), 'ref: refs/heads/wt\n');
+  writeFileSync(join(wtGitdir, 'refs', 'heads', 'wt'), shaWt + '\n');
+  const wtNotes = join(tmp, 'sha-wt-notes.md');
+  writeFileSync(wtNotes, '---\nemitted_surfaces: []\n---\n');
+  const wtShaOut = join(tmp, 'sha-wt-mined.json');
+  const wtShaRun = spawnSync(process.execPath, [minePath, '--repo', wtRepo, '--scan', wtNotes, '--out', wtShaOut], { encoding: 'utf8' });
+  assert(wtShaRun.status === 0 && JSON.parse(readFileSync(wtShaOut, 'utf8')).corpus_sha === shaWt, 'mine: corpus_sha resolves HEAD via a .git-FILE linked worktree (the self-host layout; was null before the fix)');
+
   // (j) SPAWNS-NOTHING covenant — assert on mine.mjs's OWN SOURCE (§3(b): in-process only).
   const mineSrc = readFileSync(minePath, 'utf8');
   assert(!/child_process/.test(mineSrc), 'mine: source never references child_process (imports node:fs + node:path only)');

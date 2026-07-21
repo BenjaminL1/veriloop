@@ -82,6 +82,13 @@ const DOCS_KEYWORDS = [
   { kw: /\benv\b|\bsecret\b|\btoken\b|\bcredential/i, surface: 'secret / env handling' },
 ];
 
+// The owner tag from scan-notes is untrusted; a candidate's owner must be a real roster
+// expert (bench-score §6 consumes it). Unknown → fall back to the query's own owner.
+const ALLOWED_OWNERS = new Set(['security', 'drift', 'ux', 'code-review']);
+// Cap emitted citations per candidate so mined.json stays reviewable on a large repo; the
+// TRUE conforming/violating/site counts are always kept in `conformance`.
+const MAX_CITATIONS = 20;
+
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 const SKIP_REL = new Set(['.claude/veriloop/.backups']);
 // mine.mjs and scan.mjs DEFINE these regexes; scanning them yields self-referential
@@ -140,17 +147,41 @@ function readTextSafe(abs) {
  */
 function readHeadSha(repo) {
   try {
-    const head = readFileSync(join(repo, '.git', 'HEAD'), 'utf8').trim();
+    const dotgit = join(repo, '.git');
+    // .git is a DIRECTORY (normal clone) or a FILE `gitdir: <path>` (worktree/submodule).
+    // veriloop self-hosts inside isolated worktrees, so the file layout is the common case.
+    let gitdir;
+    if (statSync(dotgit).isDirectory()) {
+      gitdir = dotgit;
+    } else {
+      const m = readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/);
+      if (!m) return null;
+      gitdir = resolve(repo, m[1].trim());
+    }
+    // Worktrees keep HEAD in their own gitdir but share refs via the commondir.
+    let commondir = gitdir;
+    try {
+      commondir = resolve(gitdir, readFileSync(join(gitdir, 'commondir'), 'utf8').trim());
+    } catch { /* single repo — no commondir */ }
+    const head = readFileSync(join(gitdir, 'HEAD'), 'utf8').trim();
+    if (/^[0-9a-f]{40}$/.test(head)) return head; // detached HEAD
     const ref = head.match(/^ref:\s*(.+)$/);
-    if (!ref) return /^[0-9a-f]{7,40}$/.test(head) ? head : null; // detached HEAD
+    if (!ref) return null;
     const refRel = ref[1].trim();
-    const looseRef = join(repo, '.git', refRel);
-    if (existsSync(looseRef)) return readFileSync(looseRef, 'utf8').trim();
-    const packed = join(repo, '.git', 'packed-refs');
-    if (existsSync(packed)) {
-      for (const line of readFileSync(packed, 'utf8').split('\n')) {
-        const m = line.match(/^([0-9a-f]{40})\s+(.+)$/);
-        if (m && m[2] === refRel) return m[1];
+    for (const base of [gitdir, commondir]) {
+      const loose = join(base, refRel);
+      if (existsSync(loose)) {
+        const s = readFileSync(loose, 'utf8').trim();
+        if (/^[0-9a-f]{40}$/.test(s)) return s;
+      }
+    }
+    for (const base of [commondir, gitdir]) {
+      const packed = join(base, 'packed-refs');
+      if (existsSync(packed)) {
+        for (const line of readFileSync(packed, 'utf8').split('\n')) {
+          const m = line.match(/^([0-9a-f]{40})\s+(.+)$/);
+          if (m && m[2] === refRel) return m[1];
+        }
       }
     }
     return null;
@@ -259,9 +290,12 @@ function main() {
   const candidates = [];
   const seenRules = new Set();
   for (const seed of seeds) {
+    // Object.hasOwn guards the untrusted scan-notes trust boundary: a `## surface:` name
+    // that is a prototype key (__proto__, constructor, toString, …) would otherwise return
+    // an inherited value from a bracket lookup and crash verify(). No OWN query here →
+    // the candidate cannot compile to a falsifiable check → refuse (skip).
+    if (!Object.hasOwn(MINE_QUERIES, seed.surface)) continue;
     const query = MINE_QUERIES[seed.surface];
-    // Refuse unfalsifiable: no compiled query → the candidate cannot fail a check.
-    if (!query) continue;
     if (seenRules.has(query.rule)) continue; // dedupe implied/redundant candidates
 
     const { citations, conforming, violating } = verify(args.repo, paths, query);
@@ -277,9 +311,9 @@ function main() {
     seenRules.add(query.rule);
     candidates.push({
       rule: query.rule,
-      owner: seed.owner || query.owner,
+      owner: ALLOWED_OWNERS.has(seed.owner) ? seed.owner : query.owner,
       provenance: seed.provenance,
-      citations,
+      citations: citations.slice(0, MAX_CITATIONS),
       conformance: { ratio, conforming, violating, sites },
       confirmed_at_sha: corpusSha,
       confirmed_by: null, // owner-gated — never set by this run
@@ -290,7 +324,8 @@ function main() {
   // Ranking (cheap in-process proxy): citation count, then distinct-file spread.
   // Author/commit-diversity via git blame is git-history → DEFERRED.
   candidates.sort((a, b) => {
-    if (b.citations.length !== a.citations.length) return b.citations.length - a.citations.length;
+    // rank by the TRUE conforming-site count (citations are capped for output)
+    if (b.conformance.conforming !== a.conformance.conforming) return b.conformance.conforming - a.conformance.conforming;
     const spread = (c) => new Set(c.citations.map((x) => x.split(':')[0])).size;
     const sb = spread(b), sa = spread(a);
     if (sb !== sa) return sb - sa;
