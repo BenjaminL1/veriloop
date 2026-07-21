@@ -21,6 +21,7 @@ const verifyPath = join(here, 'verify.mjs');
 const generatePath = join(here, 'generate.mjs');
 const lintPath = join(here, 'lint-bundle.mjs');
 const scanPath = join(here, 'scan.mjs');
+const minePath = join(here, 'mine.mjs');
 
 let pass = 0;
 let fail = 0;
@@ -1184,6 +1185,87 @@ function assert(cond, desc) {
   assert(progression.join('→') === '1→2→3', `scan: --max 1 DEFERS surfaces across re-runs (1→2→3, none dropped) — got ${progression.join('→')}`);
   const finalNames = new Set((readFileSync(out3, 'utf8').match(/^## surface:\s*(.+)$/gm) || []));
   assert(finalNames.size === 3, 'scan: after --max-1 re-runs every fixture surface is emitted exactly once (no loss, no duplication)');
+
+  rmSync(tmp, { recursive: true, force: true });
+}
+
+// --- v0.3.9: phase-4 constitution mining (scripts/mine.mjs, IN-PROCESS core).
+//     Drive the REAL pipeline end-to-end — run scan.mjs to produce the notes, then
+//     mine.mjs to re-verify candidates IN PROCESS against fixtures/mine-target/ and
+//     emit mined.json. The harness may spawnSync node; the ASSERTION under test is
+//     that mine.mjs's OWN source spawns nothing (grepped below). ---
+{
+  const target = join(fixtures, 'mine-target');
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-mine-'));
+  const notes = join(tmp, 'scan-notes.md'); // TMP, never inside fixtures/ (would self-scan)
+  const out = join(tmp, 'mined.json');
+
+  const scanRun = spawnSync(process.execPath, [scanPath, '--repo', target, '--out', notes], { encoding: 'utf8' });
+  assert(scanRun.status === 0, 'mine: scan.mjs produces scan-notes.md for fixtures/mine-target (real pipeline, not a stub)');
+
+  const mineRun = spawnSync(process.execPath, [minePath, '--repo', target, '--scan', notes, '--out', out], { encoding: 'utf8' });
+  assert(mineRun.status === 0, 'mine: exits 0 on fixtures/mine-target (write-then-halt)');
+  assert(/review mined\.json — the owner confirms which candidates become rules/.test(mineRun.stdout || ''), 'mine: prints the owner-confirm halt (proposes, never confirms the constitution)');
+
+  const mined = JSON.parse(readFileSync(out, 'utf8'));
+  const cands = mined.candidates;
+
+  // (a) ONE real invariant (≥5 conforming sites) mines to exactly one candidate.
+  assert(cands.length === 1, 'mine: mine-target yields exactly ONE candidate (the code-backed invariant; the prose-only doc yields none)');
+
+  // (b) that candidate carries conformance ≥0.9, ≥2 citations, correct owner + provenance.
+  const c0 = cands[0] || {};
+  assert(c0.conformance && c0.conformance.ratio >= 0.9, `mine: candidate conformance ratio ≥0.9 (got ${c0.conformance && c0.conformance.ratio})`);
+  assert(c0.conformance && c0.conformance.sites >= 5, 'mine: candidate re-verified over ≥5 sites (invariant, not hypothesis)');
+  assert(Array.isArray(c0.citations) && c0.citations.length >= 2, 'mine: candidate ships ≥2 real file:line citations (witness-or-drop)');
+  assert(c0.owner === 'security', "mine: candidate owner === 'security' (from the scan nomination's expert key)");
+  assert(c0.provenance === 'scan-surface:shell-string execution', "mine: candidate provenance === 'scan-surface:shell-string execution'");
+
+  // (c) governance metadata is present but owner-gated fields stay EMPTY (not this run).
+  assert('confirmed_at_sha' in c0 && c0.confirmed_by === null && c0.ratification === null, 'mine: confirmed_by / ratification left EMPTY — owner-confirmation is not this run');
+
+  // (d) acceptance invariant: EVERY candidate has ≥2 citations + a numeric conformance ratio.
+  assert(cands.every((r) => r.citations.length >= 2 && typeof r.conformance.ratio === 'number'), 'mine: every candidate has ≥2 citations + a conformance ratio (no naked prose survives)');
+
+  // (e) citations are repo-RELATIVE — no absolute paths leak into the artifact (rule 7).
+  const allCites = cands.flatMap((r) => r.citations);
+  assert(allCites.every((x) => !x.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(x)), 'mine: every citation is repo-relative (no absolute path in mined.json)');
+
+  // (f) each cited file:line is REAL and in range (re-verified in process, never trusted from prose).
+  let allReal = allCites.length > 0;
+  for (const cite of allCites) {
+    const m = cite.match(/^(.+):(\d+)$/);
+    if (!m) { allReal = false; continue; }
+    const abs = join(target, m[1]);
+    if (!existsSync(abs)) { allReal = false; continue; }
+    const n = readFileSync(abs, 'utf8').split('\n').length;
+    if (!(parseInt(m[2], 10) >= 1 && parseInt(m[2], 10) <= n)) allReal = false;
+  }
+  assert(allReal, 'mine: every citation names a REAL in-range file:line (deterministic in-process re-verification)');
+
+  // (g) the PROSE-ONLY doc claim ("always write clean code") produces no candidate.
+  assert(cands.every((r) => !r.provenance.startsWith('docs:')), 'mine: the prose-only doc claim yields 0 candidates (unfalsifiable-refusal)');
+
+  // (h) fixtures/mine-target has no .git → corpus_sha resolves gracefully to null (never crashes).
+  assert(mined.corpus_sha === null, 'mine: corpus_sha is null when --repo has no .git (graceful, no git spawned)');
+
+  // (i) WITNESS-OR-DROP: a surface with only ONE conforming citation is DROPPED.
+  //     Synthesize a minimal repo + hand-written notes so the query finds a single site.
+  const dropRepo = join(tmp, 'drop-repo');
+  mkdirSync(dropRepo, { recursive: true });
+  writeFileSync(join(dropRepo, 'only.mjs'), 'export const x = 1;\nconst r = call(a, b, { shell: false });\n');
+  const dropNotes = join(tmp, 'drop-notes.md');
+  writeFileSync(dropNotes, '---\nemitted_surfaces:\n  - shell-string execution\n---\n\n## surface: shell-string execution\n- evidence: only.mjs:2\n- nominates: expert=security | rule="never synthesize shell strings"\n');
+  const dropOut = join(tmp, 'drop-mined.json');
+  const dropRun = spawnSync(process.execPath, [minePath, '--repo', dropRepo, '--scan', dropNotes, '--out', dropOut], { encoding: 'utf8' });
+  assert(dropRun.status === 0, 'mine: exits 0 even when every candidate is dropped');
+  assert(JSON.parse(readFileSync(dropOut, 'utf8')).candidates.length === 0, 'mine: a candidate with only 1 citation is DROPPED (witness-or-drop, <2 citations)');
+
+  // (j) SPAWNS-NOTHING covenant — assert on mine.mjs's OWN SOURCE (§3(b): in-process only).
+  const mineSrc = readFileSync(minePath, 'utf8');
+  assert(!/child_process/.test(mineSrc), 'mine: source never references child_process (imports node:fs + node:path only)');
+  assert(!/\bspawnSync\b|\bexecSync\b|\bexecFileSync\b|\bspawn\s*\(|\bexec\s*\(/.test(mineSrc), 'mine: source contains no spawn/exec call (spawns nothing)');
+  assert(!/shell:\s*true/.test(mineSrc), 'mine: source contains no shell:true options object (danger regex is fragment-assembled)');
 
   rmSync(tmp, { recursive: true, force: true });
 }

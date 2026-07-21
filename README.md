@@ -166,8 +166,10 @@ skills/veriloop/SKILL.md            the pipeline runbook (LLM orchestration)
 scripts/detect.mjs                  phase 1 — command-surface detection
 scripts/verify.mjs                  phase 2 — safe-list smoke-run
 scripts/generate.mjs                phases 6/7 — generate + wire the gate
+scripts/scan.mjs                    phase 3 — deep scan of danger surfaces (compiler-side; not emitted)
+scripts/mine.mjs                    phase 4 — constitution mining, in-process core (compiler-side; not emitted)
 scripts/lint-bundle.mjs             phase 8 — artifact lint
-scripts/selftest.mjs                deterministic self-test (asserts detect/verify/generate on fixtures)
+scripts/selftest.mjs                deterministic self-test (asserts detect/verify/generate/scan/mine on fixtures)
 scripts/templates/dev-loop.template.js   the portable workflow machinery
 scripts/lib/                        detectors, parsers (toml/makefile/ci), roster, renderers
 fixtures/                           fixture repos exercised by the self-test
