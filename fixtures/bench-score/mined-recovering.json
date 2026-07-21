@@ -1,0 +1,34 @@
+{
+  "corpus_sha": "fixturesha0000000000000000000000000000000",
+  "candidates": [
+    {
+      "rule": "child-process spawns pass an argv array with the shell option false — never a synthesized shell string",
+      "owner": "security",
+      "provenance": "scan-surface:shell-string execution",
+      "citations": ["scripts/verify.mjs:64", "scripts/lib/mined-query.mjs:80"],
+      "conformance": { "ratio": 1.0, "conforming": 5, "violating": 0, "sites": 5, "distinctFiles": 5 }
+    },
+    {
+      "rule": "process environment values are never written to a console call — secrets stay out of logs",
+      "owner": "security",
+      "provenance": "docs:CLAUDE.md:12",
+      "citations": ["scripts/detect.mjs:12"],
+      "conformance": { "ratio": 0.95, "conforming": 19, "violating": 1, "sites": 20, "distinctFiles": 6 }
+    },
+    {
+      "rule": "the gate runs on real exit codes — the selftest must pass",
+      "owner": "code-review",
+      "provenance": "docs:docs/plans/m3-plan.md:14",
+      "citations": ["scripts/selftest.mjs:1", "scripts/verify.mjs:136"],
+      "conformance": { "ratio": 1.0, "conforming": 8, "violating": 0, "sites": 8, "distinctFiles": 4 }
+    },
+    {
+      "rule": "emitted artifacts carry no absolute filesystem paths — portable generated files only",
+      "owner": "drift",
+      "provenance": "scan-surface:portability",
+      "citations": ["scripts/lint-bundle.mjs:94"],
+      "conformance": { "ratio": 0.92, "conforming": 11, "violating": 1, "sites": 12, "distinctFiles": 3 }
+    }
+  ],
+  "note": "review mined.json — the owner confirms which candidates become rules"
+}

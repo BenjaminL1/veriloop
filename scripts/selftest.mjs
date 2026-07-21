@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { compileMinedQuery, runMinedQuery } from './lib/mined-query.mjs';
+import { parseGoldRules, scoreRecovery } from './bench-score.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', 'fixtures');
@@ -23,6 +24,7 @@ const generatePath = join(here, 'generate.mjs');
 const lintPath = join(here, 'lint-bundle.mjs');
 const scanPath = join(here, 'scan.mjs');
 const minePath = join(here, 'mine.mjs');
+const benchScorePath = join(here, 'bench-score.mjs');
 
 let pass = 0;
 let fail = 0;
@@ -1468,6 +1470,70 @@ function assert(cond, desc) {
   ]) {
     assert(compileMinedQuery({ provenance: prov, command: { cmd: 'grep -rn x .', safety: 'safe' } }).runnable === null, `mined-query (e): a normalized scan-only provenance "${prov}" is still refused (case/slash/backslash cannot launder)`);
   }
+}
+
+// --- v0.3.11: M3 §6 — the held-out gold benchmark SCORER (scripts/bench-score.mjs).
+//     The SCORER + its FIXTURE selftest only; the actual gold RUN (scoring the frozen
+//     Torevan gold, publishing ≥12/14) is OWNER-GATED and OUT OF SCOPE — these fixtures
+//     are SYNTHETIC (a hand-written gold md + hand-written mined.json), never the real
+//     gold. Exercise the scorer end-to-end (real exit codes, constitution rule 1) AND
+//     unit-test the matcher (fine-grained per-rule verdicts). ---
+{
+  const goldPath = join(fixtures, 'bench-score', 'gold-constitution.md');
+  const recoveringPath = join(fixtures, 'bench-score', 'mined-recovering.json');
+  const underPath = join(fixtures, 'bench-score', 'mined-under.json');
+  const goldMd = readFileSync(goldPath, 'utf8');
+
+  // (0) the fixture gold parses to exactly 5 numbered rules (top-level `N.` items).
+  const goldRules = parseGoldRules(goldMd);
+  assert(goldRules.length === 5 && goldRules.map((r) => r.n).join(',') === '1,2,3,4,5', `bench-score: fixture gold parses to 5 numbered rules (got ${goldRules.length})`);
+
+  // (1) ACCEPTANCE — the recovering mined.json recovers ≥ threshold (4/5 = 0.8) ⇒ EXIT 0.
+  const rec = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath], { encoding: 'utf8' });
+  assert(rec.status === 0, `bench-score (+): a mined.json recovering ≥ threshold EXITS 0 (got ${rec.status})`);
+  assert(/recovered 4\/5/.test(rec.stdout) && /PASS/.test(rec.stdout), 'bench-score (+): the table reports recovered 4/5 → PASS');
+
+  // (2) ACCEPTANCE — the under-threshold mined.json recovers < threshold (2/5) ⇒ EXIT nonzero.
+  const und = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', underPath], { encoding: 'utf8' });
+  assert(und.status !== 0, `bench-score (−): a mined.json recovering < threshold EXITS nonzero (got ${und.status})`);
+  assert(/recovered 2\/5/.test(und.stdout) && /FAIL/.test(und.stdout), 'bench-score (−): the table reports recovered 2/5 → FAIL');
+
+  // (3) MATCHER — the recovering set: 4 recovered (each a text match WITH a well-formed
+  //     citation), rule 5 unmatched (no candidate names it).
+  const recScore = scoreRecovery(goldMd, JSON.parse(readFileSync(recoveringPath, 'utf8')), 0.8);
+  assert(recScore.recovered === 4 && recScore.total === 5 && recScore.pass === true, `bench-score: recovering scores recovered 4/5, pass=true (got ${recScore.recovered}/${recScore.total}, pass=${recScore.pass})`);
+  assert(recScore.results.find((r) => r.n === 5)?.reason === 'unmatched', 'bench-score: gold rule 5 (no candidate) is MISSED as unmatched');
+  assert(recScore.results.filter((r) => r.recovered).every((r) => typeof r.citation === 'string'), 'bench-score: every recovered rule records the well-formed citation that recovered it');
+
+  // (4) CITATION IS REQUIRED — the under set proves a keyword text-match WITHOUT a valid
+  //     file:line citation counts MISSED (the discipline is "cite real code", not "text
+  //     matches"). rule 3 = a malformed citation string (no :line); rule 4 = empty citations.
+  const undScore = scoreRecovery(goldMd, JSON.parse(readFileSync(underPath, 'utf8')), 0.8);
+  assert(undScore.recovered === 2 && undScore.pass === false, `bench-score: under-threshold scores recovered 2/5, pass=false (got ${undScore.recovered}/${undScore.total}, pass=${undScore.pass})`);
+  const u1 = undScore.results.find((r) => r.n === 1);
+  const u3 = undScore.results.find((r) => r.n === 3);
+  const u4 = undScore.results.find((r) => r.n === 4);
+  assert(u1?.recovered === true, 'bench-score: a candidate with a well-formed citation DOES recover its rule (control)');
+  assert(u3?.recovered === false && u3?.reason === 'matched-without-valid-citation', 'bench-score: rule 3 — matched by keywords but citation lacks :line ⇒ MISSED (citation required, not just text match)');
+  assert(u4?.recovered === false && u4?.reason === 'matched-without-valid-citation', 'bench-score: rule 4 — matched by keywords but citations[] empty ⇒ MISSED');
+
+  // (5) THRESHOLD PARAM GATES — the same recovering set (4/5 = 0.8) passes at 0.8 but FAILS
+  //     at 0.85, proving --threshold actually drives the verdict (not a hardcoded 0.8).
+  assert(scoreRecovery(goldMd, JSON.parse(readFileSync(recoveringPath, 'utf8')), 0.8).pass === true, 'bench-score: 4/5 passes at threshold 0.8 (>= boundary)');
+  assert(scoreRecovery(goldMd, JSON.parse(readFileSync(recoveringPath, 'utf8')), 0.85).pass === false, 'bench-score: 4/5 FAILS at threshold 0.85 — the threshold parameter gates the verdict');
+
+  // (6) IN-PROCESS COVENANT — bench-score is compiler-side and spawns NOTHING (no LLM/
+  //     network/git). Assert on its OWN SOURCE (source grep, like the mine covenant).
+  const bsSrc = readFileSync(benchScorePath, 'utf8');
+  assert(!/child_process|\bspawnSync\b|\bexecFile|\bexec\s*\(/.test(bsSrc), 'bench-score: source spawns nothing (no child_process/spawnSync/execFile — reads the two given files as TEXT)');
+  const bsImports = [...bsSrc.matchAll(/^import\s+.*?from\s+'([^']+)';/gm)].map((m) => m[1]);
+  assert(bsImports.length >= 1 && bsImports.every((s) => s === 'node:fs' || s === 'node:path' || s === 'node:url'), `bench-score: imports are a subset of node:fs/node:path/node:url (got ${bsImports.join(', ')})`);
+
+  // (7) COMPILER-SIDE (NOT emitted) — like scan/mine, bench-score is never referenced by
+  //     the generator or the emitted template, so lint-bundle never sees it in a bundle.
+  const genSrc = readFileSync(generatePath, 'utf8');
+  const tmplSrc = readFileSync(join(here, 'templates', 'dev-loop.template.js'), 'utf8');
+  assert(!/bench-score/.test(genSrc) && !/bench-score/.test(tmplSrc), 'bench-score: unreferenced by generate.mjs and the emitted template (compiler-side, not emitted)');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);
