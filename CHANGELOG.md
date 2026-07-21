@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.8 — 2026-07-20
+- Phase-3 deep scan (`scripts/scan.mjs`, M3 §1). A new DETERMINISTIC compiler-side script (sibling of detect/verify/generate; NOT emitted into target bundles) walks a repo's danger surfaces from a hardcoded pattern catalog and emits `scan-notes.md` — one `## surface:` block per surface with real `file:line` evidence and an expert nomination (`security|drift|ux`, restricted to `SPECIALIST_DEFAULTS` so each maps 1:1 onto `applyRosterAdd`) — then STOPS for owner classification-confirm. No LLM inside scan (constitution rule 2); SCAN-ONLY covenant (rule 4/5) — it reads files as TEXT only and spawns nothing (git-history mining is §2). Bounded (`--max`, default 12) and resumable (a `scanned_paths:` frontmatter cursor; a re-run skips completed paths and adds no duplicate headers, preserving owner-reviewed content). This slice scans and stops: it never mines, scores, or runs/compiles any nominated check. New `fixtures/scan-target/` (shell:true, `process.env.FOO_KEY`, a `*.fixture.json`) + selftest interrogate scan's DECISION (the fixture is input, never executed).
+
 ## 0.3.7 — 2026-07-17
 - Emitted text is host-hook-clean: the persona ground-rules line carried a trailing space, which a host repo's pre-commit trailing-whitespace hook rejected (discovered installing into catan_rl_v2 — the hook auto-fixed machine-owned files, which would flap on every regen, the same class as the M1 prettier lesson). Fixed at the renderer; a selftest now generates a bundle and asserts NO emitted file carries trailing whitespace.
 

@@ -20,6 +20,7 @@ const fixtures = join(here, '..', 'fixtures');
 const verifyPath = join(here, 'verify.mjs');
 const generatePath = join(here, 'generate.mjs');
 const lintPath = join(here, 'lint-bundle.mjs');
+const scanPath = join(here, 'scan.mjs');
 
 let pass = 0;
 let fail = 0;
@@ -1099,6 +1100,73 @@ function assert(cond, desc) {
   const listBody = listMatch ? listMatch[1] : '';
   assert(['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md'].every((c) => listBody.includes(`'${c}'`)), 'lint-bundle: the single command constant covers all four commands');
   assert(!/\[\s*'dev-loop\.md'\s*,\s*'advise\.md'\s*,\s*'review\.md'\s*\]/.test(lintSrc), 'lint-bundle: no remaining hardcoded [dev-loop, advise, review] array — every check references EMITTED_COMMANDS');
+}
+
+// --- v0.3.8: phase-3 deep scan (scripts/scan.mjs). Drive scan over the
+//     fixtures/scan-target/ INPUT and interrogate its DECISION (the ci-adopt
+//     rule-3 discipline: the fixture supplies input, the assertions interrogate
+//     scan's classification — scan NEVER executes fixture content). ---
+{
+  const target = join(fixtures, 'scan-target');
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-scan-'));
+  const out = join(tmp, 'scan-notes.md'); // TMP, never inside fixtures/ (would self-scan)
+
+  const r1 = spawnSync(process.execPath, [scanPath, '--repo', target, '--out', out], { encoding: 'utf8' });
+  assert(r1.status === 0, 'scan: exits 0 on fixtures/scan-target (write-then-halt)');
+  assert(/review scan-notes\.md, then run mine\.mjs/.test(r1.stderr || ''), 'scan: prints the classification-confirm halt (never chains into mining)');
+
+  const notes = existsSync(out) ? readFileSync(out, 'utf8') : '';
+
+  // (a) expected `## surface:` blocks are emitted for the fixture's known surfaces.
+  const headers = (notes.match(/^## surface:\s*(.+)$/gm) || []).map((h) => h.replace(/^## surface:\s*/, '').trim());
+  assert(headers.includes('shell-string execution'), 'scan: emits the shell-string execution surface (run-check.mjs shell:true)');
+  assert(headers.includes('secret / env handling'), 'scan: emits the secret/env surface (config.mjs process.env.FOO_KEY)');
+  assert(headers.includes('parity / golden-fixture surfaces'), 'scan: emits the parity/golden surface (golden.fixture.json)');
+
+  // frontmatter cursor persists the scanned paths.
+  assert(/^---\nscanned_paths:\n(?:\s*-\s+.+\n)+---/m.test(notes), 'scan: frontmatter carries a scanned_paths resumability cursor');
+
+  // (b) every nomination cites a REAL file:line and names a valid expert key.
+  //     Parse each surface block; verify the cited file exists and the line is in range,
+  //     and the nominated expert is one of security|drift|ux (the SPECIALIST_DEFAULTS set).
+  const blocks = notes.split(/^## surface:/m).slice(1);
+  const VALID_EXPERTS = new Set(['security', 'drift', 'ux']);
+  let allCitationsReal = blocks.length > 0;
+  let allExpertsValid = blocks.length > 0;
+  let shellCitesRunCheck = false;
+  for (const b of blocks) {
+    const name = (b.match(/^\s*(.+)/) || [])[1].trim();
+    const evidence = [...b.matchAll(/^- evidence:\s*(.+?):(\d+)\s*$/gm)];
+    if (evidence.length < 1) allCitationsReal = false;
+    for (const [, relPath, lineStr] of evidence) {
+      const abs = join(target, relPath);
+      if (!existsSync(abs)) { allCitationsReal = false; continue; }
+      const n = readFileSync(abs, 'utf8').split('\n').length;
+      const ln = parseInt(lineStr, 10);
+      if (!(ln >= 1 && ln <= n)) allCitationsReal = false;
+      if (name === 'shell-string execution' && relPath === 'run-check.mjs') shellCitesRunCheck = true;
+    }
+    const expert = (b.match(/nominates:\s*expert=([a-z-]+)/) || [])[1];
+    if (!VALID_EXPERTS.has(expert)) allExpertsValid = false;
+  }
+  assert(allCitationsReal, 'scan: every nomination cites a REAL in-range file:line');
+  assert(allExpertsValid, 'scan: every nomination names a valid expert key (security|drift|ux → maps 1:1 onto applyRosterAdd)');
+
+  // (d) scan NEVER executes fixture content: run-check.mjs would spawn a shell if
+  //     run; instead scan read it as TEXT and CLASSIFIED it. The presence of the
+  //     shell-string nomination citing run-check.mjs IS the decision-not-execution proof.
+  assert(shellCitesRunCheck, 'scan: classified run-check.mjs as shell-string execution — read-and-decided, never executed (rule-4 scan-only covenant)');
+
+  // (c) a second run adds NO duplicate surface headers (resumability cursor).
+  const r2 = spawnSync(process.execPath, [scanPath, '--repo', target, '--out', out], { encoding: 'utf8' });
+  assert(r2.status === 0, 'scan: second run exits 0 (resumable)');
+  const notes2 = readFileSync(out, 'utf8');
+  const headers2 = (notes2.match(/^## surface:/gm) || []).length;
+  const uniqueHeaders2 = new Set((notes2.match(/^## surface:\s*(.+)$/gm) || [])).size;
+  assert(headers2 === uniqueHeaders2, 'scan: a second run adds NO duplicate surface headers (header count === unique count)');
+  assert(headers2 === headers.length, 'scan: a second run adds NO new surface blocks at all (cursor skips completed paths)');
+
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

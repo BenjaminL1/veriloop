@@ -86,6 +86,8 @@ test "$(grep -c '^## surface:' /tmp/vl-bench/scan-notes.md)" = "$(grep '^## surf
 ```
 Add a selftest fixture + assertion (must grow ⟨SELFTEST_BASELINE⟩).
 
+**Implementation notes (shipped v0.3.8).** `scripts/scan.mjs` landed as specified: a deterministic, compiler-side script (NOT emitted — `lint-bundle` confirms it stays out of the bundle/manifest). The danger-surface catalog is a hardcoded array of `{ name, expert, rule, line?, path?, uiOnly? }`, each matched IN PROCESS (regex over file text and/or the relative path); every nominated expert key is one of `SPECIALIST_DEFAULTS` (`security|drift|ux`) so it maps 1:1 onto `applyRosterAdd`. The walk is sorted (stable output), skips `node_modules`/`.git`/`.claude/veriloop/.backups`, and reads files as TEXT only — this slice spawns NOTHING (no git; history mining stays in §2). Output carries a `scanned_paths:` frontmatter cursor; a re-run skips completed paths and adds no duplicate `## surface:` headers, preserving owner-reviewed body content. Bound is `--max` (default 12) NEW surface blocks per invocation. The `ux` surface only nominates when a cheap self-contained `package.json`-deps check reports a UI stack. Halt: write, print `review scan-notes.md, then run mine.mjs`, exit 0 — never chains into mining, never runs/compiles a nominated check. Smoke test: pointed at veriloop itself it surfaces `verify.mjs` `shell: true`, the `.gitignore` splice markers, and the golden-fixture surfaces. Selftest baseline grew 212 → 224; the `SKILL.md:103` reference to `scan-notes.md` is now truthful.
+
 ---
 
 ## §2 — Phase 4: constitution mining pipeline (`scripts/mine.mjs`, new)
