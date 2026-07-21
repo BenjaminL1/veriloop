@@ -1,0 +1,53 @@
+{
+  "veriloop_schema": 1,
+  "generated_by": "veriloop/scripts/detect.mjs (phase 1)",
+  "repo_root": ".",
+  "package_manager": "npm",
+  "stack": [
+    "node"
+  ],
+  "polyglot": [],
+  "has_ui": false,
+  "warnings": [],
+  "commands": {
+    "install": {
+      "cmd": "npm install",
+      "cwd": ".",
+      "source": "lockfile → npm",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": null
+    },
+    "lint": {
+      "cmd": "npm run lint",
+      "cwd": ".",
+      "source": "package.json:1",
+      "from": "node",
+      "safety": "safe",
+      "verified_by_ci": false,
+      "verified": null
+    },
+    "test": {
+      "cmd": "npm run test",
+      "cwd": ".",
+      "source": "package.json:1",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": null
+    },
+    "test_single": {
+      "cmd": "npx vitest run <file>",
+      "cwd": ".",
+      "source": "test runner: vitest",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": false,
+      "verified": null
+    }
+  },
+  "scopes": [],
+  "ci_commands": [],
+  "ci_files": []
+}

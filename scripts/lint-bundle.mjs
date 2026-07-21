@@ -256,6 +256,67 @@ function main() {
     }
   }
 
+  // 8. rule-ownership referee (M3 §4) — mechanize the constitution invariant
+  //    "No orphan rules, no jobless experts" as a HARD LINT (two fail-level checks),
+  //    reading the constitution's inline _(owner: `<key>`)_ annotations against the
+  //    manifest roster keys. GATE: the strict fails fire ONLY once mining has filled
+  //    ownership — a legitimate pre-mining STARTER bundle is EXEMPT (the jobless-
+  //    evidence WARN in section 5 still applies there). The gate keys off three
+  //    literals emitted by the renderer for a starter: the STARTER banner
+  //    (render.mjs:108) and the two TODO-owner placeholders (render.mjs:114,116).
+  //    Accepted spec-directed coupling, same precedent as the hardcoded FORBIDDEN/ABS
+  //    patterns above.
+  {
+    const conPath = join(args.bundle, '.claude/veriloop/constitution.md');
+    const manPath = join(args.bundle, '.claude/veriloop/veriloop-manifest.json');
+    if (existsSync(conPath) && existsSync(manPath)) {
+      let roster = [];
+      try { roster = JSON.parse(readFileSync(manPath, 'utf8')).roster || []; } catch { /* section 5 already failed on bad JSON */ }
+      const rosterKeys = new Set(roster.map((e) => e.key));
+      const con = readFileSync(conPath, 'utf8');
+      const preMining =
+        con.includes('> **veriloop STARTER**') ||                                  // render.mjs:108
+        con.includes('_(owner: assign — usually') ||                               // render.mjs:114
+        con.includes('_(owner: the `security` expert; if this roster has none');   // render.mjs:116
+      if (preMining) {
+        ok('rule-ownership referee skipped — pre-mining STARTER bundle');
+      } else if (rosterKeys.size) {
+        const before = fails.length;
+        // (a) NO ORPHAN RULE — split the constitution into numbered-rule blocks: a
+        //     block opens on a line matching /^\d+\.\s/ and runs until the next such
+        //     line OR a heading/hr. Each block must carry EXACTLY ONE owner tag whose
+        //     key is a roster expert (this attributes multi-line rules' owner tags,
+        //     which the renderer places on a continuation line, correctly).
+        const ownedBy = new Map();
+        let cur = null;
+        const closeBlock = () => {
+          if (!cur) return;
+          const tags = [...cur.text.matchAll(/_\(owner:\s*`([^`]+)`\)_/g)].map((x) => x[1]);
+          if (tags.length === 0) fail(`orphan rule — rule ${cur.num} has no _(owner: \`<key>\`)_ tag`);
+          else if (tags.length > 1) fail(`orphan rule — rule ${cur.num} has ${tags.length} owner tags (need exactly one)`);
+          else if (!rosterKeys.has(tags[0])) fail(`orphan rule — rule ${cur.num} owner \`${tags[0]}\` is not a roster expert`);
+          else ownedBy.set(tags[0], (ownedBy.get(tags[0]) || 0) + 1);
+          cur = null;
+        };
+        for (const line of con.split('\n')) {
+          const rm = line.match(/^(\d+)\.\s/);
+          if (rm) { closeBlock(); cur = { num: rm[1], text: line }; continue; }
+          if (/^(#{1,6}\s|---\s*$)/.test(line)) { closeBlock(); continue; }
+          if (cur) cur.text += `\n${line}`;
+        }
+        closeBlock();
+        // (b) NO JOBLESS EXPERT — every roster expert owns >= 2 numbered rules
+        //     (acceptance criterion 3, roadmap:105). Distinct from the section-5
+        //     jobless-evidence WARN, which is left untouched.
+        for (const k of rosterKeys) {
+          const n = ownedBy.get(k) || 0;
+          if (n < 2) fail(`jobless expert — roster expert \`${k}\` owns ${n} rule(s) (need >= 2)`);
+        }
+        if (fails.length === before) ok('rule-ownership referee — every rule owned by exactly one roster expert; every expert owns >= 2 rules');
+      }
+    }
+  }
+
   // report
   const name = args.name || '(bundle)';
   console.log(`\nveriloop lint — ${name} @ ${args.bundle.split('/').slice(-1)[0]}`);

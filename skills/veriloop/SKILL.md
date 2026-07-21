@@ -201,7 +201,11 @@ DB-touching changes:
    `Math.random`, `process.*`, `require`, `import` — syntax-valid but banned at
    runtime) and **config↔file mismatches** (a roster expert whose persona file is
    missing, or a workflow whose wired gate doesn't match the manifest's
-   `gate_commands`).
+   `gate_commands`). On a **mined bundle** it also mechanizes the constitution's
+   "no orphan rules, no jobless experts" invariant as a hard lint — every numbered
+   rule must carry exactly one `_(owner: `<key>`)_` tag whose key is a roster
+   expert, and every roster expert must own ≥ 2 rules; a pre-mining STARTER bundle
+   (banner + TODO-owner placeholders) is exempt so it can lint clean before mining.
 2. **(Full pipeline) Fresh-context drive:** spawn a NEW subagent with no memory of
    this build and have it run `/dev-loop` on one tiny real task, confirming the gate
    actually executes the commands and reports from exit codes. Do NOT drive it

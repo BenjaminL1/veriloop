@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.3.8",
-  "generated_at": "2026-07-17T08:00:42.731Z",
-  "repo_name": "veriloop",
+  "veriloop_version": "0.3.7",
+  "generated_at": "2026-07-21T11:08:56.382Z",
+  "repo_name": "mined-bundle",
   "repo_root": ".",
-  "repo_sha": "83b24b7bf6938a7599801a6ec8888fb214f14722",
+  "repo_sha": null,
   "stack": [
     "node"
   ],
@@ -26,15 +26,13 @@
     },
     {
       "key": "security",
-      "title": "Supply-Chain & Input-Safety Reviewer",
+      "title": "Security & Data Reviewer",
       "tiers": [
         "high"
       ],
       "evidence": [
-        "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
-        "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
-        "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
-        "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+        "parses untrusted request bodies at src/api/parse.ts",
+        "owns the SQL schema at db/schema.sql"
       ],
       "file": ".claude/veriloop/experts/security.md"
     },
@@ -46,10 +44,7 @@
         "high"
       ],
       "evidence": [
-        "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
-        "splice-marker integrity (scripts/lib/render.mjs:11)",
-        "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
-        "selftest golden expectations — the assertions are this repo's only gate"
+        "golden-parity oracle at test/parity/golden.json"
       ],
       "file": ".claude/veriloop/experts/drift.md"
     }
@@ -59,9 +54,15 @@
   ],
   "gate_commands": [
     {
+      "name": "lint",
+      "cmd": "npm run lint",
+      "verified": null,
+      "ci": false
+    },
+    {
       "name": "test",
       "cmd": "npm run test",
-      "verified": true,
+      "verified": null,
       "ci": false
     }
   ],
@@ -159,15 +160,7 @@
         }
       }
     },
-    "models": {
-      "plan": "opus",
-      "implement": "opus",
-      "review": "opus",
-      "checks": "opus",
-      "fix": "opus",
-      "land": "opus",
-      "report": "opus"
-    },
+    "models": {},
     "effort": {}
   },
   "e2e": null,
@@ -178,23 +171,29 @@
       "verified": null,
       "verified_by_ci": false
     },
+    "lint": {
+      "cmd": "npm run lint",
+      "safety": "safe",
+      "verified": null,
+      "verified_by_ci": false
+    },
     "test": {
       "cmd": "npm run test",
       "safety": "ask",
-      "verified": true,
+      "verified": null,
       "verified_by_ci": false
     },
     "test_single": {
-      "cmd": "npm run test -- <file>",
+      "cmd": "npx vitest run <file>",
       "safety": "ask",
       "verified": null,
       "verified_by_ci": false
     }
   },
-  "verified_at": "2026-07-14T02:16:41.064Z",
+  "verified_at": null,
   "emitted_files": [
     {
-      "path": ".claude/workflows/veriloop-dev-loop.js",
+      "path": ".claude/workflows/mined-bundle-dev-loop.js",
       "ownership": "machine",
       "status": "written"
     },
@@ -206,12 +205,12 @@
     {
       "path": ".claude/commands/advise.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/review.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/dev-plan.md",
@@ -221,94 +220,67 @@
     {
       "path": ".claude/commands/posture.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/commands.json",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
       "ownership": "hand",
-      "status": "preserved"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
       "ownership": "hand",
-      "status": "preserved"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",
       "ownership": "hand",
-      "status": "preserved"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/constitution.md",
       "ownership": "starter",
-      "status": "preserved"
+      "status": "written"
     },
     {
       "path": ".gitignore",
       "ownership": "shared-block",
-      "status": "unchanged"
+      "status": "written"
     }
   ],
   "interview_answers": {
-    "cross_model": true,
-    "budget_posture": "balanced",
-    "phase_models": {
-      "plan": "opus",
-      "implement": "opus",
-      "review": "opus",
-      "checks": "opus",
-      "fix": "opus",
-      "land": "opus",
-      "report": "opus"
-    },
-    "high_risk_areas": [
-      "detector",
-      "hostile",
-      "splice",
-      "template",
-      "emitted",
-      "fixture",
-      "safety",
-      "ownership"
-    ],
     "roster_add": [
       {
         "key": "security",
-        "title": "Supply-Chain & Input-Safety Reviewer",
         "evidence": [
-          "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
-          "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
-          "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
-          "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+          "parses untrusted request bodies at src/api/parse.ts",
+          "owns the SQL schema at db/schema.sql"
         ]
       },
       {
         "key": "drift",
         "evidence": [
-          "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
-          "splice-marker integrity (scripts/lib/render.mjs:11)",
-          "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
-          "selftest golden expectations — the assertions are this repo's only gate"
+          "golden-parity oracle at test/parity/golden.json"
         ]
       }
     ]
