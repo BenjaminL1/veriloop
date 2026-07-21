@@ -18,7 +18,7 @@
 // NOTE: run verify ONCE with your full --include set — a later narrower run resets the skipped commands' verification.
 
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 function reqVal(argv, i, flag) {
@@ -137,7 +137,9 @@ function main() {
 }
 
 // Run only when invoked as the entry script — importing plan() (the M3 §3 mined-query
-// execution contract) must NOT trigger a verify run. Compare file URLs without importing
-// url helpers, so this guard adds no line above and keeps every verify.mjs:<line> citation
-// (constitution.md, the §3 spec, m3-plan.md) accurate.
-if (process.argv[1] && new URL(`file://${resolve(process.argv[1])}`).href === import.meta.url) main();
+// execution contract) must NOT trigger a verify run. REALPATH both sides: import.meta.url is
+// realpath'd + percent-encoded by Node, so a SYMLINKED invocation path (macOS /tmp→/private/tmp,
+// or a symlinked plugin install) or a #/%/? char would otherwise make this guard falsely skip
+// main() — a SILENT gate no-op, the worst failure for a safety gate. realpathSync joins the
+// existing node:fs import (no new line), so every verify.mjs:<line> citation stays accurate.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(decodeURIComponent(new URL(import.meta.url).pathname))) main();
