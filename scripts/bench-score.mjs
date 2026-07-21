@@ -5,10 +5,10 @@
 // per-rule recovered/missed table and EXITS 0 iff recovered ≥ threshold (default
 // 0.8 = 12/14 on the real gold), else nonzero.
 //
-// IN-PROCESS-ONLY COVENANT (same as scan/mine): this script imports node:fs +
-// node:path + node:url ONLY. It reads the two files it is GIVEN as TEXT and spawns
-// NOTHING — no LLM, no network, no git. It is compiler-side (sibling of mine.mjs),
-// NOT emitted into any target bundle.
+// IN-PROCESS-ONLY COVENANT (same as scan/mine): this script imports node:fs + node:path
+// ONLY (plus the URL global + import.meta for the entry guard — no node:url import). It reads
+// the two files it is GIVEN as TEXT and spawns NOTHING — no LLM, no network, no git. It is
+// compiler-side (sibling of mine.mjs), NOT emitted into any target bundle.
 //
 // SCOPE FENCE: this is the SCORER + its fixture selftest. The actual held-out gold
 // benchmark RUN (scoring the frozen Torevan gold, publishing the ≥12/14 result and
@@ -54,12 +54,13 @@ function reqVal(argv, i, flag) {
 }
 
 function parseArgs(argv) {
-  const args = { gold: null, mined: null, threshold: 0.8, help: false };
+  const args = { gold: null, mined: null, threshold: 0.8, expectRules: null, help: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--gold') args.gold = resolve(reqVal(argv, ++i, '--gold'));
     else if (a === '--mined') args.mined = resolve(reqVal(argv, ++i, '--mined'));
     else if (a === '--threshold') args.threshold = Number(reqVal(argv, ++i, '--threshold'));
+    else if (a === '--expect-rules') args.expectRules = Number(reqVal(argv, ++i, '--expect-rules'));
     else if (a === '--help' || a === '-h') args.help = true;
   }
   return args;
@@ -176,18 +177,35 @@ export function scoreRecovery(goldMd, minedObj, threshold = 0.8) {
   }));
 
   const results = [];
+  const consumed = new Set(); // 1:1 — a candidate recovers AT MOST ONE gold rule (no double-count)
   for (const g of goldRules) {
-    const matching = candidates.filter((c) => overlap(g.tokens, c.tokens) >= MATCH_THRESHOLD);
+    const matching = candidates
+      .map((c, i) => ({ c, i, ov: overlap(g.tokens, c.tokens) }))
+      .filter((m) => m.ov >= MATCH_THRESHOLD)
+      .sort((a, b) => b.ov - a.ov || a.i - b.i); // best overlap first, then stable by index
     if (matching.length === 0) {
       results.push({ n: g.n, recovered: false, reason: 'unmatched', candidate: null, citation: null });
       continue;
     }
-    const withCite = matching.find((c) => c.validCitations.length >= 1);
-    if (withCite) {
-      results.push({ n: g.n, recovered: true, reason: 'recovered', candidate: withCite.rule, citation: withCite.validCitations[0] });
+    // 1:1 ASSIGNMENT — recover with the best-overlap matching candidate that has a valid citation
+    // AND is not already claimed by an earlier rule. Without this, one terse generic candidate
+    // (e.g. tokens {process, pass}) recovers several gold rules and inflates the headline number;
+    // requiring a DISTINCT cited candidate per rule closes that gaming hole.
+    const pick = matching.find((m) => m.c.validCitations.length >= 1 && !consumed.has(m.i));
+    if (pick) {
+      consumed.add(pick.i);
+      results.push({ n: g.n, recovered: true, reason: 'recovered', candidate: pick.c.rule, citation: pick.c.validCitations[0] });
     } else {
-      // A text match is NOT enough — the citation is required (mining's rule-2 discipline).
-      results.push({ n: g.n, recovered: false, reason: 'matched-without-valid-citation', candidate: matching[0].rule, citation: null });
+      // A text match is NOT enough — a well-formed citation is required (mining's rule-2). Distinguish
+      // "no cited candidate at all" from "its only cited candidate already recovered another rule".
+      const citedButClaimed = matching.some((m) => m.c.validCitations.length >= 1);
+      results.push({
+        n: g.n,
+        recovered: false,
+        reason: citedButClaimed ? 'no-distinct-cited-candidate' : 'matched-without-valid-citation',
+        candidate: matching[0].c.rule,
+        citation: null,
+      });
     }
   }
 
@@ -207,7 +225,7 @@ function truncate(s, n) {
 function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
-    console.log('Usage: node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json> [--threshold 0.8]');
+    console.log('Usage: node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json> [--threshold 0.8] [--expect-rules N]');
     return;
   }
   for (const [flag, val] of [['--gold', args.gold], ['--mined', args.mined]]) {
@@ -245,6 +263,13 @@ function main() {
     console.error(`no numbered rules parsed from --gold ${args.gold} (expected top-level \`N.\` list items)`);
     process.exit(2);
   }
+  // Denominator integrity: the recovery ratio is N/total, so a mis-parsed gold silently shifts the
+  // headline. --expect-rules pins the count (e.g. the frozen gold's `grep -cE '^[0-9]+\.'` = 14) so
+  // a formatting drift fails the run LOUDLY instead of publishing "/13" or "/15".
+  if (args.expectRules !== null && score.total !== args.expectRules) {
+    console.error(`--gold parsed ${score.total} numbered rules but --expect-rules ${args.expectRules} was required — denominator mismatch (check the gold's ordered-list formatting)`);
+    process.exit(2);
+  }
 
   // per-rule table
   console.log(`veriloop bench-score — gold ${args.gold.split('/').slice(-1)[0]}`);
@@ -253,6 +278,8 @@ function main() {
       console.log(`  rule ${String(r.n).padEnd(3)} → recovered  ${truncate(r.candidate, 64)}  [cite ${r.citation}]`);
     } else if (r.reason === 'matched-without-valid-citation') {
       console.log(`  rule ${String(r.n).padEnd(3)} → missed     (matched candidate carried no well-formed file:line citation)`);
+    } else if (r.reason === 'no-distinct-cited-candidate') {
+      console.log(`  rule ${String(r.n).padEnd(3)} → missed     (its only cited candidate already recovered another rule — 1:1)`);
     } else {
       console.log(`  rule ${String(r.n).padEnd(3)} → missed     (no candidate names this invariant)`);
     }

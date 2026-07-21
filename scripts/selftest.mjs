@@ -1522,6 +1522,23 @@ function assert(cond, desc) {
   assert(scoreRecovery(goldMd, JSON.parse(readFileSync(recoveringPath, 'utf8')), 0.8).pass === true, 'bench-score: 4/5 passes at threshold 0.8 (>= boundary)');
   assert(scoreRecovery(goldMd, JSON.parse(readFileSync(recoveringPath, 'utf8')), 0.85).pass === false, 'bench-score: 4/5 FAILS at threshold 0.85 — the threshold parameter gates the verdict');
 
+  // (5b) 1:1 ASSIGNMENT — a single generic candidate cannot recover MULTIPLE gold rules (else 3
+  //     terse generic candidates could game the headline to 5/5). Two gold rules sharing generic
+  //     tokens + ONE terse cited candidate ⇒ recovers exactly ONE; the other is missed as
+  //     "no-distinct-cited-candidate". Two DISTINCT cited candidates recover both.
+  const twoRuleGold = '1. the process must pass a shell argument array _(owner: `security`)_\n2. the process must pass the exit code check _(owner: `code-review`)_\n';
+  const g11 = scoreRecovery(twoRuleGold, { candidates: [{ rule: 'process pass', citations: ['a.js:1'] }] }, 0.5);
+  assert(g11.recovered === 1, `bench-score (1:1): one generic candidate recovers AT MOST one gold rule, not both (got ${g11.recovered}/2 — double-counting would give 2)`);
+  assert(g11.results.some((r) => r.reason === 'no-distinct-cited-candidate'), 'bench-score (1:1): the second rule is missed as "no-distinct-cited-candidate" (its only cited match was already claimed)');
+  const twoDistinct = { candidates: [{ rule: 'process shell argument array', citations: ['a.js:1'] }, { rule: 'process exit code check', citations: ['b.js:2'] }] };
+  assert(scoreRecovery(twoRuleGold, twoDistinct, 0.5).recovered === 2, 'bench-score (1:1): two DISTINCT cited candidates recover both rules (the assignment is 1:1, not 0:1)');
+
+  // (5c) --expect-rules pins the denominator: a count mismatch fails LOUDLY (exit 2); a match proceeds.
+  const er1 = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath, '--expect-rules', '14'], { encoding: 'utf8' });
+  assert(er1.status === 2 && /denominator mismatch/.test(er1.stderr), 'bench-score: --expect-rules 14 against a 5-rule fixture gold fails with exit 2 (denominator integrity)');
+  const er2 = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath, '--expect-rules', '5'], { encoding: 'utf8' });
+  assert(er2.status === 0, 'bench-score: --expect-rules 5 matches the fixture gold → proceeds (exit 0)');
+
   // (6) IN-PROCESS COVENANT — bench-score is compiler-side and spawns NOTHING (no LLM/
   //     network/git). Assert on its OWN SOURCE (source grep, like the mine covenant).
   const bsSrc = readFileSync(benchScorePath, 'utf8');
