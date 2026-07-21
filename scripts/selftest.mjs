@@ -1412,7 +1412,7 @@ function assert(cond, desc) {
   assert(npmSafe.runnable === null && /not an allowlisted/.test(npmSafe.reason), 'mined-query (b): a self-declared-safe `npm run dev` is refused — the allowlist, not the trusted flag, decides');
   assert(runMinedQuery(npmSafe).refused === true, 'mined-query (b): the runner REFUSES a non-allowlisted candidate (never spawns)');
   assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'npm test', safety: 'safe' } }).runnable === null, 'mined-query (b): an arbitrary self-declared-safe command is refused (read-only allowlist)');
-  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'grep -rn <pattern> .', safety: 'safe' } }).runnable === null, 'mined-query (c): an allowlisted grep with a <placeholder> is still refused by the rule-6 plan() gate');
+  assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'grep -rn <pattern> .', safety: 'safe' } }).runnable === null, 'mined-query (a): a grep carrying a <placeholder> is refused — angle brackets are shell metacharacters (plan() would also reject a placeholder)');
 
   // (3) SHELL-INJECTION (a/b) — NO shell string is ever synthesized. Every named vector is
   //     refused (argv-only); a shell interpreter as argv[0] (`sh -c <str>`) is refused too.
@@ -1444,14 +1444,23 @@ function assert(cond, desc) {
   assert(compileMinedQuery({ provenance: codeProv, command: { cmd: 'prettier --write .', safety: 'safe', mutates: true } }).runnable === null, 'mined-query (b): a mutating `prettier --write` candidate is refused — not an allowlisted read-only tool');
 
   // (5) POSITIVE — a legit safe-tier, code-provenance candidate compiles to a non-null argv
-  //     ARRAY and RUNS read-only (shell-option-false spawn, exit 0).
+  //     ARRAY and RUNS read-only (shell-option-false spawn, exit 0). The target is a RELATIVE
+  //     path (`.`) resolved against the runner's cwd — repo-scoped by construction.
   const mqTmp = mkdtempSync(join(tmpdir(), 'veriloop-mq-'));
   writeFileSync(join(mqTmp, 'code.mjs'), "export const r = () => spawnSync('git', ['status'], { shell: false });\n");
-  const good = compileMinedQuery({ provenance: codeProv, command: { cmd: `grep -rn spawnSync ${mqTmp}`, safety: 'safe' } });
+  const good = compileMinedQuery({ provenance: codeProv, command: { cmd: 'grep -rn spawnSync .', safety: 'safe' } });
   assert(Array.isArray(good.runnable) && good.runnable[0] === 'grep' && good.runnable.length === 4, 'mined-query (+): a legit safe-tier code-provenance candidate compiles to a non-null argv ARRAY');
   const goodRun = runMinedQuery(good, { cwd: mqTmp });
   assert(goodRun.ran === true && goodRun.refused === false && goodRun.ok === true && goodRun.exit === 0, 'mined-query (+): the compiled argv RUNS read-only via a shell-option-false spawn (exit 0)');
   rmSync(mqTmp, { recursive: true, force: true });
+
+  // (5b) REPO-SCOPED reads (b2) — grep is read-only, but an attacker-chosen ARG must not turn a
+  //      check into an arbitrary-file read. An absolute path, a `..` traversal, `-f patterns-file`,
+  //      or `-R` symlink-follow is refused; a relative in-repo path is allowed.
+  for (const cmd of ['grep -a . /Users/victim/.ssh/id_rsa', 'grep -rn secret /etc', 'grep x ../secrets', 'grep -f /etc/passwd .', 'grep -R x .']) {
+    assert(compileMinedQuery({ provenance: codeProv, command: { cmd, safety: 'safe' } }).runnable === null, `mined-query (b2): grep reading OUTSIDE the repo "${cmd}" is refused — reads are cwd-scoped`);
+  }
+  assert(Array.isArray(compileMinedQuery({ provenance: codeProv, command: { cmd: 'grep -rn spawnSync src', safety: 'safe' } }).runnable), 'mined-query (b2): a relative in-repo grep target (src) is still allowed');
 
   // (6) COVENANT (kept) — mine.mjs stays IN-PROCESS; execution lives ONLY in this contract.
   const mineSrc2 = readFileSync(minePath, 'utf8');
@@ -1468,6 +1477,9 @@ function assert(cond, desc) {
   ]) {
     assert(compileMinedQuery({ provenance: prov, command: { cmd: 'grep -rn x .', safety: 'safe' } }).runnable === null, `mined-query (e): a normalized scan-only provenance "${prov}" is still refused (case/slash/backslash cannot launder)`);
   }
+  // (e) NO OVER-REFUSAL — the guard matches the dir as a PATH COMPONENT, so a legit provenance
+  //     that merely CONTAINS the name as a substring is NOT laundered-refused.
+  assert(Array.isArray(compileMinedQuery({ provenance: 'docs:src/about-fixtures/hostile-ci-migration.md:5', command: { cmd: 'grep -rn x .', safety: 'safe' } }).runnable), 'mined-query (e): a path that merely contains "fixtures/hostile-ci" as a substring (about-fixtures/hostile-ci-migration) is NOT over-refused');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

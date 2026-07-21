@@ -45,16 +45,15 @@ const RUNNABLE_TOOLS = new Set(['grep']);
  * launder is caught too).
  */
 function isScanOnlyProvenance(prov) {
-  // Normalize before matching (fail-closed, bias to REFUSE): lower-case + backslashes→slashes,
-  // and match the dir WITHOUT its trailing slash. So a bare-dir, a Capitalized path (Darwin has
-  // a case-insensitive FS — same files), or a Windows backslash provenance cannot under-match
-  // the rule-4 "scan-only FOREVER" crown-jewel guard, including a future git-history: form.
-  const norm = (s) => s.replace(/\\/g, '/').toLowerCase();
-  const p = norm(prov);
-  const body = norm(prov.replace(/^(docs|git-history|scan-surface):/, ''));
+  // Normalize (fail-closed): lower-case + backslashes→slashes, then match each scan-only dir as
+  // a PATH COMPONENT — preceded by start / `/` / `:` and followed by end / `/` / `:`. This holds
+  // the rule-4 "scan-only FOREVER" guard across Capitalized (Darwin's case-insensitive FS),
+  // bare-dir, backslash, and a future git-history: form, WITHOUT over-refusing a path that merely
+  // contains the name as a substring (e.g. `…/about-fixtures/hostile-ci-notes.md`).
+  const p = prov.replace(/\\/g, '/').toLowerCase();
   return SCAN_ONLY_DIRS.some((dir) => {
-    const d = norm(dir).replace(/\/+$/, '');
-    return p.includes(d) || body.includes(d);
+    const d = dir.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '').replace(/[.*+?^${}()|[\]]/g, '\\$&');
+    return new RegExp(`(^|[/:])${d}($|[/:])`).test(p);
   });
 }
 
@@ -128,6 +127,19 @@ export function compileMinedQuery(candidate) {
   }
   if (!RUNNABLE_TOOLS.has(exe)) {
     return { runnable: null, reason: `refused (b): argv[0] "${exe}" is not an allowlisted read-only inspector (${[...RUNNABLE_TOOLS].join(', ')}) — a candidate's self-declared safety is never trusted` };
+  }
+
+  // (b2) SCOPE the allowlisted tool's reads to the repo (cwd). grep is read-only, but its ARGS
+  // are attacker-chosen: an absolute path, a `..` traversal, `-f <patterns-file>`, or `-R`
+  // (symlink-follow) would turn a check into an arbitrary-file read — e.g.
+  // `grep . /home/u/.ssh/id_rsa` returns the file's contents in stdout. Reject those so
+  // "read-only inspector" means REPO-SCOPED, not read-anything-on-disk.
+  for (const a of argv.slice(1)) {
+    if (a.startsWith('/') || a.startsWith('../') || a.includes('/../') || a === '..'
+      || a === '-f' || a === '--file' || a.startsWith('--file=')
+      || a === '-R' || a === '--dereference-recursive') {
+      return { runnable: null, reason: `refused (b2): arg "${a}" escapes the repo (absolute path / .. traversal / -f patterns-file / -R symlink-follow) — reads are cwd-scoped` };
+    }
   }
 
   // (c) rule-6 tier gate — route a SELF-DERIVED classification through verify.mjs's plan().
