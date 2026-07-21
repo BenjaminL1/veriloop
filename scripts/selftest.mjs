@@ -1261,10 +1261,12 @@ function assert(cond, desc) {
   assert(dropRun.status === 0, 'mine: exits 0 even when every candidate is dropped');
   assert(JSON.parse(readFileSync(dropOut, 'utf8')).candidates.length === 0, 'mine: a candidate with only 1 citation is DROPPED (witness-or-drop, <2 citations)');
 
-  // (k) HYPOTHESIS-DROP by ratio: a surface whose invariant holds at only 3 of 7 sites
-  //     (ratio 0.43 < 0.9) is a hypothesis, not an invariant — DROPPED even though it has
-  //     ≥2 conforming citations. Locks the deterministic re-verification gate (mine.mjs:309),
-  //     the branch that the 1-citation case above can never exercise.
+  // (k) HYPOTHESIS-DROP by ratio: a surface conforming at 5 of 7 sites (ratio 0.71 < 0.9) is a
+  //     hypothesis, not an invariant — DROPPED. The fixture is 5 conforming + 2 violating on
+  //     PURPOSE: 5 conforming citations clear witness-or-drop (≥2), so the ONLY thing that can
+  //     drop it is the deterministic re-verification gate (mine.mjs ratio<0.9). This isolates
+  //     that branch — a regression that stopped counting conforming sites would fail elsewhere,
+  //     not pass here vacuously (the 3/7 version could also drop via witness-or-drop).
   const mixRepo = join(fixtures, 'mine-drop');
   const mixNotes = join(tmp, 'mix-notes.md');
   const mixScan = spawnSync(process.execPath, [scanPath, '--repo', mixRepo, '--out', mixNotes], { encoding: 'utf8' });
@@ -1272,7 +1274,27 @@ function assert(cond, desc) {
   const mixOut = join(tmp, 'mix-mined.json');
   const mixRun = spawnSync(process.execPath, [minePath, '--repo', mixRepo, '--scan', mixNotes, '--out', mixOut], { encoding: 'utf8' });
   assert(mixRun.status === 0, 'mine: exits 0 on the mixed-conformance repo');
-  assert(JSON.parse(readFileSync(mixOut, 'utf8')).candidates.length === 0, 'mine: a surface conforming at only 3/7 sites (ratio < 0.9) is DROPPED as a hypothesis, not surfaced as an invariant');
+  assert(JSON.parse(readFileSync(mixOut, 'utf8')).candidates.length === 0, 'mine: a surface conforming at only 5/7 sites (ratio 0.71 < 0.9) is DROPPED by the ratio gate — its 5 citations clear witness-or-drop, so ONLY re-verification can drop it');
+
+  // (k2) COMMENT/STRING ARE NOT CODE: a line-comment that MENTIONS the antipattern must not
+  //     flip a real invariant. 5 real `shell: false` sites + 1 file whose ONLY `shell: true`
+  //     is inside a `//` warning comment: without comment-stripping that comment scores as a
+  //     6th (violating) site → ratio 5/6 = 0.83 < 0.9 → the valid invariant is suppressed.
+  //     With stripping: 5 conforming / 0 violating / ratio 1.0 → surfaced. (baseline lens SHOULD-FIX)
+  const csRepo = join(tmp, 'comment-strip');
+  mkdirSync(join(csRepo, 'src'), { recursive: true });
+  for (const f of ['a', 'b', 'c', 'd', 'e']) {
+    writeFileSync(join(csRepo, 'src', `ok-${f}.mjs`), "import { spawnSync } from 'node:child_process';\nexport const r = () => spawnSync('git', ['status'], { shell: false });\n");
+  }
+  writeFileSync(join(csRepo, 'src', 'warn.mjs'), '// SECURITY: never call spawn with shell: true — synthesizing a shell string is banned.\nexport const ok = () => 1;\n');
+  const csNotes = join(tmp, 'comment-strip-notes.md');
+  const csScan = spawnSync(process.execPath, [scanPath, '--repo', csRepo, '--out', csNotes], { encoding: 'utf8' });
+  assert(csScan.status === 0, 'mine: scan nominates the shell surface for the comment-strip repo');
+  const csOut = join(tmp, 'comment-strip-mined.json');
+  const csRun = spawnSync(process.execPath, [minePath, '--repo', csRepo, '--scan', csNotes, '--out', csOut], { encoding: 'utf8' });
+  const csCands = JSON.parse(readFileSync(csOut, 'utf8')).candidates;
+  assert(csRun.status === 0 && csCands.length === 1, 'mine: a `shell: true` inside a `//` comment does NOT flip the 5-site invariant to a hypothesis (comment/string is not an enforcement site)');
+  assert(csCands[0].conformance.violating === 0, 'mine: the commented antipattern is not counted as a violating site (0 violations, ratio 1.0)');
 
   // (l) PROTOTYPE-KEY SAFETY: a scan-notes surface literally named "__proto__" / "constructor"
   //     must not crash the MINE_QUERIES lookup (Object.hasOwn guard, mine.mjs:297) — a bracket
@@ -1314,11 +1336,52 @@ function assert(cond, desc) {
   const wtShaRun = spawnSync(process.execPath, [minePath, '--repo', wtRepo, '--scan', wtNotes, '--out', wtShaOut], { encoding: 'utf8' });
   assert(wtShaRun.status === 0 && JSON.parse(readFileSync(wtShaOut, 'utf8')).corpus_sha === shaWt, 'mine: corpus_sha resolves HEAD via a .git-FILE linked worktree (the self-host layout; was null before the fix)');
 
+  // (m2) DETACHED HEAD — .git/HEAD is a bare sha, not a `ref:` line. Exercises readHeadSha's
+  //      early-return branch (the resolve rewrote it; test (m) only covered the loose-ref path).
+  const shaDet = 'c'.repeat(40);
+  const detRepo = join(tmp, 'sha-detached');
+  mkdirSync(join(detRepo, '.git'), { recursive: true });
+  writeFileSync(join(detRepo, '.git', 'HEAD'), shaDet + '\n');
+  const detNotes = join(tmp, 'sha-det-notes.md');
+  writeFileSync(detNotes, '---\nemitted_surfaces: []\n---\n');
+  const detOut = join(tmp, 'sha-det-mined.json');
+  const detRun = spawnSync(process.execPath, [minePath, '--repo', detRepo, '--scan', detNotes, '--out', detOut], { encoding: 'utf8' });
+  assert(detRun.status === 0 && JSON.parse(readFileSync(detOut, 'utf8')).corpus_sha === shaDet, 'mine: corpus_sha resolves a DETACHED HEAD (bare sha in .git/HEAD)');
+
+  // (m3) PACKED REFS — the ref has no loose file; the sha lives only in .git/packed-refs.
+  //      Exercises the packed-refs loop (moved into the two-base loop by the resolve).
+  const shaPk = 'd'.repeat(40);
+  const pkRepo = join(tmp, 'sha-packed');
+  mkdirSync(join(pkRepo, '.git'), { recursive: true });
+  writeFileSync(join(pkRepo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  writeFileSync(join(pkRepo, '.git', 'packed-refs'), `# pack-refs with: peeled fully-peeled sorted\n${shaPk} refs/heads/main\n`);
+  const pkNotes = join(tmp, 'sha-pk-notes.md');
+  writeFileSync(pkNotes, '---\nemitted_surfaces: []\n---\n');
+  const pkOut = join(tmp, 'sha-pk-mined.json');
+  const pkRun = spawnSync(process.execPath, [minePath, '--repo', pkRepo, '--scan', pkNotes, '--out', pkOut], { encoding: 'utf8' });
+  assert(pkRun.status === 0 && JSON.parse(readFileSync(pkOut, 'utf8')).corpus_sha === shaPk, 'mine: corpus_sha resolves a ref that lives ONLY in packed-refs (no loose ref file)');
+
+  // (m4) HOSTILE .git — a ref name with `..` is refused (no traversal read), and readHeadSha
+  //      degrades to null without crashing. (security lens: bounded untrusted-repo hardening.)
+  const evRepo = join(tmp, 'sha-evil');
+  mkdirSync(join(evRepo, '.git'), { recursive: true });
+  writeFileSync(join(evRepo, '.git', 'HEAD'), 'ref: ../../../../etc/hostname\n');
+  const evNotes = join(tmp, 'sha-ev-notes.md');
+  writeFileSync(evNotes, '---\nemitted_surfaces: []\n---\n');
+  const evOut = join(tmp, 'sha-ev-mined.json');
+  const evRun = spawnSync(process.execPath, [minePath, '--repo', evRepo, '--scan', evNotes, '--out', evOut], { encoding: 'utf8' });
+  assert(evRun.status === 0 && JSON.parse(readFileSync(evOut, 'utf8')).corpus_sha === null, 'mine: a HEAD ref containing `..` is refused (no traversal) → corpus_sha null, no crash');
+
   // (j) SPAWNS-NOTHING covenant — assert on mine.mjs's OWN SOURCE (§3(b): in-process only).
   const mineSrc = readFileSync(minePath, 'utf8');
   assert(!/child_process/.test(mineSrc), 'mine: source never references child_process (imports node:fs + node:path only)');
   assert(!/\bspawnSync\b|\bexecSync\b|\bexecFileSync\b|\bspawn\s*\(|\bexec\s*\(/.test(mineSrc), 'mine: source contains no spawn/exec call (spawns nothing)');
   assert(!/shell:\s*true/.test(mineSrc), 'mine: source contains no shell:true options object (danger regex is fragment-assembled)');
+  // import allowlist — the spawns-nothing covenant is only as strong as the module surface.
+  // Assert mine.mjs imports EXACTLY node:fs + node:path (no child_process/vm/net/dynamic import).
+  const imports = [...mineSrc.matchAll(/^import\s+.*?from\s+'([^']+)';/gm)].map((m) => m[1]);
+  assert(imports.every((s) => s === 'node:fs' || s === 'node:path') && imports.length >= 2, `mine: imports are EXACTLY node:fs + node:path (defense-in-depth for spawns-nothing; got ${imports.join(', ')})`);
+  assert(!/\brequire\s*\(|\bimport\s*\(|\beval\s*\(|\bnew Function\b/.test(mineSrc), 'mine: no dynamic require/import()/eval/Function (the source grep cannot be obfuscation-evaded)');
 
   rmSync(tmp, { recursive: true, force: true });
 }

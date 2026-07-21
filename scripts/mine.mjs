@@ -145,41 +145,57 @@ function readTextSafe(abs) {
  * covenant). Returns null when there is no .git (e.g. a fixture subtree) or on any
  * failure — the caller must degrade gracefully, never crash.
  */
+const SHA_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/; // git object id: SHA-1 (40) or SHA-256 (64) hex
+// Read a small .git metadata file as text, SIZE-CAPPED. A ref / HEAD / packed-refs is tiny;
+// the cap denies a hostile .git a memory-blow-up read (e.g. a multi-GB HEAD, /dev/zero).
+function readSmall(abs) {
+  try {
+    if (statSync(abs).size > (1 << 20)) return null; // 1 MiB — far above any real ref file
+    return readFileSync(abs, 'utf8');
+  } catch { return null; }
+}
+// Resolve the repo HEAD sha by READING .git as text — never spawns git (same in-process
+// covenant as the rest of mine). Handles a .git DIRECTORY (normal clone), a .git FILE
+// `gitdir: <path>` (linked worktree — veriloop self-hosts this way), detached HEAD, and
+// loose + packed refs via the shared commondir.
+// SECURITY (untrusted-repo posture): reads are size-capped (readSmall) and a ref name
+// containing `..` is refused, so a hostile .git cannot force an unbounded or `..`-traversal
+// read. The gitdir/commondir pointers MAY still resolve OUTSIDE --repo — that is inherent to
+// git's worktree layout (the legitimate self-host case reads the MAIN repo's .git). Output is
+// gated to a hex object id, so no arbitrary file CONTENT can leak (only a 40/64-hex value or
+// an existence oracle). Full untrusted-repo .git containment is a DEFERRED, separately
+// red-teamed concern — see the spec non-goals; today mine runs against trusted worktrees.
 function readHeadSha(repo) {
   try {
     const dotgit = join(repo, '.git');
-    // .git is a DIRECTORY (normal clone) or a FILE `gitdir: <path>` (worktree/submodule).
-    // veriloop self-hosts inside isolated worktrees, so the file layout is the common case.
     let gitdir;
     if (statSync(dotgit).isDirectory()) {
       gitdir = dotgit;
     } else {
-      const m = readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/);
+      const raw = readSmall(dotgit);
+      const m = raw && raw.match(/gitdir:\s*(.+)/);
       if (!m) return null;
       gitdir = resolve(repo, m[1].trim());
     }
     // Worktrees keep HEAD in their own gitdir but share refs via the commondir.
     let commondir = gitdir;
-    try {
-      commondir = resolve(gitdir, readFileSync(join(gitdir, 'commondir'), 'utf8').trim());
-    } catch { /* single repo — no commondir */ }
-    const head = readFileSync(join(gitdir, 'HEAD'), 'utf8').trim();
-    if (/^[0-9a-f]{40}$/.test(head)) return head; // detached HEAD
+    const cd = readSmall(join(gitdir, 'commondir'));
+    if (cd) commondir = resolve(gitdir, cd.trim());
+    const head = (readSmall(join(gitdir, 'HEAD')) || '').trim();
+    if (SHA_RE.test(head)) return head; // detached HEAD
     const ref = head.match(/^ref:\s*(.+)$/);
     if (!ref) return null;
     const refRel = ref[1].trim();
+    if (refRel.includes('..')) return null; // a real ref never traverses — refuse `..`
     for (const base of [gitdir, commondir]) {
-      const loose = join(base, refRel);
-      if (existsSync(loose)) {
-        const s = readFileSync(loose, 'utf8').trim();
-        if (/^[0-9a-f]{40}$/.test(s)) return s;
-      }
+      const loose = readSmall(join(base, refRel));
+      if (loose !== null && SHA_RE.test(loose.trim())) return loose.trim();
     }
     for (const base of [commondir, gitdir]) {
-      const packed = join(base, 'packed-refs');
-      if (existsSync(packed)) {
-        for (const line of readFileSync(packed, 'utf8').split('\n')) {
-          const m = line.match(/^([0-9a-f]{40})\s+(.+)$/);
+      const packed = readSmall(join(base, 'packed-refs'));
+      if (packed !== null) {
+        for (const line of packed.split('\n')) {
+          const m = line.match(/^([0-9a-f]{40,64})\s+(.+)$/);
           if (m && m[2] === refRel) return m[1];
         }
       }
@@ -249,10 +265,14 @@ function verify(repo, paths, query) {
     if (text === null) continue;
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (query.violating.test(line)) {
+      // Classify the CODE portion only. A line-comment that merely MENTIONS the antipattern
+      // (e.g. `// never console.log(process.env.X)`) is not an enforcement site: counting it
+      // would suppress a real invariant (a warning comment flips ratio below 0.9) or inflate
+      // conformance with citations that point at prose. Strip `//`→EOL before testing.
+      const code = lines[i].replace(/\/\/.*$/, '');
+      if (query.violating.test(code)) {
         violating++;
-      } else if (query.conforming.test(line)) {
+      } else if (query.conforming.test(code)) {
         conforming++;
         citations.push(`${rel}:${i + 1}`);
       }
@@ -305,7 +325,8 @@ function main() {
     if (citations.length < 2) continue;
 
     // Deterministic re-verification: ≥90% over ≥5 sites ⇒ invariant; else hypothesis → DROP.
-    const ratio = sites === 0 ? 0 : conforming / sites;
+    // sites ≥ 2 here — the ≥2-citation gate above implies ≥2 conforming sites, so no /0.
+    const ratio = conforming / sites;
     if (!(ratio >= 0.9 && sites >= 5)) continue;
 
     seenRules.add(query.rule);
@@ -314,21 +335,21 @@ function main() {
       owner: ALLOWED_OWNERS.has(seed.owner) ? seed.owner : query.owner,
       provenance: seed.provenance,
       citations: citations.slice(0, MAX_CITATIONS),
-      conformance: { ratio, conforming, violating, sites },
+      // distinctFiles is the TRUE conforming-file spread (over the full, pre-cap citation set)
+      // so the ranking tiebreaker is not undercounted by the MAX_CITATIONS output cap.
+      conformance: { ratio, conforming, violating, sites, distinctFiles: new Set(citations.map((c) => c.split(':')[0])).size },
       confirmed_at_sha: corpusSha,
       confirmed_by: null, // owner-gated — never set by this run
       ratification: null, // owner-gated — never set by this run
     });
   }
 
-  // Ranking (cheap in-process proxy): citation count, then distinct-file spread.
+  // Ranking (cheap in-process proxy): TRUE conforming-site count, then TRUE distinct-file
+  // spread (both pre-cap, so the MAX_CITATIONS output cap never skews the order).
   // Author/commit-diversity via git blame is git-history → DEFERRED.
   candidates.sort((a, b) => {
-    // rank by the TRUE conforming-site count (citations are capped for output)
     if (b.conformance.conforming !== a.conformance.conforming) return b.conformance.conforming - a.conformance.conforming;
-    const spread = (c) => new Set(c.citations.map((x) => x.split(':')[0])).size;
-    const sb = spread(b), sa = spread(a);
-    if (sb !== sa) return sb - sa;
+    if (b.conformance.distinctFiles !== a.conformance.distinctFiles) return b.conformance.distinctFiles - a.conformance.distinctFiles;
     return a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0;
   });
 
