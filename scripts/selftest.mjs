@@ -9,7 +9,7 @@
 // Usage: node scripts/selftest.mjs   → prints one line per assertion, exits 1 on any FAIL.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync, readdirSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -1641,6 +1641,56 @@ function assert(cond, desc) {
   const shaBad = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath, '--corpus-sha', 'deadbeef'], { encoding: 'utf8' });
   assert(shaBad.status === 2 && /corpus-sha/.test(shaBad.stderr) && /does not match/.test(shaBad.stderr),
     '--corpus-sha: a mismatch EXITS 2 with a clear message (pins the frozen corpus)');
+}
+
+
+// --- M3 §4: referee-as-lint — the constitution's "No orphan rules, no jobless
+//     experts" invariant is machine-checked in lint-bundle.mjs (two fail-level
+//     checks), gated to fire ONLY on a mined bundle (a pre-mining STARTER is
+//     exempt). Positive path uses the committed fixture; the two failure paths
+//     mutate tmp COPIES (never a second committed broken fixture — constitution
+//     rule 3); the gate-skip path generates a fresh starter. ---
+{
+  const mined = join(fixtures, 'mined-bundle');
+
+  // positive: the fully-owned mined fixture lints clean (both strict fails run + pass)
+  const pos = spawnSync(process.execPath, [lintPath, '--bundle', mined], { encoding: 'utf8' });
+  assert(pos.status === 0, 'lint-bundle: the fully-owned mined-bundle fixture lints clean (referee runs and passes)');
+  assert(/rule-ownership referee — every rule owned/.test(pos.stdout || ''), 'lint-bundle: the mined fixture reports the rule-ownership referee ran (not skipped)');
+
+  // negative (a): strip ONE rule's owner tag → orphan rule → fail
+  const orphanDir = mkdtempSync(join(tmpdir(), 'veriloop-orphan-'));
+  cpSync(mined, orphanDir, { recursive: true });
+  const conO = join(orphanDir, '.claude/veriloop/constitution.md');
+  writeFileSync(conO, readFileSync(conO, 'utf8').replace(/ _\(owner: `code-review`\)_/, '')); // drop rule 1's tag (code-review keeps 2 → only orphan fires)
+  const orphan = spawnSync(process.execPath, [lintPath, '--bundle', orphanDir], { encoding: 'utf8' });
+  assert(orphan.status === 1, 'lint-bundle: FAILS (exit 1) when a mined rule loses its owner tag');
+  assert(/orphan rule/.test(orphan.stdout || ''), 'lint-bundle: the failure names the orphan-rule referee');
+  rmSync(orphanDir, { recursive: true, force: true });
+
+  // negative (b): reassign two of drift's tags → drift owns 1 rule → jobless expert → fail
+  const joblessDir = mkdtempSync(join(tmpdir(), 'veriloop-jobless-'));
+  cpSync(mined, joblessDir, { recursive: true });
+  const conJ = join(joblessDir, '.claude/veriloop/constitution.md');
+  let reassigned = 0;
+  writeFileSync(conJ, readFileSync(conJ, 'utf8').replace(/_\(owner: `drift`\)_/g, (m) => (++reassigned <= 2 ? '_(owner: `code-review`)_' : m)));
+  const jobless = spawnSync(process.execPath, [lintPath, '--bundle', joblessDir], { encoding: 'utf8' });
+  assert(jobless.status === 1, 'lint-bundle: FAILS (exit 1) when a roster expert owns fewer than 2 rules');
+  assert(/jobless expert/.test(jobless.stdout || ''), 'lint-bundle: the failure names the jobless-expert referee');
+  rmSync(joblessDir, { recursive: true, force: true });
+
+  // gate regression guard: a fresh STARTER bundle (banner + TODO owner placeholders,
+  // rule 3 owner `security` absent from its single-expert roster) does NOT trip the
+  // strict fails — the referee skips pre-mining. Pins the gate in both directions.
+  const starterDir = mkdtempSync(join(tmpdir(), 'veriloop-starter-'));
+  writeFileSync(join(starterDir, 'package.json'), JSON.stringify({ name: 'starter', scripts: { lint: 'eslint .', test: 'vitest run' } }));
+  const cjPathS = join(starterDir, 'commands.json');
+  writeFileSync(cjPathS, JSON.stringify(detectCommands(starterDir), null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', starterDir, '--commands', cjPathS, '--out', starterDir], { encoding: 'utf8' });
+  const starter = spawnSync(process.execPath, [lintPath, '--bundle', starterDir], { encoding: 'utf8' });
+  assert(starter.status === 0, 'lint-bundle: a fresh STARTER bundle passes — the referee skips pre-mining (gate regression guard)');
+  assert(/rule-ownership referee skipped/.test(starter.stdout || ''), 'lint-bundle: the starter reports the referee was skipped (pre-mining gate fired)');
+  rmSync(starterDir, { recursive: true, force: true });
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);
