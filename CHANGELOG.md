@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8 — 2026-07-21
+- The `/dev-plan` interview question cap is now CONFIGURABLE (M3 §5 owner decision). A new optional `interview.json` field `question_cap` sets a repo's DEFAULT question ceiling for the emitted `/dev-plan`; the DEFAULT is unset (`null`/absent) → NO cap, exactly today's behavior. When set it must be a **positive integer** — a non-integer or `≤0` value FAILS THE BUILD (`buildQuestionCap` throws, mirroring `buildBudget`'s "never emit a loop that dies mid-run" discipline), it never silently passes. The emitted `/dev-plan` guardrail reflects it: unset keeps the "ask as many as you genuinely need — NO fixed cap" copy; set to N states the repo's DEFAULT cap is ≤N questions, with the per-run `questions=<M>` override still documented and taking precedence. `question_cap` is documented in the SKILL.md interview.json schema block; the selftest covers unset (no-cap copy preserved), `question_cap: 3` (≤3 default stated + override still documented), and `question_cap: 0` / `"three"` (build fails, nonzero exit).
+- NOTE: version 0.3.8 collides with the parallel `feat/m3-scan-deep-scan` and `feat/m3-referee-as-lint` branches — a KNOWN parallel-branch collision the owner resolves at merge.
+
 ## 0.3.7 — 2026-07-17
 - Emitted text is host-hook-clean: the persona ground-rules line carried a trailing space, which a host repo's pre-commit trailing-whitespace hook rejected (discovered installing into catan_rl_v2 — the hook auto-fixed machine-owned files, which would flap on every regen, the same class as the M1 prettier lesson). Fixed at the renderer; a selftest now generates a bundle and asserts NO emitted file carries trailing whitespace.
 

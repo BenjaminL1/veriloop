@@ -245,7 +245,7 @@ export function renderAdviseCommand({ repoName, roster }) {
 // (the interview is a dialogue). Writes ONLY the spec — no code, no verdicts.
 // ---------------------------------------------------------------------------
 
-export function renderDevPlanCommand({ repoName, roster, planModel }) {
+export function renderDevPlanCommand({ repoName, roster, planModel, questionCap }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
   // frontmatter model line: emitted ONLY when the interview set phase_models.plan
   // (verbatim, no hardcoded fallback — rule 9). Absent key → no line, inherit the
@@ -259,6 +259,20 @@ export function renderDevPlanCommand({ repoName, roster, planModel }) {
       `unavailable the harness **silently falls back** to the session model (no error). A premium\n` +
       `value spends **that model's quota**, not the session's.\n\n`
     : '';
+  // Interview question-cap guardrail. Default (question_cap unset) keeps today's exact
+  // "no fixed cap" copy — behavior unchanged. A repo may bake a DEFAULT ceiling via
+  // interview.question_cap = N; a per-run `questions=<M>` still overrides it. The value
+  // is validated at BUILD time (generate.mjs buildQuestionCap), so a bad cap never lands here.
+  const cap = Number.isInteger(questionCap) && questionCap > 0 ? questionCap : null;
+  const capGuardrail = cap
+    ? `   Guardrails: this repo bakes a **DEFAULT cap of ≤${cap} questions**; the "ask ONLY what you\n` +
+      `   cannot derive" discipline above is what holds you under it, not the number alone. A per-run\n` +
+      `   **\`questions=<M>\`** in the invocation (e.g. \`questions=2\`) OVERRIDES that default and takes\n` +
+      `   precedence — when set, stop asking after M and proceed on best-effort defaults for the rest.\n`
+    : `   Guardrails: **ask as many questions as you genuinely need** — there is NO fixed cap; the\n` +
+      `   "ask ONLY what you cannot derive" discipline above is what keeps this bounded, not a number.\n` +
+      `   The owner may cap it by passing **\`questions=<N>\`** in the invocation (e.g. \`questions=3\`);\n` +
+      `   when set, stop asking after N and proceed on best-effort defaults for the rest.\n`;
   return (
     `---\n` +
     `description: Use when the owner wants to turn a feature idea into a BINDING spec for ${repoName} — recon first, an interleaved spec interview, then an expert council (${lenses}) that pressure-tests the design before a spec is written and the owner ratifies it. Runs inline (the interview is a dialogue). Writes ONLY the spec, never code, and produces NO PASS/FAIL verdict (verdicts belong to /dev-loop).\n` +
@@ -281,11 +295,8 @@ export function renderDevPlanCommand({ repoName, roster, planModel }) {
     `   (where state lives, client vs server, which existing pattern to follow), user-visible\n` +
     `   specifics (copy, thresholds, edge-case behavior), and what "done" means (the check or\n` +
     `   test that would prove it). Use **AskUserQuestion**, each with a recommended default.\n` +
-    `   Guardrails: **ask as many questions as you genuinely need** — there is NO fixed cap; the\n` +
-    `   "ask ONLY what you cannot derive" discipline above is what keeps this bounded, not a number.\n` +
-    `   The owner may cap it by passing **\`questions=<N>\`** in the invocation (e.g. \`questions=3\`);\n` +
-    `   when set, stop asking after N and proceed on best-effort defaults for the rest. Forks that\n` +
-    `   co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.\n` +
+    capGuardrail +
+    `   Forks that co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.\n` +
     `   **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A\n` +
     `   trivial change should not trigger an interrogation.\n\n` +
     `## Step 2 — Convene the expert council\n\n` +

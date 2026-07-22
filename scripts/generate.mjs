@@ -21,7 +21,7 @@ import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.3.7';
+const VERILOOP_VERSION = '0.3.8';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -165,6 +165,16 @@ function buildBudget(interview) {
   };
 }
 
+/** Fail the BUILD on a bad question cap — never emit a loop that dies mid-run. */
+function buildQuestionCap(interview) {
+  const cap = interview.question_cap;
+  if (cap === undefined || cap === null) return null; // default: no cap (behavior unchanged)
+  if (!Number.isInteger(cap) || cap <= 0) {
+    throw new Error(`interview.question_cap: '${cap}' must be a positive integer (the /dev-plan default question cap)`);
+  }
+  return cap;
+}
+
 // The specialist keys an owner may add — exactly the persona bodies render.mjs
 // supports, minus the always-present baseline. (finding #11)
 const ROSTER_ADD_KEYS = Object.keys(SPECIALIST_DEFAULTS); // security | drift | ux
@@ -245,6 +255,7 @@ function buildConfig(cj, roster, repoName, interview = {}) {
     depsSetup: buildDepsSetup(cj),
     crossModel: interview.cross_model !== undefined ? !!interview.cross_model : true,
     budget: buildBudget(interview),
+    questionCap: buildQuestionCap(interview),
     uiAreas: ['ui', 'component', 'page', 'screen', 'view', 'css', 'style', 'layout', 'hud', 'board', 'lobby', 'render', 'widget', 'gui', 'frontend'],
     riskTiers: (() => {
       const rt = buildRiskTiers(cj, roster);
@@ -385,7 +396,7 @@ function main() {
   // raw interview key if present, else undefined — no preset fallback); an absent
   // key emits NO model line (inherit the session model). Runs inline; writes only
   // the spec; carries NO gate authority.
-  w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan }));
+  w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan, questionCap: config.questionCap }));
   // /posture — change the repo's DEFAULT budget posture (the value baked into the
   // bundle from interview.json). The emitted valid-level list derives from the real
   // BUDGET_PRESETS keys (rule 9 — command text can't drift from the presets).

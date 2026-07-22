@@ -138,6 +138,7 @@ Schema (every field optional):
 { "cross_model": bool,              // default true; false disables the cross-model lens
   "high_risk_areas": string[],      // extra keywords appended to the high-risk tier
   "budget_posture": "frugal" | "balanced" | "max",   // default balanced; cost dial
+  "question_cap": int,              // default null (no cap); /dev-plan interview's DEFAULT question ceiling (positive int)
   "phase_models": {                 // per-phase model — overrides the posture preset
     "plan"|"implement"|"review"|"checks"|"fix"|"land"|"report": "haiku"|"sonnet"|"opus"|"fable" },
   "phase_effort": {                 // per-phase reasoning effort
