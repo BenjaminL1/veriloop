@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { compileMinedQuery, runMinedQuery } from './lib/mined-query.mjs';
-import { parseGoldRules, scoreRecovery } from './bench-score.mjs';
+import { parseGoldRules, scoreRecovery, contentTokens } from './bench-score.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', 'fixtures');
@@ -1551,6 +1551,96 @@ function assert(cond, desc) {
   const genSrc = readFileSync(generatePath, 'utf8');
   const tmplSrc = readFileSync(join(here, 'templates', 'dev-loop.template.js'), 'utf8');
   assert(!/bench-score/.test(genSrc) && !/bench-score/.test(tmplSrc), 'bench-score: unreferenced by generate.mjs and the emitted template (compiler-side, not emitted)');
+}
+
+// --- v0.3.12: bench-score rigor upgrade #1 — STEMMING (recall). A trivial deterministic
+//     suffix-normalization so singular/plural variants of the SAME content word collide,
+//     closing a false-MISS gap — WITHOUT merging unrelated words. ---
+{
+  const eqSet = (a, b) => a.size === b.size && [...a].every((t) => b.has(t));
+
+  // (a) DIRECT — plurals normalize to their singulars' Set (the required cases).
+  assert(
+    eqSet(contentTokens('secrets tokens logs paths spawns'), contentTokens('secret token log path spawn')),
+    'stemming: {secrets,tokens,logs,paths,spawns} normalizes to the same token Set as its singulars',
+  );
+  // (b) OVER-STEM GUARD — an `ss` word is left whole (process ≠ proces); a short word intact.
+  assert(
+    contentTokens('process').has('process') && !contentTokens('process').has('proces'),
+    'stemming: an `ss` word (process) is NOT stripped — the over-stem guard holds (no unrelated-word merge)',
+  );
+  // (c) `…ies`→`…y` (the optional nicety) collapses policies↔policy.
+  assert(contentTokens('policies').has('policy') && eqSet(contentTokens('policies'), contentTokens('policy')),
+    'stemming: `…ies`→`…y` (policies→policy)');
+
+  // (d) END-TO-END — a gold rule and a candidate differing ONLY by plural now RECOVER
+  //     where they previously MISSED. Pre-stem the shared tokens were {stay} only ⇒
+  //     overlap |{stay}|/min(4,4) = 0.25 < 0.5 ⇒ unmatched/MISSED; post-stem both Sets
+  //     are {secret,token,stay,log} ⇒ overlap 1.0 ≥ 0.5 ⇒ RECOVERED (it has a citation).
+  const pluralGold = '1. secrets and tokens stay out of logs _(owner: `security`)_\n';
+  const singularCand = { candidates: [{ rule: 'secret and token stay out of log', citations: ['src/audit.js:3'] }] };
+  const stemScore = scoreRecovery(pluralGold, singularCand, 0.5);
+  assert(
+    stemScore.recovered === 1 && stemScore.results[0].recovered === true,
+    'stemming: a gold rule and candidate differing only by plural (secrets/secret, tokens/token, logs/log) RECOVER (pre-stem they missed at overlap 0.25)',
+  );
+}
+
+// --- v0.3.12: bench-score rigor upgrade #2 — `--corpus <root>` citation VERIFICATION
+//     (realness). With a corpus root a citation is valid iff well-formed AND it resolves
+//     to a real file:line under the root (path exists AND line ≤ EOF). Without --corpus,
+//     well-formedness only (today's behavior — delegated to mine's witness-or-drop). ---
+{
+  const corpus = mkdtempSync(join(tmpdir(), 'veriloop-corpus-'));
+  mkdirSync(join(corpus, 'src'), { recursive: true });
+  // a real 10-line file (trailing newline → editor line count 10, not 11)
+  writeFileSync(join(corpus, 'src', 'real.js'), Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n') + '\n');
+  const gold = '1. child-process spawns pass an argv array with the shell option false _(owner: `security`)_\n';
+  const mk = (cite) => ({ candidates: [{ rule: 'child-process spawns pass an argv array with the shell option false', citations: [cite] }] });
+
+  // valid: real path, line within range (and the boundary line == line count).
+  assert(scoreRecovery(gold, mk('src/real.js:5'), 0.5, { corpusRoot: corpus }).recovered === 1,
+    '--corpus: a citation into a real file at a valid line is ACCEPTED (rule recovers)');
+  assert(scoreRecovery(gold, mk('src/real.js:10'), 0.5, { corpusRoot: corpus }).recovered === 1,
+    '--corpus: line == file line count (EOF boundary) is ACCEPTED');
+  // nonexistent path → REJECTED under --corpus, but ACCEPTED without it.
+  assert(scoreRecovery(gold, mk('src/ghost.js:1'), 0.5, { corpusRoot: corpus }).recovered === 0,
+    '--corpus: a citation to a nonexistent path is REJECTED (rule MISSED)');
+  assert(scoreRecovery(gold, mk('src/ghost.js:1'), 0.5).recovered === 1,
+    "--corpus absent: the same nonexistent-path citation is ACCEPTED (well-formedness only — mine's witness-or-drop already vetted it)");
+  // line past EOF → REJECTED under --corpus, but ACCEPTED without it.
+  assert(scoreRecovery(gold, mk('src/real.js:11'), 0.5, { corpusRoot: corpus }).recovered === 0,
+    '--corpus: a citation whose line is past EOF is REJECTED (rule MISSED)');
+  assert(scoreRecovery(gold, mk('src/real.js:11'), 0.5).recovered === 1,
+    '--corpus absent: the same past-EOF citation is ACCEPTED (line count is not checked without a corpus)');
+
+  // END-TO-END via the CLI --corpus flag (real exit codes + the corpus-aware miss message).
+  const goldFile = join(corpus, 'gold.md'); writeFileSync(goldFile, gold);
+  const validFile = join(corpus, 'valid.json'); writeFileSync(validFile, JSON.stringify(mk('src/real.js:5')));
+  const ghostFile = join(corpus, 'ghost.json'); writeFileSync(ghostFile, JSON.stringify(mk('src/ghost.js:1')));
+  const cliValid = spawnSync(process.execPath, [benchScorePath, '--gold', goldFile, '--mined', validFile, '--corpus', corpus, '--threshold', '0.5'], { encoding: 'utf8' });
+  assert(cliValid.status === 0 && /recovered 1\/1/.test(cliValid.stdout),
+    '--corpus (CLI): a real, in-range citation drives recovered 1/1 → exit 0');
+  const cliGhost = spawnSync(process.execPath, [benchScorePath, '--gold', goldFile, '--mined', ghostFile, '--corpus', corpus, '--threshold', '0.5'], { encoding: 'utf8' });
+  assert(cliGhost.status === 1 && /recovered 0\/1/.test(cliGhost.stdout),
+    '--corpus (CLI): a citation that does not resolve in the corpus counts MISSED → exit 1');
+  assert(/does not resolve in the corpus/.test(cliGhost.stdout),
+    '--corpus (CLI): the missed-rule line explains the citation did not resolve in the corpus');
+}
+
+// --- v0.3.12: bench-score rigor upgrade #3 — `--corpus-sha <sha>` PIN. Assert the mined
+//     run was produced against the frozen corpus the published result claims (e.g.
+//     `4d0e114`). A match proceeds; a mismatch exits 2. Absent → no check. ---
+{
+  const goldPath = join(fixtures, 'bench-score', 'gold-constitution.md');
+  const recoveringPath = join(fixtures, 'bench-score', 'mined-recovering.json');
+  const recSha = JSON.parse(readFileSync(recoveringPath, 'utf8')).corpus_sha; // read the fixture's own sha (robust to the exact string)
+  const shaOk = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath, '--corpus-sha', recSha], { encoding: 'utf8' });
+  assert(shaOk.status === 0 && /recovered 4\/5/.test(shaOk.stdout),
+    '--corpus-sha: a sha matching mined.corpus_sha PROCEEDS (exit 0, 4/5 PASS)');
+  const shaBad = spawnSync(process.execPath, [benchScorePath, '--gold', goldPath, '--mined', recoveringPath, '--corpus-sha', 'deadbeef'], { encoding: 'utf8' });
+  assert(shaBad.status === 2 && /corpus-sha/.test(shaBad.stderr) && /does not match/.test(shaBad.stderr),
+    '--corpus-sha: a mismatch EXITS 2 with a clear message (pins the frozen corpus)');
 }
 
 console.log(`\n${pass} ok, ${fail} failed`);

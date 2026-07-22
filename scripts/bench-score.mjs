@@ -23,7 +23,15 @@
 //      trailing `_(owner: <key>)_` governance tag; strip markdown markup; split on
 //      every non-alphanumeric run; drop stopwords + modal/imperative words
 //      (must/never/always — constant across ALL rules, so NON-discriminative), pure
-//      digits, and tokens shorter than 3 chars; dedupe.
+//      digits, and tokens shorter than 3 chars; then STEM each surviving token and
+//      dedupe. STEMMING (recall — closes the false-MISS gap): a trivial deterministic
+//      suffix-normalization so singular/plural variants of the SAME word collide
+//      (logs↔log, secrets↔secret, tokens↔token, spawns↔spawn, paths↔path). The rule,
+//      applied AFTER the stopword/len<3/digit filter: leave a token whole if it ends
+//      in `ss` (process/pass/class/access — never strip) or is <4 chars (keeps the
+//      stem ≥3); else `…ies`→`…y` (policies→policy); else drop a lone trailing `s`.
+//      Deliberately conservative — no `ed`/`ing`, no NLP lib — so it never MERGES
+//      unrelated words (the sin), only reunites a word with its own plural.
 //   2. Overlap = the CONTAINMENT (overlap) coefficient |G ∩ C| / min(|G|, |C|).
 //      Containment — not Jaccard — because a mined candidate is typically TERSER
 //      than the verbose gold prose; containment asks "is the candidate's content a
@@ -31,17 +39,27 @@
 //      length gap. A candidate MATCHES a gold rule iff overlap ≥ MATCH_THRESHOLD
 //      (0.5) AND both token sets have ≥2 tokens (guards a 1-token coincidence).
 //   3. CITATION IS REQUIRED, not just a text match. A candidate that names the same
-//      invariant but has NO well-formed citation leaves the gold rule MISSED. A
-//      citation is well-formed iff it is `<path>:<line>` with a non-empty,
-//      whitespace-free path and a positive integer line. The scorer checks
-//      well-formedness ONLY — it is NOT given the corpus root and stays in-process;
-//      mine.mjs already emitted citations for REAL conforming sites it witnessed.
+//      invariant but has NO VALID citation leaves the gold rule MISSED. A citation is
+//      well-formed iff it is `<path>:<line>` with a non-empty, whitespace-free path
+//      and a positive integer line. By DEFAULT (no --corpus) the scorer checks
+//      well-formedness ONLY and stays fully in-process — mine.mjs already emitted
+//      citations for REAL conforming sites it witnessed (witness-or-drop). With
+//      --corpus <root> (see below) the bar RISES to REALNESS: a citation is valid iff
+//      it is also `<root>/<path>` exists as a readable file AND `line` ≤ that file's
+//      line count — so a recovery means "cites REAL code in this corpus".
+//
+// OPTIONAL corpus flags (both absent by default → today's behavior is unchanged):
+//   --corpus <root>       verify each citation resolves to a real file:line under
+//                         <root> (reads the file as TEXT, counts lines — in-covenant).
+//   --corpus-sha <sha>    assert mined.corpus_sha === <sha> (exit 2 on mismatch), so
+//                         a published run can PIN the frozen corpus (e.g. `4d0e114`).
 //
 // Usage:
-//   node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json> [--threshold 0.8]
+//   node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json>
+//     [--threshold 0.8] [--expect-rules N] [--corpus <root>] [--corpus-sha <sha>]
 
 import { readFileSync, realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 // --- CLI ---------------------------------------------------------------------
 function reqVal(argv, i, flag) {
@@ -54,13 +72,15 @@ function reqVal(argv, i, flag) {
 }
 
 function parseArgs(argv) {
-  const args = { gold: null, mined: null, threshold: 0.8, expectRules: null, help: false };
+  const args = { gold: null, mined: null, threshold: 0.8, expectRules: null, corpus: null, corpusSha: null, help: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--gold') args.gold = resolve(reqVal(argv, ++i, '--gold'));
     else if (a === '--mined') args.mined = resolve(reqVal(argv, ++i, '--mined'));
     else if (a === '--threshold') args.threshold = Number(reqVal(argv, ++i, '--threshold'));
     else if (a === '--expect-rules') args.expectRules = Number(reqVal(argv, ++i, '--expect-rules'));
+    else if (a === '--corpus') args.corpus = resolve(reqVal(argv, ++i, '--corpus'));
+    else if (a === '--corpus-sha') args.corpusSha = reqVal(argv, ++i, '--corpus-sha');
     else if (a === '--help' || a === '-h') args.help = true;
   }
   return args;
@@ -81,8 +101,27 @@ const STOPWORDS = new Set([
   'up', 'off', 'onto', 'over', 'under', 'again', 'once', 'here', 'there', 'other', 'same',
 ]);
 
-/** Normalize a rule's text into a Set of discriminative content tokens. */
-function contentTokens(text) {
+/**
+ * Deterministic suffix-normalization (a Porter-lite stem) so singular/plural variants
+ * of the SAME content word collide: logs→log, secrets→secret, tokens→token,
+ * spawns→spawn, paths→path. Applied AFTER the stopword/len<3/digit filter, on the
+ * already-lowercased token. Deliberately conservative to avoid MERGING UNRELATED words:
+ *   • a token ending in `ss` is left whole (process/pass/class/access) — stripping there
+ *     would corrupt the stem and could collide unrelated words;
+ *   • only tokens with ≥4 chars are touched, so the stem stays ≥3 chars;
+ *   • `…ies`→`…y` (policies→policy, dependencies→dependency), else a lone trailing `s`
+ *     is dropped. No `ed`/`ing` and no other transforms — minimal + reproducible, no lib.
+ */
+function stem(t) {
+  if (t.length < 4) return t; // keep short tokens intact (a strip would drop below 3)
+  if (t.endsWith('ss')) return t; // process/pass/class/access — never strip
+  if (t.length >= 5 && t.endsWith('ies')) return t.slice(0, -3) + 'y'; // policies→policy
+  if (t.endsWith('s')) return t.slice(0, -1); // logs→log, paths→path, spawns→spawn
+  return t;
+}
+
+/** Normalize a rule's text into a Set of discriminative, stemmed content tokens. */
+export function contentTokens(text) {
   const stripped = String(text)
     .toLowerCase()
     // drop a trailing governance tag `_(owner: security)_` / `(owner: drift)`
@@ -93,8 +132,8 @@ function contentTokens(text) {
   for (const raw of stripped.split(/[^a-z0-9]+/)) {
     if (raw.length < 3) continue; // drops "is", "be", single letters, most line refs
     if (/^\d+$/.test(raw)) continue; // pure digits (line numbers embedded in prose)
-    if (STOPWORDS.has(raw)) continue;
-    tokens.add(raw);
+    if (STOPWORDS.has(raw)) continue; // stopword test on the RAW token (before stemming)
+    tokens.add(stem(raw)); // stem AFTER filtering so plural/singular collide
   }
   return tokens;
 }
@@ -120,6 +159,35 @@ function isWellFormedCitation(c) {
   if (/\s/.test(path)) return false;
   if (!/^\d+$/.test(line)) return false;
   return Number(line) >= 1;
+}
+
+// REALNESS check (only when --corpus is given). A well-formed citation `<path>:<line>`
+// is REAL iff `<root>/<path>` reads as a text file AND `line` ≤ that file's line count.
+// Reading the file as TEXT and counting lines stays in-covenant (node:fs, no spawn).
+// A missing/unreadable path or a line past EOF → false (the rule is left MISSED).
+function citationResolvesInCorpus(c, corpusRoot) {
+  const idx = c.lastIndexOf(':');
+  const relPath = c.slice(0, idx);
+  const line = Number(c.slice(idx + 1));
+  let text;
+  try {
+    text = readFileSync(join(corpusRoot, relPath), 'utf8');
+  } catch {
+    return false; // path does not resolve to a readable file under the corpus root
+  }
+  // line count = editor lines: newline count, not counting a trailing-newline empty tail.
+  const lineCount = text.length === 0 ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+  return line <= lineCount;
+}
+
+/**
+ * The citation-validity predicate. By default (no corpus root) a citation is valid iff
+ * well-formed. With a corpus root the bar rises to REALNESS: well-formed AND it resolves
+ * to a real file:line in the corpus.
+ */
+function citationValidator(corpusRoot) {
+  if (!corpusRoot) return isWellFormedCitation;
+  return (c) => isWellFormedCitation(c) && citationResolvesInCorpus(c, corpusRoot);
 }
 
 // --- Parsing -----------------------------------------------------------------
@@ -167,13 +235,17 @@ function parseMinedCandidates(obj) {
  * @param {string} goldMd  gold constitution markdown (text)
  * @param {{candidates: Array}} minedObj  parsed mined.json
  * @param {number} threshold  recovery ratio in (0, 1]
+ * @param {{corpusRoot?: string|null}} [opts]  when corpusRoot is set, a citation must
+ *   also resolve to a real file:line under that root to count (see citationValidator);
+ *   omitted/null keeps today's well-formedness-only behavior.
  */
-export function scoreRecovery(goldMd, minedObj, threshold = 0.8) {
+export function scoreRecovery(goldMd, minedObj, threshold = 0.8, opts = {}) {
+  const isValidCitation = citationValidator(opts && opts.corpusRoot);
   const goldRules = parseGoldRules(goldMd).map((r) => ({ ...r, tokens: contentTokens(r.text) }));
   const candidates = (parseMinedCandidates(minedObj) || []).map((c) => ({
     rule: c.rule,
     tokens: contentTokens(c.rule),
-    validCitations: c.citations.filter(isWellFormedCitation),
+    validCitations: c.citations.filter(isValidCitation),
   }));
 
   const results = [];
@@ -225,7 +297,7 @@ function truncate(s, n) {
 function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
-    console.log('Usage: node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json> [--threshold 0.8] [--expect-rules N]');
+    console.log('Usage: node bench-score.mjs --gold <gold-constitution.md> --mined <mined.json> [--threshold 0.8] [--expect-rules N] [--corpus <root>] [--corpus-sha <sha>]');
     return;
   }
   for (const [flag, val] of [['--gold', args.gold], ['--mined', args.mined]]) {
@@ -257,8 +329,15 @@ function main() {
     console.error(`--mined ${args.mined} has no candidates[] array (not a mine.mjs mined.json)`);
     process.exit(2);
   }
+  // Corpus-SHA pin: assert the mined run was produced against the FROZEN corpus the
+  // published result claims (e.g. `4d0e114`). A mismatch means the numbers are scored
+  // against a different tree than advertised — fail LOUDLY (exit 2) rather than publish.
+  if (args.corpusSha !== null && minedObj.corpus_sha !== args.corpusSha) {
+    console.error(`--corpus-sha ${args.corpusSha} does not match mined.corpus_sha ${minedObj.corpus_sha ?? '(absent)'} — the mined run was not produced against the pinned corpus`);
+    process.exit(2);
+  }
 
-  const score = scoreRecovery(goldMd, minedObj, args.threshold);
+  const score = scoreRecovery(goldMd, minedObj, args.threshold, { corpusRoot: args.corpus });
   if (score.total === 0) {
     console.error(`no numbered rules parsed from --gold ${args.gold} (expected top-level \`N.\` list items)`);
     process.exit(2);
@@ -277,7 +356,10 @@ function main() {
     if (r.recovered) {
       console.log(`  rule ${String(r.n).padEnd(3)} → recovered  ${truncate(r.candidate, 64)}  [cite ${r.citation}]`);
     } else if (r.reason === 'matched-without-valid-citation') {
-      console.log(`  rule ${String(r.n).padEnd(3)} → missed     (matched candidate carried no well-formed file:line citation)`);
+      const why = args.corpus
+        ? "matched candidate's citation does not resolve in the corpus (missing path or line past EOF)"
+        : 'matched candidate carried no well-formed file:line citation';
+      console.log(`  rule ${String(r.n).padEnd(3)} → missed     (${why})`);
     } else if (r.reason === 'no-distinct-cited-candidate') {
       console.log(`  rule ${String(r.n).padEnd(3)} → missed     (its only cited candidate already recovered another rule — 1:1)`);
     } else {
