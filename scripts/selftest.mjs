@@ -1104,6 +1104,21 @@ function assert(cond, desc) {
   const listBody = listMatch ? listMatch[1] : '';
   assert(['dev-loop.md', 'advise.md', 'review.md', 'dev-plan.md'].every((c) => listBody.includes(`'${c}'`)), 'lint-bundle: the single command constant covers all four commands');
   assert(!/\[\s*'dev-loop\.md'\s*,\s*'advise\.md'\s*,\s*'review\.md'\s*\]/.test(lintSrc), 'lint-bundle: no remaining hardcoded [dev-loop, advise, review] array — every check references EMITTED_COMMANDS');
+
+  // (i) v0.3.8: the /dev-plan interview question cap is CONFIGURABLE via interview.question_cap
+  //     (owner decision, M3 §5). Default (unset) keeps today's no-cap copy — behavior unchanged;
+  //     a positive int bakes a DEFAULT ceiling the per-run `questions=<M>` still overrides; a bad
+  //     cap FAILS THE BUILD (never emit a loop that dies mid-run — same discipline as a bad posture).
+  assert(/NO fixed cap/i.test(devPlan2), '/dev-plan: question_cap unset → the emitted body keeps the "NO fixed cap" default (behavior unchanged)');
+  const { tmp: tmpCap, r: rCap } = gen({ question_cap: 3 });
+  assert(rCap.status === 0, 'generate: a positive-integer question_cap generates cleanly (exit 0)');
+  const devPlanCap = readFileSync(join(tmpCap, '.claude/commands/dev-plan.md'), 'utf8');
+  assert(/DEFAULT cap of ≤3 questions/.test(devPlanCap) && !/NO fixed cap/i.test(devPlanCap), '/dev-plan: question_cap=3 → body states the ≤3 DEFAULT cap and drops the no-cap copy');
+  assert(/questions=<M>/.test(devPlanCap) && /precedence/i.test(devPlanCap), '/dev-plan: question_cap=3 → the per-run questions=<M> override is still documented and takes precedence');
+  const badCapZero = gen({ question_cap: 0 });
+  assert(badCapZero.r.status !== 0, 'generate: question_cap=0 FAILS THE BUILD (a cap must be a positive integer — never emit a loop that dies mid-run)');
+  const badCapStr = gen({ question_cap: 'three' });
+  assert(badCapStr.r.status !== 0, 'generate: a non-integer question_cap ("three") FAILS THE BUILD');
 }
 
 // --- v0.3.8: phase-3 deep scan (scripts/scan.mjs). Drive scan over the
