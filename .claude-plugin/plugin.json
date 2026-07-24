@@ -1,6 +1,6 @@
 {
   "name": "veriloop",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Compile a tailored, self-verifying dev-loop for any repo: bespoke AI reviewer personas, a constitution of the repo's invariants, and a per-feature workflow whose gate passes/fails on REAL command exit codes — not the AI's self-assessment.",
   "author": {
     "name": "Benjamin Li",

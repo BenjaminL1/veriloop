@@ -232,6 +232,14 @@ function assert(cond, desc) {
   assert(/READ-ONLY/.test(advise), '/advise: states the read-only limit');
   assert(/never PASS\/FAIL\/approval/.test(advise) && /NEVER\s+substitutes/i.test(advise.replace(/\n/g, ' ')), '/advise: no-verdicts — advice never substitutes for the gate');
 
+  // /advise ALWAYS-firing premise-council: every consult is pressure-tested by an independent
+  // council with a dedicated PREMISE reviewer (attack the FRAME, not the design) — the fix for
+  // the direction-level oversights /advise is used to make. Not just inline lenses.
+  const adviseFlat = advise.replace(/\s+/g, ' ');
+  assert(/premise-council/i.test(advise) && /Convene the premise-council . ALWAYS/.test(adviseFlat), '/advise: convenes a premise-council ALWAYS (not just inline lenses)');
+  assert(/PREMISE reviewer/.test(advise) && /overrule the owner/i.test(adviseFlat), '/advise: a dedicated PREMISE reviewer attacks the FRAME and may overrule the owner');
+  assert(/parallel, read-only subagents/.test(adviseFlat) && /Anti-sycophancy mandate/.test(advise), '/advise: council = independent read-only subagents with an anti-sycophancy mandate');
+
   // /review contract: root-cause dedup + not-the-gate/no-verdict
   assert(/deduped by ROOT CAUSE/.test(review), '/review: merges findings deduped by ROOT CAUSE');
   assert(/Advisory, NOT the gate/.test(review) && /no verdict/i.test(review) && /never/i.test(review), '/review: advisory, NOT the gate, produces no verdict and never substitutes for it');

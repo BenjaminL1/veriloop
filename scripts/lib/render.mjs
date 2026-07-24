@@ -212,10 +212,11 @@ export function renderAdviseCommand({ repoName, roster }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
   return (
     `---\n` +
-    `description: Use when the owner wants to brainstorm a feature or direction, sanity-check a design decision, weigh priorities, or pressure-test an idea BEFORE building — a consultation with ${repoName}'s expert personas (${lenses}) in ADVISE mode. Read-only; produces advice + tradeoffs, never a PASS/FAIL verdict (verdicts belong to /dev-loop). Runs inline because brainstorming is a dialogue.\n` +
+    `description: Use when the owner wants to brainstorm a feature or direction, sanity-check a design decision, weigh priorities, or pressure-test an idea BEFORE building — a consultation with ${repoName}'s expert personas (${lenses}) in ADVISE mode. The dialogue is inline; a MANDATORY read-only premise-council then pressure-tests the recommendation before it lands. Read-only; produces advice + tradeoffs, never a PASS/FAIL verdict (verdicts belong to /dev-loop).\n` +
     `---\n\n` +
-    `Consult **${repoName}'s experts** on an idea — this runs **inline, in the main session**,\n` +
-    `because brainstorming is a dialogue and background agents cannot talk to you.\n\n` +
+    `Consult **${repoName}'s experts** on an idea — the DIALOGUE runs **inline, in the main\n` +
+    `session** (brainstorming is a conversation), and a **read-only premise-council** then\n` +
+    `pressure-tests your recommendation before you hand it back.\n\n` +
     `> $ARGUMENTS\n\n` +
     `## How to advise\n\n` +
     `1. **Load the lenses.** Read \`$REPO/.claude/veriloop/constitution.md\`, then the expert\n` +
@@ -227,13 +228,36 @@ export function renderAdviseCommand({ repoName, roster }) {
     `   before opining; cite \`file:line\` wherever a claim is checkable — no hand-waving.\n` +
     `3. **HARD LIMITS.**\n` +
     `   - **READ-ONLY** — no file edits, no worktrees or branches, no mutating commands\n` +
-    `     (read-only commands like \`git log\` / \`git diff\` are fine).\n` +
+    `     (read-only commands like \`git log\` / \`git diff\` are fine). The council subagents\n` +
+    `     inherit this — they review and report to you; they never edit or talk to the owner.\n` +
     `   - **NO VERDICTS** — you produce advice and tradeoffs, never PASS/FAIL/approval. A\n` +
     `     verdict belongs exclusively to the \`/dev-loop\` gate, and advice here NEVER\n` +
     `     substitutes for it.\n` +
-    `4. **Converse.** Present options with their tradeoffs and a recommendation; use\n` +
-    `   **AskUserQuestion** for genuine forks where you'd otherwise be guessing.\n` +
-    `5. **Off-ramp.** If the discussion converges on a buildable feature, **hand off to\n` +
+    `4. **Converse to a DRAFT recommendation.** Present options with their tradeoffs and a\n` +
+    `   recommendation; use **AskUserQuestion** for genuine forks. Treat this as a DRAFT — the\n` +
+    `   council in step 5 pressure-tests it before it is final.\n` +
+    `5. **Convene the premise-council — ALWAYS.** \`/advise\` guides direction, and the costliest\n` +
+    `   errors here are PREMISE-level, not design-level — so before your recommendation lands,\n` +
+    `   an independent council attacks it. This fires on every consult (the only skip is a pure\n` +
+    `   factual lookup with no recommendation to test).\n` +
+    `   - **Spawn each roster expert (${lenses}) PLUS a dedicated PREMISE reviewer as parallel,\n` +
+    `     read-only subagents.** Give each your draft recommendation + the question + where you\n` +
+    `     grounded it. Each returns an INDEPENDENT brief — no coordination, no shared draft.\n` +
+    `     - The **roster experts** attack the recommendation from their lens (correctness,\n` +
+    `       security, drift), grounded in real \`file:line\`.\n` +
+    `     - The **PREMISE reviewer's ONLY job** is to attack the FRAME, not the details:\n` +
+    `       *Is this the RIGHT problem? What unexamined assumption is the recommendation — and\n` +
+    `       the question itself — sitting on? What would FALSIFY it? Run it cold: would the\n` +
+    `       owner ACCEPT the outcome?* It is explicitly allowed to **overrule the owner's\n` +
+    `       framing AND your recommendation** — that is the point.\n` +
+    `   - **One cross-examination round** — each sees the others' briefs and **attacks rather\n` +
+    `     than concedes**. **Anti-sycophancy mandate:** a brief that just agrees with the owner,\n` +
+    `     with you, or with another expert is a FAILED brief. Hard stop after two rounds.\n` +
+    `   - **Synthesize (main session).** Reconcile into the FINAL recommendation. **If the\n` +
+    `     council overturned your draft or found a premise-level flaw, say so PLAINLY** — the\n` +
+    `     owner hears what the council found, never a laundered version. The council PROPOSES;\n` +
+    `     it never decides and never emits a verdict — it sharpens the advice you give.\n` +
+    `6. **Off-ramp.** If the discussion converges on a buildable feature, **hand off to\n` +
     `   \`/dev-plan\`** — it runs the recon + interleaved spec interview + expert council and\n` +
     `   leaves a ratified BINDING spec, which \`/dev-loop\` then builds.\n`
   );
