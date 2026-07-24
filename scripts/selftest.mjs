@@ -240,6 +240,15 @@ function assert(cond, desc) {
   assert(/PREMISE reviewer/.test(advise) && /overrule the owner/i.test(adviseFlat), '/advise: a dedicated PREMISE reviewer attacks the FRAME and may overrule the owner');
   assert(/parallel, read-only subagents/.test(adviseFlat) && /Anti-sycophancy mandate/.test(advise), '/advise: council = independent read-only subagents with an anti-sycophancy mandate');
 
+  // /advise premise-council sharpeners (v0.3.17): the genuinely-NEW red-team moves only —
+  // a REQUIRED + surfaced pre-mortem and argue-the-other-side (the other 3 "Fool modes" already
+  // live in the frame-attack at render.mjs, so they are named, not duplicated), a steelman framing
+  // that does NOT collide with the anti-sycophancy mandate, and a main-session dialogue push-back.
+  assert(/Pre-mortem \(REQUIRED\)/.test(advise) && /surface the pre-mortem's top failure narrative/.test(adviseFlat), '/advise: premise reviewer runs a REQUIRED pre-mortem, surfaced in the synthesis');
+  assert(/Argue the other side/.test(advise), '/advise: premise reviewer argues the OPPOSITE direction (dialectic)');
+  assert(/Steelman, then attack the STRONGEST version/.test(advise) && /NOT a concession/.test(advise), '/advise: steelman = attack the strongest version, explicitly NOT a concession (no collision with anti-sycophancy)');
+  assert(/Do not agree with the owner's framing to be agreeable/.test(adviseFlat), '/advise: the inline dialogue itself pushes back on a wrong owner premise (not only the council)');
+
   // /review contract: root-cause dedup + not-the-gate/no-verdict
   assert(/deduped by ROOT CAUSE/.test(review), '/review: merges findings deduped by ROOT CAUSE');
   assert(/Advisory, NOT the gate/.test(review) && /no verdict/i.test(review) && /never/i.test(review), '/review: advisory, NOT the gate, produces no verdict and never substitutes for it');
@@ -990,6 +999,27 @@ function assert(cond, desc) {
   assert(
     genVer && Object.values(stamps).every((v) => v === genVer),
     `version stamps agree across all five locations (${JSON.stringify(stamps)})`,
+  );
+}
+
+// --- self-host roster guard: the COMMITTED .claude/commands/advise.md must name all three
+//     roster experts in its council spawn line — ESPECIALLY `security`. The gate runs only
+//     `npm run test`; lint-bundle never checks roster SIZE, and the /advise assertions above run
+//     against a tmp FIXTURE — so without this, an accidental cold `generate` that dropped
+//     `security` and overwrote the committed command file would keep the whole gate GREEN
+//     (the execution-reviewer gap, 2026-07-24). Also a soft word ceiling: lint-bundle's >700-word
+//     accretion tripwire is persona-only and never guards a command body. ---
+{
+  const committedAdvise = readFileSync(join(here, '..', '.claude/commands/advise.md'), 'utf8');
+  const spawnLine = (committedAdvise.match(/Spawn each roster expert \(([^)]*)\)/) || [])[1] || '';
+  assert(
+    /code-review/.test(spawnLine) && /security/.test(spawnLine) && /drift/.test(spawnLine),
+    `self-host /advise: committed advise.md council names all 3 roster experts incl. security (spawn line experts: "${spawnLine}")`,
+  );
+  const adviseWords = committedAdvise.split(/\s+/).filter(Boolean).length;
+  assert(
+    adviseWords < 900,
+    `self-host /advise: command body within word budget (${adviseWords} < 900) — guards command-prompt bloat lint-bundle does not check`,
   );
 }
 
