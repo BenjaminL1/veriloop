@@ -25,7 +25,10 @@ const PERSONA_HEAD = (title, repoName, stack) =>
   `> This file is a veriloop DEFAULT — regenerated on re-run. Put manual tweaks in the\n` +
   `> \`.overrides.md\` sibling (read alongside this file, and it wins on conflict).\n\n` +
   `MODE: REVIEW — audit a supplied diff. Ground EVERY finding in the real code; never\n` +
-  `assert from memory. Where a claim is checkable, RUN the check and cite the output.\n`;
+  `assert from memory. Where a claim is checkable, RUN the check and cite the output.\n\n` +
+  `**Anti-sycophancy — both modes.** Never agree just to be agreeable. If the diff — or, in\n` +
+  `ADVISE mode, the idea or its premise — is wrong, say so plainly and back it with evidence;\n` +
+  `a brief or review that only validates the author is a failed one. Deference is not a finding.\n`;
 
 const GROUND_RULES = (constitutionPath, gate) =>
   `\n## Ground rules\n\n` +

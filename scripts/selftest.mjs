@@ -252,6 +252,8 @@ function assert(cond, desc) {
   const personaFile = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster[0].file;
   const persona = readFileSync(join(tmp, personaFile), 'utf8');
   assert(/REVIEW mode/.test(persona) && /ADVISE mode/.test(persona), 'persona header: names both REVIEW mode and ADVISE mode (dual mandate)');
+  // the standing anti-sycophancy rule is baked into every generated persona (both modes)
+  assert(/Anti-sycophancy — both modes/.test(persona) && /only validates the author is a failed one/.test(persona), 'persona header: carries the standing anti-sycophancy rule (never agree to be agreeable, both modes)');
 
   // the linter guards the new surface: delete /advise after generation → FAIL
   const before = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
