@@ -11,8 +11,9 @@ Point veriloop at a repository and it generates a bespoke engineering setup for
 2. **A constitution** — the repo's invariants, each one code-cited.
 3. **A per-feature dev-loop workflow** whose gate passes/fails on **REAL command
    exit codes** (your `typecheck` / `lint` / `test`), never the AI's self-assessment.
-4. **Four slash commands:** `/dev-plan` (spec interview + expert council), `/dev-loop`
-   (build loop), `/advise` (brainstorm), and `/review` (lint-only).
+4. **Five slash commands:** `/dev-plan` (spec interview + expert council), `/dev-loop`
+   (build loop), `/advise` (brainstorm), `/review` (lens-only), and `/posture`
+   (the repo's default budget posture).
 
 > **veriloop is a compiler; the dev-loop it emits is the compiled output.** It
 > automates, for any repo, work that was first done once by hand for a Next.js +

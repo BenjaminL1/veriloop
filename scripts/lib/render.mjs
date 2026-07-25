@@ -211,11 +211,19 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
 // /advise command — the experts in ADVISE mode (consultation, not the gate)
 // ---------------------------------------------------------------------------
 
-export function renderAdviseCommand({ repoName, roster }) {
+export function renderAdviseCommand({ repoName, roster, gate }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
+  // Tool allowlist. The HARD LIMITS block below is PROSE — this line is the ENFORCED fence.
+  // Allowed: read/search, ask the owner, spawn the council, read-only git, and the repo's OWN
+  // gate commands (derived, never hardcoded — a Rust repo gets `cargo test`, not `npm`), so a
+  // checkable claim can actually be checked. Deliberately ABSENT: Write, Edit, and general
+  // Bash — so file edits, worktrees, branches and mutating git are unreachable, not merely
+  // forbidden. Note the accepted widening: a gate command runs repo-authored scripts.
+  const gateAllows = (gate || []).map((c) => `Bash(${c.cmd}:*)`).join(', ');
   return (
     `---\n` +
     `description: Use when the owner wants to brainstorm a feature or direction, sanity-check a design decision, weigh priorities, or pressure-test an idea BEFORE building — a consultation with ${repoName}'s expert personas (${lenses}) in ADVISE mode. The dialogue is inline; a MANDATORY read-only premise-council then pressure-tests the recommendation before it lands. Read-only; produces advice + tradeoffs, never a PASS/FAIL verdict (verdicts belong to /dev-loop).\n` +
+    `allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, WebSearch, WebFetch, Bash(git log:*), Bash(git diff:*), Bash(git show:*)${gateAllows ? `, ${gateAllows}` : ''}\n` +
     `---\n\n` +
     `Consult **${repoName}'s experts** on an idea — the DIALOGUE runs **inline, in the main\n` +
     `session** (brainstorming is a conversation), and a **read-only premise-council** then\n` +

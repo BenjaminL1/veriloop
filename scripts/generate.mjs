@@ -21,7 +21,7 @@ import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.3.18';
+const VERILOOP_VERSION = '0.3.19';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -388,7 +388,7 @@ function main() {
   w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget }));
   // the experts' second mandate: /advise (consult in ADVISE mode) and /review
   // (lens review without the loop). Both are read-only and carry NO gate authority.
-  w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, roster }));
+  w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, roster, gate: config.gate }));
   w.machine(P('.claude/commands/review.md'), renderReviewCommand({ repoName, roster, gate: config.gate }));
   // /dev-plan — recon + interleaved spec interview + expert council → a spec the
   // owner ratifies as BINDING before /dev-loop builds it. The plan-phase model is

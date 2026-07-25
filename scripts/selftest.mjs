@@ -998,7 +998,7 @@ function assert(cond, desc) {
   const stamps = { genVer, pkgVer, pluginVer, mktMeta: mkt.metadata.version, mktPlugin: mkt.plugins[0].version, changelogVer };
   assert(
     genVer && Object.values(stamps).every((v) => v === genVer),
-    `version stamps agree across all five locations (${JSON.stringify(stamps)})`,
+    `version stamps agree across all six locations (${JSON.stringify(stamps)})`,
   );
 }
 
@@ -1020,6 +1020,23 @@ function assert(cond, desc) {
   assert(
     adviseWords < 900,
     `self-host /advise: command body within word budget (${adviseWords} < 900) — guards command-prompt bloat lint-bundle does not check`,
+  );
+  // --- allowed-tools fence (v0.3.19). /advise's "HARD LIMITS — READ-ONLY" block is PROSE, so
+  //     until now nothing stopped an edit, a worktree, or a mutating git command; `/dev-plan`
+  //     and `/posture` both ship real allowlists and `/advise` did not. These assert the FENCE,
+  //     not the sentence: Write/Edit/unscoped-Bash must never appear, or read-only is back to
+  //     an honor system. The gate entry must be DERIVED from this repo's own gate_commands —
+  //     a hardcoded `npm test` would not equal veriloop's actual `npm run test` and fails here,
+  //     which is what keeps the line correct for a cargo/pytest target repo too. ---
+  const adviseAllow = (committedAdvise.match(/^allowed-tools:.*$/m) || [''])[0];
+  const gateCmd = JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/veriloop-manifest.json'), 'utf8')).gate_commands[0].cmd;
+  assert(
+    adviseAllow.startsWith('allowed-tools:') && !/\bWrite\b/.test(adviseAllow) && !/\bEdit\b/.test(adviseAllow) && !/Bash(?!\()/.test(adviseAllow),
+    `self-host /advise: allowed-tools ENFORCES the read-only covenant — no Write, no Edit, no unscoped Bash ("${adviseAllow}")`,
+  );
+  assert(
+    /WebSearch/.test(adviseAllow) && /WebFetch/.test(adviseAllow) && adviseAllow.includes(`Bash(${gateCmd}:*)`),
+    `self-host /advise: allowed-tools keeps online source verification (WebSearch/WebFetch) and DERIVES its gate entry from gate_commands (expected Bash(${gateCmd}:*))`,
   );
 }
 

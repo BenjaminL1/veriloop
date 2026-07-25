@@ -6,8 +6,9 @@ description: >-
   bespoke, self-verifying engineering setup for ANY repo: AI expert personas, a
   code-cited constitution of the repo's invariants, a per-feature workflow whose
   gate passes/fails on REAL command exit codes (never the AI's self-assessment),
-  and four slash commands to drive it: /dev-plan (spec interview + expert
-  council), /dev-loop (build loop), /advise (brainstorm), /review (lens-only).
+  and five slash commands to drive it: /dev-plan (spec interview + expert
+  council), /dev-loop (build loop), /advise (brainstorm), /review (lens-only),
+  /posture (the repo's default budget posture).
 ---
 
 # veriloop — compile a self-verifying dev-loop for any repo
@@ -249,8 +250,8 @@ BLOCKER.
 
 ## Guardrails
 - Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`,
-  `.claude/workflows/<repo>-dev-loop.js`, the four emitted commands
-  `.claude/commands/{dev-plan,dev-loop,advise,review}.md`, and the marked
+  `.claude/workflows/<repo>-dev-loop.js`, the five emitted commands
+  `.claude/commands/{dev-plan,dev-loop,advise,review,posture}.md`, and the marked
   veriloop block in `.gitignore` / `.prettierignore` (owner lines outside the
   block are never touched).
 - Never run a `safety=never` command during setup. Never auto-run a `mutates`
