@@ -1023,6 +1023,19 @@ function assert(cond, desc) {
   );
 }
 
+// --- self-host premise-rider guard: the COMMITTED .claude/commands/dev-plan.md must carry the
+//     ALWAYS-firing premise-rider (v0.3.18). Same gap class as the /advise roster guard above — the
+//     /dev-plan assertions run against a tmp FIXTURE, so a command file that was never re-rendered
+//     keeps the gate GREEN while drifting from render.mjs. This drift was REAL: dev-plan.md had been
+//     stale since the v0.3.8 cap-guardrail refactor until v0.3.18 re-rendered it. ---
+{
+  const committedDevPlan = readFileSync(join(here, '..', '.claude/commands/dev-plan.md'), 'utf8');
+  assert(
+    /Premise-rider — ALWAYS/.test(committedDevPlan) && /Pre-mortem \(REQUIRED\)/.test(committedDevPlan),
+    'self-host /dev-plan: committed dev-plan.md carries the ALWAYS premise-rider (pre-mortem) — guards against a stale, never-re-rendered command file',
+  );
+}
+
 // --- host-hook cleanliness: emitted text carries NO trailing whitespace (the
 //     catan_rl_v2 lesson, 2026-07-17: a host repo's pre-commit trailing-whitespace
 //     hook rejected generated personas and would flap on every regen — the host's
@@ -1103,6 +1116,20 @@ function assert(cond, desc) {
   assert(/subagents are \*\*read-only\*\*/i.test(devPlan) && /only the main\s+session writes/i.test(devPlan), '/dev-plan: the council subagents are read-only — only the main session writes');
   assert(/owner ratifies it as BINDING/i.test(devPlan) && /AskUserQuestion/.test(devPlan), '/dev-plan: the owner ratifies the spec as BINDING via AskUserQuestion (only the owner stamps BINDING)');
   assert(/council=auto\|always\|off/.test(devPlan) && /high_risk_areas/.test(devPlan), '/dev-plan: the council firing rule keys off recon-touched files vs high_risk_areas, not request phrasing');
+
+  // (g2) premise-rider (v0.3.18): ALWAYS-firing pre-mortem + argue-the-other-side, DECOUPLED from the
+  //   `auto` council (owner's Phase-4 verdict: auto-council + always-rider) so a wrong premise in a
+  //   low-risk/uncontested spec still gets challenged; surfaced at ratification as CHALLENGES, never
+  //   "cleared" (the laundering mode /advise cannot have). Steelman deliberately NOT ported here.
+  const dpFlat = devPlan.replace(/\n/g, ' ');
+  assert(/Premise-rider — ALWAYS/.test(devPlan) && /independent of the council firing rule/i.test(devPlan), '/dev-plan: an ALWAYS-firing premise-rider runs on every /dev-plan, independent of the council firing rule');
+  assert(dpFlat.includes('on **every** `/dev-plan`') && dpFlat.includes('even `council=off`'), '/dev-plan: the premise-rider fires on every /dev-plan — even council=off / when auto fires nothing');
+  assert(/Pre-mortem \(REQUIRED\)/.test(devPlan), '/dev-plan: premise-rider runs a REQUIRED pre-mortem');
+  assert(/Argue the other side/.test(devPlan), '/dev-plan: premise-rider argues the OPPOSITE direction (dialectic)');
+  assert(/CHALLENGES/.test(devPlan) && /never\b[^.]{0,40}\bcleared/i.test(dpFlat), '/dev-plan: premise challenges are surfaced at ratification, NEVER framed as "cleared" (anti-laundering)');
+  assert(devPlan.includes('default `auto`'), '/dev-plan: council DEFAULT stays `auto` (owner chose auto-council + always-rider, not always-council)');
+  assert(!/steelman/i.test(devPlan), '/dev-plan: steelman deliberately NOT ported (collides with anti-sycophancy; /advise needed a careful framing this command does not)');
+
   // interview: NO fixed question cap; owner may set an optional questions=<N> budget
   assert(/NO fixed cap/i.test(devPlan) && /questions=<N>/.test(devPlan), '/dev-plan: the interview has no fixed question cap and documents the optional owner-set questions=<N> budget');
 

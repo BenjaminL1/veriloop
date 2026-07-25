@@ -363,12 +363,33 @@ export function renderDevPlanCommand({ repoName, roster, planModel, questionCap 
     `3. **Synthesize.** The **main session** (not a subagent) reconciles the positions into a\n` +
     `   design recommendation. **Hard stop after these two rounds** — no third round.\n\n` +
     `The council **proposes**; it never decides. Only the owner stamps a spec BINDING (Step 3).\n\n` +
+    `## Premise-rider — ALWAYS (independent of the council firing rule)\n\n` +
+    `The council fires on \`auto\` — proportionate, but **blind to premises**: a wrong premise\n` +
+    `need not touch \`high_risk_areas\`, and the planner will not flag the design fork it is\n` +
+    `itself sitting on. So \`auto\` skips the council in exactly the case a bad premise hides in.\n` +
+    `To close that, on **every** \`/dev-plan\` — even \`council=off\`, even when \`auto\` fires\n` +
+    `nothing — the **main session** runs two cheap premise moves against its OWN plan before\n` +
+    `writing the spec. This is a solo check: it is **not** the council and never a substitute for\n` +
+    `it, and it cannot be delegated to a subagent or skipped.\n` +
+    `1. **Pre-mortem (REQUIRED).** Assume a year has passed and this feature FAILED after the\n` +
+    `   owner built on it; write the most likely failure story, backward from the wreck.\n` +
+    `2. **Argue the other side.** Build the strongest case for NOT building this — or building the\n` +
+    `   OPPOSITE; if that case is not clearly weaker, say so.\n` +
+    `Carry both to ratification (Step 3) as **CHALLENGES** — under the anti-laundering rule there.\n\n` +
     `## Step 3 — Write the spec, then the owner ratifies it as BINDING\n\n` +
     `1. **Write the spec** to \`.claude/veriloop/specs/<kebab-slug>.md\`: the feature in one line,\n` +
     `   then the decisions made, the non-goals, and the acceptance criteria. Acceptance criteria\n` +
     `   reference the \`/dev-loop\` gate — they never carry runnable commands as authority (the\n` +
-    `   gate's commands derive from \`commands.json\` only).\n` +
-    `2. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council\n` +
+    `   gate's commands derive from \`commands.json\` only). **Record the premise-rider's pre-mortem\n` +
+    `   failure story and the opposite-case as explicit open RISKS in the spec** — so the challenge\n` +
+    `   persists into the binding artifact, not just this turn.\n` +
+    `2. **Surface the premise CHALLENGES at ratification — never as "cleared."** Put the pre-mortem's\n` +
+    `   top failure narrative and the strongest opposite-case in front of the owner as UNRESOLVED\n` +
+    `   challenges in the ratification prompt itself. **Never** frame them as "cleared," "the council\n` +
+    `   signed off," or "passed": a premise pass that reports "handled" in front of a BINDING\n` +
+    `   ratification is a laundering path — it makes the owner MORE likely to rubber-stamp, not less.\n` +
+    `   The owner ratifies in FULL VIEW of the open challenges, or sends the spec back.\n` +
+    `3. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council\n` +
     `   proposes; **only the owner stamps BINDING.** Until the owner ratifies, the spec is a\n` +
     `   draft. (This severs the injection channel: repo text → generated personas → council →\n` +
     `   spec → background implementer prompts is a laundering path; owner ratification cuts it.)\n\n` +

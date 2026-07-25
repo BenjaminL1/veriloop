@@ -33,8 +33,8 @@ spec; `/dev-loop` builds to it.
    Guardrails: **ask as many questions as you genuinely need** — there is NO fixed cap; the
    "ask ONLY what you cannot derive" discipline above is what keeps this bounded, not a number.
    The owner may cap it by passing **`questions=<N>`** in the invocation (e.g. `questions=3`);
-   when set, stop asking after N and proceed on best-effort defaults for the rest. Forks that
-   co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.
+   when set, stop asking after N and proceed on best-effort defaults for the rest.
+   Forks that co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.
    **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A
    trivial change should not trigger an interrogation.
 
@@ -67,13 +67,36 @@ text, e.g. `council=off`):
 
 The council **proposes**; it never decides. Only the owner stamps a spec BINDING (Step 3).
 
+## Premise-rider — ALWAYS (independent of the council firing rule)
+
+The council fires on `auto` — proportionate, but **blind to premises**: a wrong premise
+need not touch `high_risk_areas`, and the planner will not flag the design fork it is
+itself sitting on. So `auto` skips the council in exactly the case a bad premise hides in.
+To close that, on **every** `/dev-plan` — even `council=off`, even when `auto` fires
+nothing — the **main session** runs two cheap premise moves against its OWN plan before
+writing the spec. This is a solo check: it is **not** the council and never a substitute for
+it, and it cannot be delegated to a subagent or skipped.
+1. **Pre-mortem (REQUIRED).** Assume a year has passed and this feature FAILED after the
+   owner built on it; write the most likely failure story, backward from the wreck.
+2. **Argue the other side.** Build the strongest case for NOT building this — or building the
+   OPPOSITE; if that case is not clearly weaker, say so.
+Carry both to ratification (Step 3) as **CHALLENGES** — under the anti-laundering rule there.
+
 ## Step 3 — Write the spec, then the owner ratifies it as BINDING
 
 1. **Write the spec** to `.claude/veriloop/specs/<kebab-slug>.md`: the feature in one line,
    then the decisions made, the non-goals, and the acceptance criteria. Acceptance criteria
    reference the `/dev-loop` gate — they never carry runnable commands as authority (the
-   gate's commands derive from `commands.json` only).
-2. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council
+   gate's commands derive from `commands.json` only). **Record the premise-rider's pre-mortem
+   failure story and the opposite-case as explicit open RISKS in the spec** — so the challenge
+   persists into the binding artifact, not just this turn.
+2. **Surface the premise CHALLENGES at ratification — never as "cleared."** Put the pre-mortem's
+   top failure narrative and the strongest opposite-case in front of the owner as UNRESOLVED
+   challenges in the ratification prompt itself. **Never** frame them as "cleared," "the council
+   signed off," or "passed": a premise pass that reports "handled" in front of a BINDING
+   ratification is a laundering path — it makes the owner MORE likely to rubber-stamp, not less.
+   The owner ratifies in FULL VIEW of the open challenges, or sends the spec back.
+3. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council
    proposes; **only the owner stamps BINDING.** Until the owner ratifies, the spec is a
    draft. (This severs the injection channel: repo text → generated personas → council →
    spec → background implementer prompts is a laundering path; owner ratification cuts it.)
