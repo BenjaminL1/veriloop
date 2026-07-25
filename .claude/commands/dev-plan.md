@@ -37,6 +37,12 @@ spec; `/dev-loop` builds to it.
    Forks that co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.
    **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A
    trivial change should not trigger an interrogation.
+3. **If you see a BETTER route than the one asked for, PROPOSE IT — do not just spec the
+   owner's vision faithfully.** Distinct from the premise attacks below: those fire when the
+   owner is WRONG; this fires when they are RIGHT and something still beats it. Raise it as a
+   named ALTERNATIVE with the tradeoff, in the dialogue AND at ratification (Step 3). A better
+   idea found while planning and dropped because it was not what was asked for is the most
+   expensive kind of deference. Do NOT invent one: if the owner's route is best, say so.
 
 ## Step 2 — Convene the expert council
 
@@ -73,12 +79,22 @@ The council fires on `auto` — proportionate, but **blind to premises**: a wron
 need not touch `high_risk_areas`, and the planner will not flag the design fork it is
 itself sitting on. So `auto` skips the council in exactly the case a bad premise hides in.
 To close that, on **every** `/dev-plan` — even `council=off`, even when `auto` fires
-nothing — the **main session** runs two cheap premise moves against its OWN plan before
-writing the spec. This is a solo check: it is **not** the council and never a substitute for
-it, and it cannot be delegated to a subagent or skipped.
+nothing — spawn **ONE read-only premise subagent** (Task) against your own plan before
+writing the spec. It is **not** the council and never a substitute for it, and it is never
+skipped. **Why a subagent and not you:** a fresh context cannot inherit the reasoning chain
+that produced the plan, so it cannot be anchored by "we already settled that" — and you
+grading your own plan is the one review configuration that reliably fails.
+
+**Briefing — MINIMUM LEAK.** Give it EXACTLY two things, **VERBATIM, never summarized**: the
+owner's request, and the plan you intend to spec. **Withhold everything else** — why you chose
+it, what you already rejected, your confidence, your read of the risk, the owner's enthusiasm.
+A named rejection pre-empts its analysis; signalled confidence tells it what to conclude.
+A briefing that argues for the plan has already failed.
+
+It returns two things, and you carry both back verbatim:
 1. **Pre-mortem (REQUIRED).** Assume a year has passed and this feature FAILED after the
-   owner built on it; write the most likely failure story, backward from the wreck.
-2. **Argue the other side.** Build the strongest case for NOT building this — or building the
+   owner built on it; the most likely failure story, backward from the wreck.
+2. **Argue the other side.** The strongest case for NOT building this — or building the
    OPPOSITE; if that case is not clearly weaker, say so.
 Carry both to ratification (Step 3) as **CHALLENGES** — under the anti-laundering rule there.
 
@@ -95,7 +111,9 @@ Carry both to ratification (Step 3) as **CHALLENGES** — under the anti-launder
    challenges in the ratification prompt itself. **Never** frame them as "cleared," "the council
    signed off," or "passed": a premise pass that reports "handled" in front of a BINDING
    ratification is a laundering path — it makes the owner MORE likely to rubber-stamp, not less.
-   The owner ratifies in FULL VIEW of the open challenges, or sends the spec back.
+   The owner ratifies in FULL VIEW of the open challenges, or sends the spec back. **If Step 1
+   surfaced a better ALTERNATIVE route, restate it here too** — the owner should see it at the
+   moment of the binding decision, not only when it came up mid-dialogue.
 3. **The owner ratifies it as BINDING via AskUserQuestion** before it is final. The council
    proposes; **only the owner stamps BINDING.** Until the owner ratifies, the spec is a
    draft. (This severs the injection channel: repo text → generated personas → council →

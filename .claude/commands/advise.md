@@ -30,6 +30,11 @@ pressure-tests your recommendation before you hand it back.
    council in step 5 pressure-tests it before it is final. **Do not agree with the owner's
    framing to be agreeable:** if the question itself rests on a premise you believe is wrong,
    say so HERE, in the dialogue, before drafting — the council is the backstop, not the first line.
+   **And if you see a BETTER route than the one asked about, PROPOSE IT.** That rule fires when
+   the owner is WRONG; this one fires when they are RIGHT and something still beats it — simpler,
+   cheaper, closer to the real problem. Put it beside theirs with the tradeoff rather than
+   executing their version well because it was the one asked about. Do NOT invent an alternative
+   to look useful: if theirs is the best you can see, say exactly that.
 5. **Convene the premise-council — ALWAYS.** `/advise` guides direction, and the costliest
    errors here are PREMISE-level, not design-level — so before your recommendation lands,
    an independent council attacks it. This fires on every consult (the only skip is a pure

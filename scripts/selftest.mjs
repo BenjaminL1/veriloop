@@ -248,6 +248,11 @@ function assert(cond, desc) {
   assert(/Argue the other side/.test(advise), '/advise: premise reviewer argues the OPPOSITE direction (dialectic)');
   assert(/Steelman, then attack the STRONGEST version/.test(advise) && /NOT a concession/.test(advise), '/advise: steelman = attack the strongest version, explicitly NOT a concession (no collision with anti-sycophancy)');
   assert(/Do not agree with the owner's framing to be agreeable/.test(adviseFlat), '/advise: the inline dialogue itself pushes back on a wrong owner premise (not only the council)');
+  // Better-route rule (v0.3.20). Every other anti-sycophancy rule in this command fires when the
+  // owner is WRONG. None covered the owner being RIGHT while a better route exists — so an agent
+  // with a better idea and no error to report would just execute the vision faithfully.
+  assert(/BETTER route than the one asked about/.test(adviseFlat) && /fires when the owner is WRONG; this one fires when they are RIGHT/.test(adviseFlat), '/advise: a better route must be proposed even when the owner is RIGHT — the gap every other anti-sycophancy rule leaves open');
+  assert(/Do NOT invent an alternative\s+to look useful/.test(adviseFlat), '/advise: the better-route rule bars manufacturing an alternative to look useful (anti-ceremony)');
 
   // /review contract: root-cause dedup + not-the-gate/no-verdict
   assert(/deduped by ROOT CAUSE/.test(review), '/review: merges findings deduped by ROOT CAUSE');
@@ -1146,6 +1151,19 @@ function assert(cond, desc) {
   assert(/CHALLENGES/.test(devPlan) && /never\b[^.]{0,40}\bcleared/i.test(dpFlat), '/dev-plan: premise challenges are surfaced at ratification, NEVER framed as "cleared" (anti-laundering)');
   assert(devPlan.includes('default `auto`'), '/dev-plan: council DEFAULT stays `auto` (owner chose auto-council + always-rider, not always-council)');
   assert(!/steelman/i.test(devPlan), '/dev-plan: steelman deliberately NOT ported (collides with anti-sycophancy; /advise needed a careful framing this command does not)');
+
+  // (g3) rider is a FRESH-CONTEXT SUBAGENT, not a solo self-check (v0.3.20). v0.3.18 shipped it
+  //   solo and "cannot be delegated"; the same session grading the plan it just wrote is the one
+  //   review configuration the evidence is worst on. NOTE the gap this closes: every (g2)
+  //   assertion above stayed GREEN across that behavior flip, because they match contract STRINGS
+  //   the rewrite preserved. These pin the SHAPE — subagent present, solo wording gone.
+  assert(/ONE read-only premise subagent/.test(devPlan) && !/cannot be delegated/i.test(devPlan), '/dev-plan: the premise-rider is a fresh-context READ-ONLY SUBAGENT — the solo "cannot be delegated" self-check is gone');
+  assert(/fresh context cannot inherit the reasoning chain/.test(dpFlat), '/dev-plan: the rider states WHY a subagent — a fresh context cannot inherit the reasoning chain that produced the plan');
+  // Minimum-leak briefing: the subagent is only independent if the parent does not warm it up.
+  assert(/MINIMUM LEAK/.test(devPlan) && /VERBATIM, never summarized/.test(devPlan) && /Withhold everything else/.test(devPlan), '/dev-plan: the rider briefing is MINIMUM-LEAK — request + plan VERBATIM, everything else withheld');
+  assert(/briefing that argues for the plan has already failed/.test(dpFlat), '/dev-plan: a briefing that argues for the plan is declared a failed briefing (the parent must not pre-empt the reviewer)');
+  // (g4) better-route rule — fires when the owner is RIGHT, which no other rule here covers.
+  assert(/BETTER route than the one asked for/.test(devPlan) && /most\s+expensive kind of deference/.test(dpFlat), '/dev-plan: a better ALTERNATIVE route must be proposed, not silently dropped in favour of the owner\'s vision');
 
   // interview: NO fixed question cap; owner may set an optional questions=<N> budget
   assert(/NO fixed cap/i.test(devPlan) && /questions=<N>/.test(devPlan), '/dev-plan: the interview has no fixed question cap and documents the optional owner-set questions=<N> budget');
