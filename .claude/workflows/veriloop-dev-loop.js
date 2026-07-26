@@ -257,6 +257,7 @@ const VERILOOP = {
       "key": "security",
       "title": "Supply-Chain & Input-Safety Reviewer",
       "tiers": [
+        "standard",
         "high"
       ],
       "file": ".claude/veriloop/experts/security.md",

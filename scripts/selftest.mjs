@@ -14,6 +14,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
+import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { compileMinedQuery, runMinedQuery } from './lib/mined-query.mjs';
 import { parseGoldRules, scoreRecovery, contentTokens } from './bench-score.mjs';
 
@@ -1004,6 +1005,44 @@ function assert(cond, desc) {
   assert(
     genVer && Object.values(stamps).every((v) => v === genVer),
     `version stamps agree across all six locations (${JSON.stringify(stamps)})`,
+  );
+}
+
+// --- self-host TIER agreement: a roster expert's risk tiers live in THREE places — the
+//     source of truth (`SPECIALIST_DEFAULTS` in lib/roster.mjs, unless the interview's
+//     `roster_add` overrides them: generate.mjs:213) and TWO machine-owned emitted copies
+//     (`veriloop-manifest.json`, the workflow's `VERILOOP.experts`). Nothing checked they
+//     agreed. `lensesForTier` reads the WORKFLOW copy, so a tier edit applied to the source
+//     and the manifest but not the workflow changes what the manifest ADVERTISES while the
+//     gate keeps running the old lens set — silently, with npm test and lint-bundle both
+//     green (lint-bundle's parity check covers the gate commands only, not the roster).
+//     This bit for real in v0.3.21: the `security` lens was widened to `standard` by
+//     hand-editing all three files, with no guard that they stayed in step. ---
+{
+  const root = join(here, '..');
+  const interview = JSON.parse(readFileSync(join(root, '.claude/veriloop/interview.json'), 'utf8'));
+  const manRoster = JSON.parse(readFileSync(join(root, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster;
+  const wfSrc = readFileSync(join(root, '.claude/workflows/veriloop-dev-loop.js'), 'utf8');
+  const wfRoster = JSON.parse((wfSrc.match(/^const VERILOOP = (\{[\s\S]*?\n\});$/m) || [])[1]).experts;
+  const tiersOf = (r) => JSON.stringify(Object.fromEntries(r.map((e) => [e.key, e.tiers])));
+  assert(
+    manRoster.length === wfRoster.length && tiersOf(manRoster) === tiersOf(wfRoster),
+    `self-host tiers: the two machine-owned copies agree expert-for-expert (manifest ${tiersOf(manRoster)} === workflow ${tiersOf(wfRoster)})`,
+  );
+  // …and both copies match what generate.mjs WOULD emit: the interview's explicit
+  // `roster_add.tiers` when present, else SPECIALIST_DEFAULTS — so editing the emitted
+  // files without editing the source (or the reverse) fails here, not in production.
+  const drift = [];
+  for (const key of Object.keys(SPECIALIST_DEFAULTS)) {
+    const emitted = manRoster.find((e) => e.key === key);
+    if (!emitted) continue;
+    const add = (interview.roster_add || []).find((a) => a && a.key === key);
+    const want = Array.isArray(add?.tiers) && add.tiers.length ? add.tiers.map(String) : SPECIALIST_DEFAULTS[key].tiers;
+    if (JSON.stringify(emitted.tiers) !== JSON.stringify(want)) drift.push(`${key}: emitted ${JSON.stringify(emitted.tiers)} !== source ${JSON.stringify(want)}`);
+  }
+  assert(
+    drift.length === 0,
+    `self-host tiers: every emitted specialist's tiers derive from lib/roster.mjs (or an explicit roster_add override) — no hand-edit drift${drift.length ? ` [${drift.join('; ')}]` : ''}`,
   );
 }
 

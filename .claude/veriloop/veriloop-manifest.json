@@ -28,6 +28,7 @@
       "key": "security",
       "title": "Supply-Chain & Input-Safety Reviewer",
       "tiers": [
+        "standard",
         "high"
       ],
       "evidence": [

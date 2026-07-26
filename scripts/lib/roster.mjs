@@ -27,7 +27,11 @@ const DRIFT_KEYWORDS = /\b(oracle|byte.?parity|source of truth|conformance|golde
 // the interview's `roster_add` (generate.mjs) can default an owner-confirmed add to
 // the exact same shape the detector would have used — one source of truth.
 export const SPECIALIST_DEFAULTS = {
-  security: { title: 'Security & Data Reviewer', tiers: ['high'] },
+  // security runs at standard too, not high-only. Its beat — authz, secrets, input/injection,
+  // data exposure — is uncovered at standard tier, and `high` is self-assigned by the plan agent
+  // from free-text touchedAreas, so a security-relevant change labelled "docs" or "refactor" never
+  // sees this lens at all. Cost: one extra lens agent per standard run.
+  security: { title: 'Security & Data Reviewer', tiers: ['standard', 'high'] },
   drift: { title: 'Drift Sentinel', tiers: ['standard', 'high'] },
   ux: { title: 'UX / Visual Reviewer', tiers: ['standard', 'high'] },
 };
