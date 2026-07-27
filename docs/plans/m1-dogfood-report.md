@@ -82,7 +82,7 @@ emitted bundle). All fixed with selftest coverage (**21 → 26 assertions, all g
 - **Screenshot gate fires for formatting/trivial changes** touching UI-named files
   (tier came out `high`, and `game-hud` matched the `hud` UI keyword). Vindicated
   here (high-tier depth caught the corruption), but a formatting-only diff arguably
-  shouldn't trigger a visual gate — candidate for M3 tier refinement.
+  shouldn't trigger a visual gate — candidate for tier refinement.
 - ~~**Evidence-bundle auto-emission** — the loop returns its result but does not yet
   write `.claude/veriloop/history/<ts>.json` attestation records (roadmap M1).~~ —
   **SHIPPED** (v0.3.3): the loop now writes one redacted attestation record per run

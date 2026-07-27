@@ -47,7 +47,7 @@ function parseArgs(argv) {
 
 const hasPlaceholder = (cmd) => /<[^>]+>/.test(cmd);
 
-/** Decide whether/why to run a command, honoring the safe-list. (Exported so the M3 §3 mined-query contract reuses this rule-6 gate instead of reinventing it.) */
+/** Decide whether/why to run a command, honoring the safe-list. (Exported so callers reuse this rule-6 gate instead of reinventing it.) */
 export function plan(cat, c, include) {
   if (!c || !c.cmd) return { run: false, reason: 'not detected' };
   if (hasPlaceholder(c.cmd)) return { run: false, reason: 'placeholder command (needs a target file/test)' };
@@ -136,7 +136,7 @@ function main() {
   process.exitCode = failed > 0 ? 1 : 0;
 }
 
-// Run only when invoked as the entry script — importing plan() (the M3 §3 mined-query
+// Run only when invoked as the entry script — importing plan() must never execute anything.
 // execution contract) must NOT trigger a verify run. REALPATH both sides: import.meta.url is
 // realpath'd + percent-encoded by Node, so a SYMLINKED invocation path (macOS /tmp→/private/tmp,
 // or a symlinked plugin install) or a #/%/? char would otherwise make this guard falsely skip

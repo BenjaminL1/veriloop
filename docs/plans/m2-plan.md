@@ -29,31 +29,9 @@ source that fills each:
 | `HISTORY_TS` | `.claude/veriloop/history/<ts>.json` filenames — minted by the loop at run time. |
 
 **Deferred decisions** (CONTENT depends on a later milestone's result — NOT in this plan):
-the benchmark exclusion-list *content* and mining methodology (defined in m3-plan.md, M3); any
-constitution reconciliation *after* blind mining (M3 three-way merge, roadmap-v1.md:188). This
+the benchmark exclusion-list *content* and mining methodology; any
+constitution reconciliation *after* blind mining. This
 plan only *consumes* the freeze as a precondition and *seeds* the constitution by copy.
-
----
-
-## Step 0 — Precondition (checkable; NOT work in this plan)
-
-The M3 held-out-gold benchmark mines Torevan's constitution **blind**. Once the constitution
-bridge (Step 1) lands the 14 gold rules into Torevan, no pre-bridge tree exists to mine
-against unless the corpus SHA is frozen **first**. Consultation 2026-07-14 (binding): *the
-benchmark freeze must be recorded before the M2 bridge runs.*
-
-- **What:** `docs/plans/m3-plan.md` must exist with a `## §0 — Benchmark freeze` section pinning
-  frozen corpus SHA `4d0e114` (Torevan main, post-M1-merge, pre-bridge) + the exclusion list.
-- **Verify:**
-  ```
-  test -f docs/plans/m3-plan.md && \
-  grep -q '4d0e114' docs/plans/m3-plan.md && \
-  grep -qi 'Benchmark freeze' docs/plans/m3-plan.md ; echo $?   # → 0
-  ```
-- **Status now:** MET — `docs/plans/m3-plan.md` exists (committed at `9ccc455`) with a
-  `## §0 — Benchmark freeze` section (m3-plan.md:21) pinning frozen corpus SHA `4d0e114`
-  (m3-plan.md:25) + the exclusion list; the verify above exits `0`. The freeze record is in
-  place before the bridge — Step 1 is unblocked.
 
 ---
 
@@ -64,7 +42,7 @@ benchmark freeze must be recorded before the M2 bridge runs.*
 condensed rules sourced from `docs/DESIGN_DECISIONS.md §1.3` (see its header at that file
 lines 8–10), NOT the 14-rule hand-built gold. It DIFFERS from
 `Torevan/docs/constitution.md` (14 numbered rules) — the bridge has not run. Seed rule-parity
-by copying the 14 gold rules in, achieving parity immediately without waiting for M3 mining
+by copying the 14 gold rules in, achieving parity immediately without waiting for mining
 (roadmap-v1.md:144–147).
 
 **How (mechanical, owner-ownership preserved):**
@@ -80,7 +58,7 @@ by copying the 14 gold rules in, achieving parity immediately without waiting fo
    So **assign** an `_(owner: `<expert>`)_` annotation to each of the 14 rules — drawn from the
    bundle's expert set (`code-review`, `drift`, `security`, …) — and confirm **every expert
    holds ≥2 rules** (the ownership model of roadmap-v1.md:189–190). This is a manual assignment
-   check in M2: machine-enforcement of it (referee-as-lint, roadmap-v1.md:189–190) is M3 —
+   check in M2: machine-enforcement of it is out of scope —
    `lint-bundle.mjs` does not yet parse rule ownership (lint-bundle.mjs:155 only asserts the
    constitution file exists). Keep the veriloop header/ownership note; update its source pointer
    to read `docs/constitution.md` (the seed), since §1.3 is no longer the source once the 14
@@ -393,14 +371,12 @@ ci-adopt selftest. Not in M2 scope — do not delete.
    regeneration (Step 1, `BRIDGE_SHA`); referee lint green.
 5. **Evidence spine live** — the loop writes redacted `history/<ts>.json` records; selftest
    grew `119 → SELFTEST_N`; records pass lint-bundle scanning; version `VNEXT` (Step 5).
-6. **Precondition honored** — the M3 benchmark freeze (`4d0e114`) was recorded in
-   `docs/plans/m3-plan.md` **before** the bridge landed (Step 0).
 
 ---
 
 ## Non-goals (explicit)
 
-- **No mining** — blind constitution mining + the held-out-gold benchmark are M3
+- **No mining** — blind constitution mining + the held-out-gold benchmark are out of scope
   (roadmap-v1.md:166–213). M2 seeds by *copy*, not derivation.
 - **No new stacks** — Rust/cargo + maturin dual-stack are M4 (roadmap-v1.md:215–242); catan
   installs the node/python surface only.

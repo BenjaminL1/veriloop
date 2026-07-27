@@ -166,73 +166,6 @@ applicable.
 **Exit criteria:** both repos on generated loops as canonical; hand-built dev-loop
 deleted; parity checklist archived in the dogfood report.
 
-### M3 · v0.4 "Intelligence" — phases 3+4+5, evidence-grounded (~3–4 sessions; the biggest lift)
-
-> Execution plan: [m3-plan.md](./m3-plan.md) *(plan-stable; its §0 benchmark freeze is
-> recorded now and must precede M2's bridge)*
-
-**Phase 3 — deep scan:** `scan-notes.md` schema `{surface → file:line evidence →
-nominated expert/rule candidates}`; classification-confirm halt; bounded + resumable.
-
-**Phase 4 — constitution mining (upgraded by the research):**
-- Candidate sources: (a) CLAUDE.md/docs claims **verified against code**, (b)
-  invariant-shaped tests, (c) git-history mining — repeated same-pattern fixes and
-  revert/re-fix chains across authors (SZZ-style blame; cross-author recurrence is
-  the anti-spurious signal), (d) danger surfaces from the scan.
-- **Witness-or-drop:** every proposed rule ships ≥2 file:line citations plus a
-  conforming/violating site count, or it is rejected before the owner sees it.
-- **Deterministic re-verification (the Packmind/Daikon lesson):** compile each
-  candidate to a checkable query (grep/AST/command) and RUN it over the tree;
-  record the conformance ratio (guideline: ≥90% over ≥5 sites, else it's a
-  hypothesis, not an invariant). Never trust the LLM's claim that line 42 matches.
-- **Ranking:** author/commit diversity and code trustworthiness over raw frequency
-  (frequency alone is mostly spurious); prune implied/redundant rules; refuse
-  unfalsifiable prose ("write clean code") — a rule that can't fail a check isn't a rule.
-- **Governance metadata per rule:** confirmed-by, confirmed-at-SHA, conformance
-  stats, owner expert. Staleness = conformance decay on re-run → flag for
-  re-confirmation. Three-way merge on re-runs, using the stored last machine
-  proposal as merge base.
-- **Referee as lint:** machine-readable owner annotations in the constitution,
-  enforced by lint-bundle — no orphan rules, no jobless experts.
-
-**Phase 5 — interview finalized:** ≤5 option-table questions incl. budget posture;
-budget → model/effort routing wired into the emitted template's agent calls.
-
-> **Orthogonal to `/dev-plan` (v0.3.3, the fourth emitted command).** These are two
-> DIFFERENT interviews. Phase 5 finalizes the generator's **INSTALL interview** — the
-> owner-confirm option tables that shape the compiled bundle (budget posture, roster
-> adds, high-risk areas), consumed once by `generate.mjs` at compile time. `/dev-plan`
-> runs a per-**FEATURE** interview at plan time: recon + interleaved spec questions + an
-> expert council, ending in an owner-ratified BINDING spec. `/dev-plan` supersedes the
-> old `/dev-loop` Step 1 FEATURE interview (now shrunk to spec *detection* — provided/on
-> disk → binding, trivial → confirm-and-go, non-trivial → point to `/dev-plan`); it does
-> NOT touch the INSTALL interview Phase 5 owns. veriloop now emits five commands:
-> `/dev-loop`, `/advise`, `/review`, `/dev-plan`, `/posture`.
-
-**The credibility centerpiece — held-out gold benchmark:** mine Torevan's
-constitution BLIND (hand-built one hidden from the miner), then measure recovery
-of the 14 hand-authored rules. Target ≥80% recovered with citations. Publish the
-eval methodology + results — this is the portfolio-grade proof that mining works.
-**Frozen mining corpus: Torevan @ `4d0e114`** (post-M1-merge, pre-constitution-bridge;
-pinned 2026-07-14 — the M2 bridge copies the gold rules into the live tree, after
-which "recovery" degenerates to copying; blinding protocol + exclusion list in
-[m3-plan §0](./m3-plan.md)).
-
-**Decision item (recommended):** keep the constitution canonical for the loop, and
-emit a short pointer section into CLAUDE.md — the community already resents
-constitution-vs-AGENTS.md rival files, and AGENTS.md has 60k-repo adoption; don't
-create a third competing surface.
-
-**Deferred — language-pack checklists (council 2026-07-13):** per-language review
-checklists for the expert personas were council-reviewed and DEFERRED — both council
-seats converged on packs mattering only for (a) frugal-posture review lenses (Sonnet)
-and (b) freshly-compiled repos with thin constitutions. Triggers to revisit: first
-sustained frugal usage, or M4 Rust support (cold-start stack). Budget-neutral if built
-(won back from role prose, never appended; never a roster seat).
-
-**Exit criteria:** both repos re-run through the full pipeline; zero TODOs;
-benchmark ≥80%; lint enforces the referee.
-
 ### M4 · v0.5 "Rust + hardening" (~2 sessions)
 
 > Execution plan: [m4-plan.md](./m4-plan.md) *(plan-stable, written 2026-07-14)*
@@ -371,7 +304,7 @@ selftest assertion count (must grow), gate-run evidence records accumulated,
 docs-sync (this roadmap gets a check-off + "actual vs planned" note per milestone).
 
 **Model routing:** Fable for planning/review/synthesis; Opus subagents for
-implementation; the emitted loops route by tier × budget posture (from M3 on).
+implementation; the emitted loops route by tier × budget posture (from v0.4 on).
 
 ## 9. Immediate next session (M1 kickoff, concrete)
 

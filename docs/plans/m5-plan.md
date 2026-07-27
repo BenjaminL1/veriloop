@@ -21,9 +21,9 @@ execution and carries its exact fill source:
   aider · CodeRabbit). Fill by re-verifying each competitor's current behavior at publish
   time against its primary source (roadmap §11 links, [roadmap-v1.md:368-374](./roadmap-v1.md));
   a stale cell is a BLOCKER — these move.
-- ⟨benchmark-number⟩ — the mining-recovery figure, IF cited in the README. Fill from M3's
+- ⟨benchmark-number⟩ — the mining-recovery figure, IF cited in the README. Fill from the benchmark's
   held-out gold benchmark result ([roadmap-v1.md:195-198](./roadmap-v1.md)); omit the claim
-  entirely if M3 has not published it. Its VALUE is a deferred decision (below), not a
+  entirely if it has not been published. Its VALUE is a deferred decision (below), not a
   plan-time fill.
 - ⟨quickstart-clone-result⟩ — pass/fail of the 5-minute quickstart on a clean clone. Fill by
   actually running it on a fresh `git clone` at the execution SHA.
@@ -35,7 +35,7 @@ execution and carries its exact fill source:
   40-char SHA, never the tag.
 
 **Deferred decisions** (CONTENT depends on a prior milestone's result — NOT in this plan):
-- Whether the README cites a mining-recovery number, and its value — depends on M3's
+- Whether the README cites a mining-recovery number, and its value — depends on the benchmark's
   benchmark having published ≥80% ([roadmap-v1.md:105](./roadmap-v1.md)).
 - Cross-tool install adapters (superpowers precedent, [roadmap-v1.md:256-258](./roadmap-v1.md)):
   **evaluate as a listed decision, do not build.** Recorded in §6 below; no work item.
@@ -303,7 +303,7 @@ and the demo-asset structure (Part 4).
 |------|--------|
 | ⟨cmd-enumeration⟩ | `.claude/veriloop/commands.json` regenerated via `node scripts/detect.mjs --repo . --out .claude/veriloop/commands.json` + the `scripts/` that run, at exec SHA |
 | ⟨comparison-facts⟩ | each competitor's primary source at publish (roadmap §11 links) |
-| ⟨benchmark-number⟩ | M3 held-out gold benchmark result IF cited ([roadmap-v1.md:195-198](./roadmap-v1.md)); else omit |
+| ⟨benchmark-number⟩ | held-out gold benchmark result IF cited; else omit |
 | ⟨quickstart-clone-result⟩ | actual run on a fresh `git clone` |
 | ⟨checkout-pin-sha⟩ / ⟨setup-node-pin-sha⟩ | `git ls-remote https://github.com/actions/<action> <tag>` |
 

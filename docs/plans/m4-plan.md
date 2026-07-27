@@ -4,12 +4,12 @@
 
 **Goal:** make Rust/cargo a first-class detected stack (detector + fixtures + selftest), emit BOTH cargo and python surfaces for maturin repos, ship a hand-owned `commands.overrides.json` pin, and pass a Windows-path portability sweep — satisfying v1.0 acceptance criterion 4 (roadmap-v1.md:106-107).
 
-**Plan-stable:** not gated on any prior milestone's outcome. The detector surface is orthogonal to M2 mining and M3 Torevan convergence — no step's *content* depends on their results (see "Stability", last section). ⟨execution-time⟩ parameters (values knowable only at run time, each with the command that fills it):
+**Plan-stable:** not gated on any prior milestone's outcome. The detector surface is orthogonal to mining and Torevan convergence — no step's *content* depends on their results (see "Stability", last section). ⟨execution-time⟩ parameters (values knowable only at run time, each with the command that fills it):
 
 - ⟨catan-crate-path⟩ — the Rust crate dir inside catan_rl_v2's maturin bundle. Fill: `find "$CATAN" -name Cargo.toml -not -path '*/target/*'` (bundle exists only post-M2; `$CATAN` = catan_rl_v2 checkout root).
 - ⟨catan-bundle-root⟩ — catan_rl_v2's generated bundle. Fill: `ls "$CATAN/.claude/veriloop/commands.json"` (must exist before step 3's dual-stack assertion can run).
 - ⟨ripgrep-clone⟩ / ⟨tokio-clone⟩ — read-only OSS clones for detect-only validation. Fill: `git clone --depth 1 https://github.com/BurntSushi/ripgrep <dir>` and `.../tokio-rs/tokio <dir>`; pass `<dir>` to `node scripts/detect.mjs --repo <dir>`.
-- ⟨selftest-count-before⟩ — the selftest assertion count captured **at M4 start**, before any Rust asserts land. Fill: `node scripts/selftest.mjs | tail -1`. This is the execution-time baseline; do NOT hardcode a literal (the count grows through M1→M3 — M1 already moved it 21→26, and "selftest grows" is an M2/M3 exit metric, roadmap-v1.md:230, 340-341 — so any frozen number is stale by the time M4 runs).
+- ⟨selftest-count-before⟩ — the selftest assertion count captured **at M4 start**, before any Rust asserts land. Fill: `node scripts/selftest.mjs | tail -1`. This is the execution-time baseline; do NOT hardcode a literal (the count grows across milestones — M1 already moved it 21→26, and "selftest grows" is an exit metric — so any frozen number is stale by the time M4 runs).
 - ⟨selftest-count-after⟩ — the assertion count once Rust asserts land. Fill: `node scripts/selftest.mjs | tail -1`. Success = ⟨selftest-count-after⟩ > ⟨selftest-count-before⟩ (growth measured against the run-time baseline, not a frozen prior-state number).
 - ⟨version⟩ — `VERILOOP_VERSION` bump for v0.5. Set to `'0.5.0'` at generate.mjs:24 **and all six version stamps the agreement assert checks** (selftest.mjs:629-637): genVer (generate.mjs), pkgVer (package.json), pluginVer (.claude-plugin/plugin.json), **both** marketplace.json fields — `metadata.version` (mktMeta) and `plugins[0].version` (mktPlugin) — and the CHANGELOG.md heading (changelogVer). marketplace.json alone carries two version fields; bumping only five leaves the sixth stale and fails the assert (the drift class that bit once, M1 bug #4). (The assert's own comment mis-says "all five" — six values are enumerated at selftest.mjs:634.)
 
@@ -148,9 +148,9 @@ reconcile step 3 (detectors.mjs:467-483) is **documented-unreachable**: its guar
 
 ---
 
-## Stability — independent of M2 / M3
+## Stability — independent of prior milestones
 
-The detector surface is orthogonal to mining (M2) and Torevan convergence (M3): `detectRust` reads a repo's files and CI, producing citations — it never consults a mined constitution or a convergence result. The only cross-milestone touchpoint is the **catan dual-stack validation** (§3), whose *timing* waits on the M2 bundle but whose *content* (emit both surfaces) is fixed now; until the bundle exists, `fixtures/rust-maturin` covers the shape. No step's decision logic changes based on M2/M3 output. This satisfies the header's plan-stable contract.
+The detector surface is orthogonal to mining and Torevan convergence: `detectRust` reads a repo's files and CI, producing citations — it never consults a mined constitution or a convergence result. The only cross-milestone touchpoint is the **catan dual-stack validation** (§3), whose *timing* waits on the M2 bundle but whose *content* (emit both surfaces) is fixed now; until the bundle exists, `fixtures/rust-maturin` covers the shape. No step's decision logic changes based on prior-milestone output. This satisfies the header's plan-stable contract.
 
 ## Exit criteria (→ v1.0 acceptance criterion 4, roadmap-v1.md:106-107, 241-242)
 

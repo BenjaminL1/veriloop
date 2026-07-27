@@ -97,7 +97,7 @@ Invoked `/dev-plan <feature description / goals>`. It:
   hardcoded in **THREE** places (`:60`, `:144`, `:198` — verified by council). Hoist to ONE
   shared constant (rule 9) and add `dev-plan.md`.
 - Manifest `emitted_files` gains the new command; regenerate the self-host bundle.
-- `docs/plans/roadmap-v1.md`: document the fourth emitted command; note the M3 phase-5
+- `docs/plans/roadmap-v1.md`: document the fourth emitted command; note the phase-5
   orthogonality (phase 5 finalizes the generator's INSTALL interview; /dev-plan supersedes
   dev-loop Step 1's FEATURE interview — different interviews); amend any dev-loop
   description quotes. CHANGELOG entry.
@@ -125,7 +125,7 @@ merges later gets rebased by the owner; expected, not a defect.
 - NO changes to the dev-loop WORKFLOW template's plan phase (the background planner stays;
   /dev-plan is upstream of it, not a replacement).
 - NO persona file changes, NO third persona mode, NO PERSONA_HEAD edits.
-- NO allowed-tools retrofit on advise/review. NO M3 install-interview work. NO council
+- NO allowed-tools retrofit on advise/review. NO install-interview work. NO council
   seats beyond the existing roster ("no jobless experts" also means no invented ones).
 - NO scratch/staging files from /dev-plan; NO gitignoring of specs/.
 
