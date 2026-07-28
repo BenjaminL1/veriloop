@@ -15,6 +15,9 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
+import { renderExpert } from './lib/render.mjs';
+// probe: a persona rendered with NO evidence must omit the beat section entirely
+const renderExpertProbe = () => renderExpert('security', { repoName: 'r', stack: ['node'], gate: [], constitutionPath: 'c.md', title: 't', evidence: [] });
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', 'fixtures');
@@ -264,6 +267,46 @@ function assert(cond, desc) {
   assert(/REVIEW mode/.test(persona) && /ADVISE mode/.test(persona), 'persona header: names both REVIEW mode and ADVISE mode (dual mandate)');
   // the standing anti-sycophancy rule is baked into every generated persona (both modes)
   assert(/Anti-sycophancy — both modes/.test(persona) && /only validates the author is a failed one/.test(persona), 'persona header: carries the standing anti-sycophancy rule (never agree to be agreeable, both modes)');
+
+  // --- the persona's REPO-SPECIFIC beat. The four PERSONA_BODY archetypes describe a
+  //     stance, not a codebase; what makes a reviewer THIS repo's reviewer is the
+  //     evidence that nominated it. That evidence already reached the manifest and the
+  //     constitution but was never passed to renderExpert, so every emitted persona
+  //     described a generic repo (veriloop's security lens claimed a beat of "auth,
+  //     secrets, database access" — none of which exist here). The citation must arrive
+  //     VERBATIM: a paraphrased beat cannot be traced back to a line, which is what
+  //     separates a derived persona from an invented one. ---
+  {
+    const interviewPath = join(tmp, 'iv.json');
+    // The distinctive citation is supplied by the INTERVIEW (the input under test),
+    // never pre-seeded into the persona file — the assertion must be able to fail.
+    const NEEDLE = 'quarantines vendored blobs — scripts/lib/detectors.mjs:4242';
+    writeFileSync(interviewPath, JSON.stringify({
+      roster_add: [{ key: 'security', title: 'Blob Quarantine Reviewer', evidence: [NEEDLE] }],
+    }));
+    const ivOut = mkdtempSync(join(tmpdir(), 'veriloop-beat-'));
+    spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', join(tmp, 'commands.json'), '--interview', interviewPath, '--out', ivOut], { encoding: 'utf8' });
+    const secPersona = readFileSync(join(ivOut, '.claude/veriloop/experts/security.md'), 'utf8');
+    assert(
+      secPersona.includes(NEEDLE),
+      'persona: the evidence that nominated an expert is rendered VERBATIM into its persona (the repo-specific beat reaches the lens)',
+    );
+    assert(
+      /## Your beat in this repo/.test(secPersona),
+      'persona: the derived beat gets its own titled section, not an unlabelled bullet list',
+    );
+    // The archetype must NOT assert a concrete beat of its own — a hardcoded
+    // "your beat is auth, secrets, database access" contradicts the derived section
+    // directly below it, and is wrong for any repo without those surfaces.
+    assert(
+      !/beat is anything that crosses a trust\s*\n?\s*boundary: auth, secrets/.test(secPersona),
+      'persona: the security archetype no longer hardcodes a concrete beat that could contradict the derived one',
+    );
+    // An expert with no evidence emits NO empty section header.
+    const bare = renderExpertProbe();
+    assert(!/## Your beat in this repo/.test(bare), 'persona: an expert with no evidence emits no empty beat section');
+    rmSync(ivOut, { recursive: true, force: true });
+  }
 
   // the linter guards the new surface: delete /advise after generation → FAIL
   const before = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });

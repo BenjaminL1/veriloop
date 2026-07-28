@@ -404,7 +404,7 @@ function main() {
   w.machine(P('.claude/veriloop/commands.json'), JSON.stringify(cj, null, 2) + '\n');
   for (const e of roster.experts) {
     const slug = expertSlug(e.key);
-    w.machine(P('.claude/veriloop/experts', `${slug}.md`), renderExpert(e.key, { repoName, stack: cj.stack, gate: config.gate, constitutionPath: config.constitution, title: e.title }));
+    w.machine(P('.claude/veriloop/experts', `${slug}.md`), renderExpert(e.key, { repoName, stack: cj.stack, gate: config.gate, constitutionPath: config.constitution, title: e.title, evidence: e.evidence }));
     // hand-owned override sibling (write-once)
     w.handOnce(P('.claude/veriloop/experts', `${slug}.overrides.md`), renderOverrides(e.key, e.title, repoName), 'hand');
   }

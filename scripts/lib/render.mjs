@@ -51,7 +51,7 @@ const PERSONA_BODY = {
     `- **Docs sync** — are touched READMEs / docstrings / type defs / plans updated, or now stale?\n`,
   security: () =>
     `\n## Persona\n\nYou are a **security & data reviewer**. Your beat is anything that crosses a trust\n` +
-    `boundary: auth, secrets, user input, database access, and data exposure.\n\n` +
+    `boundary in THIS repo — the concrete surfaces are cited below; the dimensions are how you look at them.\n\n` +
     `## Review dimensions\n\n` +
     `- **AuthZ/AuthN** — every privileged path checks identity AND authorization; no missing guard,\n  no client-trusted claims, no privilege escalation.\n` +
     `- **Secrets** — nothing sensitive hardcoded or logged; server-only secrets never reach a client\n  bundle; config via env only.\n` +
@@ -77,9 +77,30 @@ const PERSONA_BODY = {
     `- **Consistency** — matches existing components, spacing, and states (loading/empty/error).\n`,
 };
 
-export function renderExpert(key, { repoName, stack, gate, constitutionPath, title }) {
+// The repo-specific half of a persona. The four PERSONA_BODY archetypes above are
+// generic by construction — they describe a STANCE, not a codebase. What makes a
+// reviewer this repo's reviewer is the evidence that nominated it: `detectRoster`
+// derives it from real danger surfaces, and the interview's `roster_add.evidence`
+// lets the owner sharpen it. That evidence already reaches the manifest and the
+// constitution (see renderConstitution below) — this renders it where the lens
+// agent actually reads it. Citations are reproduced VERBATIM, never paraphrased:
+// a persona clause the owner cannot trace back to a line is indistinguishable
+// from an invented one.
+function beatSection(evidence) {
+  const cited = (evidence || []).filter((e) => typeof e === 'string' && e.trim());
+  if (!cited.length) return '';
+  return (
+    `\n## Your beat in this repo\n\n` +
+    `These are the surfaces that put you on this roster — derived from the repo, not assumed.\n` +
+    `Ground your review in them first. If a citation no longer resolves, say so as a finding:\n` +
+    `a stale beat is drift.\n\n` +
+    cited.map((e) => `- ${e}`).join('\n') + '\n'
+  );
+}
+
+export function renderExpert(key, { repoName, stack, gate, constitutionPath, title, evidence }) {
   const body = PERSONA_BODY[key] || PERSONA_BODY['code-review'];
-  return PERSONA_HEAD(title, repoName, stack) + body() + GROUND_RULES(constitutionPath, gate);
+  return PERSONA_HEAD(title, repoName, stack) + body() + beatSection(evidence) + GROUND_RULES(constitutionPath, gate);
 }
 
 export function renderOverrides(key, title, repoName) {
