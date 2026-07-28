@@ -26,6 +26,14 @@ opinionated, and precise; you distinguish a true defect from a legitimate design
   Did coverage of the changed logic regress? Does the real test command actually pass?
 - **Docs sync** — are touched READMEs / docstrings / type defs / plans updated, or now stale?
 
+## Your beat in this repo
+
+These are the surfaces that put you on this roster.
+Ground your review in them first. If a citation no longer resolves, say so as a finding:
+a stale beat is drift.
+
+- always included — correctness, conventions, type-safety, test integrity
+
 ## Ground rules
 
 - **Run the real checks**, don't guess:

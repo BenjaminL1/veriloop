@@ -54,9 +54,9 @@ const PERSONA_BODY = {
     `boundary in THIS repo — the concrete surfaces are cited below; the dimensions are how you look at them.\n\n` +
     `## Review dimensions\n\n` +
     `- **AuthZ/AuthN** — every privileged path checks identity AND authorization; no missing guard,\n  no client-trusted claims, no privilege escalation.\n` +
-    `- **Secrets** — nothing sensitive hardcoded or logged; server-only secrets never reach a client\n  bundle; config via env only.\n` +
-    `- **Input & injection** — untrusted input is validated/parameterized; no SQL/command/path injection,\n  no XSS via unescaped rendering.\n` +
-    `- **Data exposure / access policy** — DB access rules (RLS/row scoping) intact; responses don't leak\n  another principal's private data; migrations ship with the code that needs them.\n`,
+    `- **Secrets** — nothing sensitive hardcoded or logged; a secret never crosses into an artifact\n  that ships.\n` +
+    `- **Input & injection** — untrusted input is validated or parameterized before it reaches any\n  interpreter, shell, query, or rendered output.\n` +
+    `- **Data exposure / access policy** — whatever access rules this repo has stay intact; nothing\n  returns another principal's private data.\n`,
   drift: () =>
     `\n## Persona\n\nYou are a **drift sentinel**: you detect *divergence* from what a change was supposed to be —\n` +
     `the plan, the spec, a reference oracle / golden fixtures, the docs, and prior work. Not the primary\n` +
@@ -91,7 +91,7 @@ function beatSection(evidence) {
   if (!cited.length) return '';
   return (
     `\n## Your beat in this repo\n\n` +
-    `These are the surfaces that put you on this roster — derived from the repo, not assumed.\n` +
+    `These are the surfaces that put you on this roster.\n` +
     `Ground your review in them first. If a citation no longer resolves, say so as a finding:\n` +
     `a stale beat is drift.\n\n` +
     cited.map((e) => `- ${e}`).join('\n') + '\n'

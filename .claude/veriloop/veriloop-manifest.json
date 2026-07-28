@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.3.8",
-  "generated_at": "2026-07-17T08:00:42.731Z",
+  "veriloop_version": "0.3.22",
+  "generated_at": "2026-07-28T11:18:04.276Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "83b24b7bf6938a7599801a6ec8888fb214f14722",
+  "repo_sha": "6d5db99a91aa81dc852d8d159366ac8a3cdd0bf3",
   "stack": [
     "node"
   ],
@@ -202,7 +202,7 @@
     {
       "path": ".claude/commands/dev-loop.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/advise.md",
@@ -217,7 +217,7 @@
     {
       "path": ".claude/commands/dev-plan.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/posture.md",
@@ -232,7 +232,7 @@
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
@@ -242,7 +242,7 @@
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
@@ -252,7 +252,7 @@
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",
