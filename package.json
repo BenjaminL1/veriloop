@@ -5,6 +5,7 @@
   "description": "Compile a tailored, self-verifying dev-loop for any repo — command manifest only; the project is deliberately dependency-free.",
   "engines": { "node": ">=18" },
   "scripts": {
+    "lint": "node scripts/lint-bundle.mjs --bundle .",
     "test": "node scripts/selftest.mjs"
   }
 }

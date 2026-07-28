@@ -109,8 +109,8 @@ export function renderConstitution({ repoName, stack, roster, gate }) {
     `any code is written, and the review lenses check the **diff** against it. A plan or diff that\n` +
     `violates one is a **BLOCKER**. Keep this list short and true.\n\n` +
     `> **veriloop STARTER** — a scaffold from detected facts. Replace the TODOs with real, code-cited\n` +
-    `> invariants (veriloop phase 4 mines these from the code + git history). This file is\n` +
-    `> three-way-merged on re-run: your edits are preserved.\n\n` +
+    `> invariants. This file is HAND-OWNED: once it exists, a re-run never rewrites it — your\n` +
+    `> edits are preserved as-is.\n\n` +
     `## Build & correctness\n\n` +
     `1. **The gate runs on real exit codes.** ${cmds || '(no check commands detected)'} must pass; a\n` +
     `   red check is a BLOCKER, never waved through on "looks right". _(owner: \`code-review\`)_\n` +
