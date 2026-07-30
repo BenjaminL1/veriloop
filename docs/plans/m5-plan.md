@@ -464,3 +464,45 @@ grep -c 'm5-plan.md#supersessions' docs/plans/roadmap-v1.md \
   .claude/veriloop/specs/ci-adopt-coverage.md   # → both 1
 git diff --stat docs/plans/roadmap-v1.md        # → 1 file, +2/-1 (pointer only)
 ```
+
+### S3 — citation repair extended to the hand-owned overrides, and symbol tokens made MANDATORY
+
+- **Superseded clause:** m5:345-346 bars *"editing the emitted bundle"*, which contains
+  `.claude/veriloop/constitution.md` and `experts/*`.
+- **Falsifying evidence:** `scripts/generate.mjs:407` renders `experts/security.md` and
+  `experts/drift.md` from `interview.json`'s `roster_add` evidence via `w.machine(...)`, so
+  the regenerate that m5:129-130 itself mandates would **re-emit false citations with a
+  fresh `generated_at`**. The executor's choice was never fix-vs-leave; it was
+  fix-vs-re-certify-as-true, in violation of constitution rule 2 (*"`file:line` citations
+  come from the deterministic scripts"*), inside the trust milestone. Nine citations were
+  dead and one imprecise, verified line by line: rule 4 `selftest.mjs:5,60`; rule 5
+  `detectors.mjs:519` (the sanitizer had moved 108 lines to `:627`); rule 7
+  `lint-bundle.mjs:88,118`; rule 8 `generate.mjs:249,287,261,237` (all four).
+- **Two extensions beyond the repair, both strengthenings:**
+  1. **`experts/*.overrides.md` are included.** They are hand-owned, so `handOnce`
+     (`generate.mjs:342`) preserves them forever — no regenerate will ever repair them, and
+     "later" therefore means "never." They carried five of the dead citations.
+  2. **A symbol token is now REQUIRED on every citation**, not optional. This was forced by
+     mutation testing, and it is the substantive finding of this step: an
+     existence-only check **does not catch the original bug.** Restoring rule 5's bare
+     `detectors.mjs:519` passed a green run, because line 519 still exists (the file has
+     640 lines) — it simply no longer holds the sanitizer. A citation without a symbol
+     anchor is unfalsifiable in practice.
+- **Substitute:** citation tokens only. No rule was reworded, added or removed; rule count
+  is still 10; rule 1's command list is untouched (adding `lint` there would add an
+  invariant, which is the owner's act — flagged as debt). Enforced by a minimality gate:
+  every changed line in `constitution.md` carries an `mjs:` token.
+- **The deliverable is the assertion, not the renumber.** `scripts/selftest.mjs` gained
+  `self-host CITATION LIVENESS`: every `scripts/*.mjs` citation in the constitution, the
+  hand-owned overrides, and `interview.json`'s roster evidence must name an existing file,
+  an in-range line, and a symbol token present within +/-6 lines. 34 citations checked.
+  Renumbering without it would re-ship the identical defect.
+- **Seen red before being trusted** (0.3.21's standard) — five mutations, all RED:
+  bare `:519` (the original defect); `:519 isCleanInvocation` (right token, wrong line);
+  `handOnce` moved to `:100`; past-EOF; and a stripped token.
+- **Verify:**
+  ```bash
+  npm test 2>&1 | grep 'self-host citations'      # 2 assertions, both ok, 34 checked
+  git diff -U0 .claude/veriloop/constitution.md | grep '^[+-]' | grep -v '^[+-][+-]' | grep -vc 'mjs:'   # → 0
+  grep -cE '^[0-9]+\. \*\*' .claude/veriloop/constitution.md   # → 10, unchanged
+  ```

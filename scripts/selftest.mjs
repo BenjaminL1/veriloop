@@ -1300,5 +1300,74 @@ function assert(cond, desc) {
   assert(badCapStr.r.status !== 0, 'generate: a non-integer question_cap ("three") FAILS THE BUILD');
 }
 
+// --- self-host CITATION LIVENESS -------------------------------------------
+// The constitution says of itself "every rule cites the enforcing line", and the
+// README calls it "code-cited". Both were FALSE for four of ten rules on
+// 2026-07-29: rule 4 cited selftest.mjs:5,60; rule 5 cited detectors.mjs:519
+// (the mechanism had moved 108 lines); rule 7 cited lint-bundle.mjs:88,118; rule 8
+// cited generate.mjs:249,287,261,237 — all four dead. They were TRUE when written
+// and rotted because nothing re-checked them. Renumbering without this assertion
+// would re-ship the identical defect under a fresh `generated_at`.
+//
+// Every citation MUST carry a trailing symbol token (`handOnce`, `ABS`, `FORBIDDEN`,
+// `isCleanInvocation`, …), and that token must appear within +/-6 lines of the cited
+// line — so a citation survives small edits but fails when the mechanism it names
+// moves away.
+//
+// The token is REQUIRED, not optional, and that is the whole point. A line-number-only
+// citation is unfalsifiable in practice: the original defect was rule 5 citing
+// detectors.mjs:519, a line that still EXISTS (the file has 640) but no longer holds
+// the sanitizer. Mutation-tested — restoring `:519` with no token passes an
+// existence-only check, so an existence-only check would not have caught the very bug
+// this assertion was written for. Requiring the token is what makes it a guard.
+{
+  const CITED = [
+    '.claude/veriloop/constitution.md',
+    '.claude/veriloop/experts/security.overrides.md',
+    '.claude/veriloop/experts/drift.overrides.md',
+  ];
+  // (?!\d) anchors the FULL line number — without it the pattern backtracks and
+  // reads `:627 isCleanInvocation` as `:62` followed by `7`, silently dropping the token.
+  const CITE = /(scripts\/[\w./-]+\.mjs):(\d+)(?!\d)(?:[ \t]+([A-Za-z_]\w*))?/g;
+  const srcCache = new Map();
+  const linesOf = (rel) => {
+    if (!srcCache.has(rel)) {
+      const p = join(here, '..', rel);
+      srcCache.set(rel, existsSync(p) ? readFileSync(p, 'utf8').split('\n') : null);
+    }
+    return srcCache.get(rel);
+  };
+
+  const blobs = CITED.filter((f) => existsSync(join(here, '..', f))).map((f) => [f, readFileSync(join(here, '..', f), 'utf8')]);
+  // the roster evidence is the SOURCE the personas render from (generate.mjs:407) —
+  // a dead citation here is re-emitted into every persona on the next regenerate
+  const ivPath = join(here, '..', '.claude/veriloop/interview.json');
+  if (existsSync(ivPath)) {
+    const iv = JSON.parse(readFileSync(ivPath, 'utf8'));
+    const ev = (iv.roster_add || []).flatMap((e) => e.evidence || []).join('\n');
+    blobs.push(['.claude/veriloop/interview.json (roster_add evidence)', ev]);
+  }
+
+  const dead = [];
+  let checked = 0;
+  for (const [name, text] of blobs) {
+    for (const [, rel, lnRaw, sym] of text.matchAll(CITE)) {
+      checked++;
+      const lines = linesOf(rel);
+      const ln = Number(lnRaw);
+      if (!lines) { dead.push(`${name}: ${rel} does not exist`); continue; }
+      if (ln < 1 || ln > lines.length) { dead.push(`${name}: ${rel}:${ln} is past EOF (${lines.length} lines)`); continue; }
+      if (!sym) { dead.push(`${name}: ${rel}:${ln} carries no symbol token — a bare line number cannot be checked for rot`); continue; }
+      const near = lines.slice(Math.max(0, ln - 7), Math.min(lines.length, ln + 6));
+      if (!near.some((l) => l.includes(sym))) dead.push(`${name}: ${rel}:${ln} no longer names \`${sym}\` within +/-6 lines`);
+    }
+  }
+  assert(checked >= 20, `self-host citations: the scan found citations to check (${checked} found)`);
+  assert(
+    dead.length === 0,
+    `self-host citations: every scripts/*.mjs citation in the constitution, the hand-owned overrides, and interview.json's roster evidence resolves${dead.length ? ` [${dead.join('; ')}]` : ` (${checked} checked)`}`,
+  );
+}
+
 console.log(`\n${pass} ok, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

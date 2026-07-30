@@ -26,27 +26,28 @@ violates one is a **BLOCKER**. Keep this list short and true.
 ## Trust boundaries & safety
 
 4. **Nothing from `fixtures/hostile-ci/` is ever executed** — scan-only, forever
-   (`scripts/selftest.mjs:5,60`). _(owner: `security`)_
+   (`scripts/selftest.mjs:6 hostile`, `scripts/selftest.mjs:66 hostile`). _(owner: `security`)_
 5. **CI text is untrusted input.** A command containing command substitution,
-   backticks, or env expansion is never adopted (`scripts/lib/detectors.mjs:519`);
+   backticks, or env expansion is never adopted (`scripts/lib/detectors.mjs:627 isCleanInvocation`);
    joined/continuation artifacts must stay clean (hostile-ci selftest block).
    _(owner: `security`)_
 6. **Safety tiers are law.** `safety=never` and `mutates` commands are never
    auto-run; `ask`-tier runs only with explicit owner inclusion
-   (`scripts/verify.mjs:54-55`). _(owner: `security`)_
+   (`scripts/verify.mjs:54 mutates`). _(owner: `security`)_
 7. **Emitted artifacts are portable and secret-free.** No absolute paths
-   (`scripts/lint-bundle.mjs:88`), no secrets, no harness-forbidden APIs in emitted
-   workflows (`lint-bundle.mjs:118`). Never stage `.env*`. _(owner: `security`)_
+   (`scripts/lint-bundle.mjs:94 ABS`), no secrets, no harness-forbidden APIs in emitted
+   workflows (`scripts/lint-bundle.mjs:124 FORBIDDEN`). Never stage `.env*`. _(owner: `security`)_
 
 ## Ownership & parity
 
 8. **The ownership asymmetry is sacred.** Machine-owned files regenerate; hand-owned
    files (`*.overrides.md`, this constitution) are never clobbered; anything
-   overwritten is backed up first (`scripts/generate.mjs:249,287,261,237`). Splice
-   markers (`scripts/lib/render.mjs:11`) bound every machine-owned block — owner
+   overwritten is backed up first (`scripts/generate.mjs:304 machine`,
+   `scripts/generate.mjs:342 handOnce`, `scripts/generate.mjs:294 backup`). Splice
+   markers (`scripts/lib/render.mjs:11 AUTO_START`) bound every machine-owned block — owner
    lines outside them are preserved byte-for-byte. _(owner: `drift`)_
 9. **Emitted config has one source of truth.** The workflow's wired gate must equal
-   the manifest's `gate_commands` (`scripts/lint-bundle.mjs:179-180`); command and
+   the manifest's `gate_commands` (`scripts/lint-bundle.mjs:177 gate_commands`); command and
    constitution text derive from the generated config, never re-hardcoded (M1 bug #2).
    _(owner: `drift`)_
 

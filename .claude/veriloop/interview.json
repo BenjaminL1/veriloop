@@ -25,18 +25,18 @@
       "key": "security",
       "title": "Supply-Chain & Input-Safety Reviewer",
       "evidence": [
-        "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519",
-        "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)",
-        "command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)",
-        "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)"
+        "parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:627 isCleanInvocation",
+        "fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:6 hostile, scripts/selftest.mjs:66 hostile)",
+        "command-safety tiers + mutates refusal (scripts/verify.mjs:54 mutates)",
+        "emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:94 ABS, scripts/lint-bundle.mjs:124 FORBIDDEN)"
       ]
     },
     {
       "key": "drift",
       "evidence": [
-        "machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)",
-        "splice-marker integrity (scripts/lib/render.mjs:11)",
-        "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)",
+        "machine/hand ownership + backup promises (scripts/generate.mjs:304 machine, scripts/generate.mjs:342 handOnce, scripts/generate.mjs:294 backup)",
+        "splice-marker integrity (scripts/lib/render.mjs:11 AUTO_START)",
+        "manifest↔workflow gate parity check (scripts/lint-bundle.mjs:177 gate_commands)",
         "selftest golden expectations — the assertions are this repo's only gate"
       ]
     }
