@@ -84,7 +84,7 @@ blaming your change.
 | 7 | **Wire the gate** | script | The gate literally runs the verified commands; exit codes decide. |
 | 8 | **Validate** | script + LLM | Lint every artifact; then a *fresh-context* agent drives the real loop. |
 | 9 | Report + stamp | script | `veriloop-manifest.json`: version, repo SHA, roster, verification results. |
-| 10 | Maintenance | script | Re-run regenerates only marked sections; three-way-merges the constitution. |
+| 10 | Maintenance | script | Re-run regenerates only marked sections; hand-owned files are preserved untouched. |
 
 ## Emitted bundle (plain files, into the target repo)
 
@@ -96,7 +96,7 @@ blaming your change.
 .claude/commands/review.md                    the /review command (lens review, no loop)
 .claude/commands/posture.md                   the /posture command (set the repo's default budget posture)
 .claude/veriloop/commands.json                detected + verified command surface
-.claude/veriloop/constitution.md              invariants (hand-owned; merged on re-run)
+.claude/veriloop/constitution.md              invariants (hand-owned; preserved on re-run)
 .claude/veriloop/experts/<name>.md            expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md  manual tweaks (hand-owned; never clobbered)
 .claude/veriloop/specs/<slug>.md              feature specs (hand-owned, ratified by owner, git-tracked)

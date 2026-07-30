@@ -408,7 +408,7 @@ function main() {
     // hand-owned override sibling (write-once)
     w.handOnce(P('.claude/veriloop/experts', `${slug}.overrides.md`), renderOverrides(e.key, e.title, repoName), 'hand');
   }
-  // hand-owned constitution (starter; three-way-merged on future re-runs)
+  // hand-owned constitution (starter; preserved untouched on future re-runs — handOnce)
   w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, roster, gate: config.gate }), 'starter');
 
   // shared owner files: veriloop keeps one marked block in each.

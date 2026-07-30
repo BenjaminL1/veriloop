@@ -110,7 +110,9 @@ node SKILL_DIR/../../scripts/verify.mjs --repo "$REPO" --commands "$REPO/.claude
   any exceptions?" questions.
 - Write the result over the STARTER `constitution.md` (replace its `TODO` lines),
   in the style of the Torevan `docs/constitution.md`: short, true, each rule
-  code-cited. On a re-run, three-way-merge — never clobber the user's edits.
+  code-cited. On a re-run the existing file is preserved untouched — never clobber
+  the user's edits. (There is no merge: a constitution you have edited will not
+  receive later generator improvements. Edit it deliberately.)
 
 ### Phase 5 — Interview (LLM, ≤5 questions)
 Ask ONLY non-derivable facts, as option-table questions with a recommended default:
@@ -219,7 +221,8 @@ overlays it. Present the final report: roster + evidence, the exact gate command
 
 ### Phase 10 — Maintenance (re-run)
 Re-run reads the committed manifest first, regenerates only marked machine
-sections, three-way-merges the constitution, and never clobbers `.overrides.md`.
+sections, and never clobbers hand-owned files — `constitution.md` and
+`.overrides.md` are preserved untouched (not merged).
 
 ---
 

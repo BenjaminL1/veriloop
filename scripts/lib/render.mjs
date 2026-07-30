@@ -6,7 +6,8 @@
 // from detected repo facts. veriloop phases 3 (deep scan) and 4 (constitution
 // mining) enrich them with bespoke, code-cited content on a full run. Manual
 // tweaks belong in each expert's `.overrides.md` (never overwritten) and in the
-// constitution (three-way-merged on re-run) — not in the auto block.
+// constitution (preserved untouched on re-run — see handOnce, generate.mjs:342)
+// — not in the auto block.
 
 const AUTO_START = '<<< veriloop:auto:start >>>';
 const AUTO_END = '<<< veriloop:auto:end >>>';
@@ -559,7 +560,7 @@ export function renderPostureCommand({ repoName, postures }) {
     `- **Write covenant.** You write **exactly one key** (\`budget_posture\`) in\n` +
     `  \`$REPO/.claude/veriloop/interview.json\`, then invoke the compiler which regenerates the\n` +
     `  machine-owned bundle (the normal, sanctioned regeneration — the same files a documented\n` +
-    `  re-run rewrites, honoring the three-way merge / backups / splice markers). **NOTHING else:** no\n` +
+    `  re-run rewrites, honoring hand-owned preservation / backups / splice markers). **NOTHING else:** no\n` +
     `  code, no branches, no other \`interview.json\` keys, and never edit \`constitution.md\`,\n` +
     `  \`experts/*\`, \`commands.json\`, or the manifest by hand, never \`.env*\`.\n` +
     `- **Validation before mutation.** A bad level changes nothing.\n` +
