@@ -9,7 +9,22 @@ description: >-
   and five slash commands to drive it: /dev-plan (spec interview + expert
   council), /dev-loop (build loop), /advise (brainstorm), /review (lens-only),
   /posture (the repo's default budget posture).
+allowed-tools: Read, Grep, Glob, Write, Edit, AskUserQuestion, Task, Bash(node:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git status:*)
 ---
+
+<!--
+  On the fence above (trust-pack T3). This is a SCOPED grant, not a read-only one:
+  veriloop's job is to write a bundle, so Write and Edit are load-bearing — the
+  constitution, scan-notes.md and interview.json are all authored here. What the
+  fence excludes is the point: unscoped `Bash` is absent, so the pipeline cannot
+  run arbitrary shell. `Bash(node:*)` covers the four deterministic scripts
+  (detect / verify / generate / lint-bundle) and nothing else; the three `git`
+  entries are read-only subcommands used to compare `repo_sha` and read history.
+  There is no `git commit`, no `git push`, no branch or worktree verb — landing is
+  owner-reserved (constitution rule 10). Commands the TARGET repo declares are run
+  by `scripts/verify.mjs` inside its own safety tiers, never by this skill directly.
+-->
+
 
 # veriloop — compile a self-verifying dev-loop for any repo
 

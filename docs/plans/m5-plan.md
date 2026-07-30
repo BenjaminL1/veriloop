@@ -555,9 +555,28 @@ against a clean tree at this SHA it returns **153 lines and exit 0**, while m5 e
 output and exit 1. An executor trusting it would conclude the repo pipes curl into a shell.
 **Replaced with a pattern that tests the actual property:**
 
+A first replacement attempt was *also* wrong, in the same way, and it is recorded here
+because it shows how strong the pull of the substring form is. `grep -rnE
+'curl[^|]*\|[[:space:]]*(ba)?sh' … ; test $? -eq 1` fires on `README.md:219`, which reads
+*"there is no `curl | bash` step"* — the trust-pack statement itself. The working check must
+exclude negated mentions, exactly like N5:
+
 ```bash
-grep -rnE 'curl[^|]*\|[[:space:]]*(ba)?sh|wget[^|]*\|[[:space:]]*(ba)?sh' \
-  scripts/ README.md skills/ SECURITY.md ; test $? -eq 1
+python3 - <<'PY'
+import re, pathlib
+NEG  = re.compile(r"\b(never|not|no|don't|do not|avoid|without|refus)\w*\b", re.I)
+PIPE = re.compile(r'(curl|wget)[^|\n]*\|\s*(ba)?sh')
+bad = []
+for r in ['scripts', 'README.md', 'skills', 'SECURITY.md']:
+    p = pathlib.Path(r)
+    fs = [p] if p.is_file() else [f for f in p.rglob('*') if f.is_file() and '.backups' not in str(f)]
+    for f in fs:
+        for line in f.read_text().splitlines():
+            if PIPE.search(line) and not NEG.search(line):
+                bad.append(f'{f}: {line.strip()[:80]}')
+assert not bad, bad
+print('T2 ok — no un-negated pipe-to-shell')
+PY
 ```
 
 T2's reader note is also now due on a second count: `scripts/selftest.mjs` is **1389 lines**,

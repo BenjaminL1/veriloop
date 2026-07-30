@@ -36,6 +36,33 @@ repo's own commands and reads their exit codes, and the reviewers are compiled
 cites your actual code), not generic best-practice essays. Instructions can be
 ignored; exit codes can't.
 
+## What veriloop runs
+
+veriloop runs commands it finds in *your* repo, so here is the whole policy. Every detected
+command is assigned a safety tier (`scripts/lib/detectors.mjs`, `DEFAULT_SAFETY`), and
+Phase 2 honors it (`scripts/verify.mjs:54`):
+
+| tier | categories | what happens |
+|------|-----------|--------------|
+| **safe** | `typecheck`, `lint`, `format` | auto-run during verify |
+| **ask** | `install`, `test`, `test_single`, `build` | **skipped** unless you include it explicitly (`--include test`) |
+| **never** | `dev`, `e2e`, `bench` | never auto-run — real side effects |
+| *`mutates`* | any formatter without `--check` | **refused** — it would rewrite your tree |
+
+Commands run with `CI=1` so they are deterministic and non-watching. A command whose text
+contains command substitution, backticks, or environment expansion is **never adopted at
+all** (`isCleanInvocation`, `scripts/lib/detectors.mjs:627`). Every entry in the generated
+`commands.json` carries a `source` citation naming the file and line it came from, so you can
+audit what veriloop decided and why.
+
+The deterministic scripts make **no network calls** and there is **no telemetry** — nothing
+is reported anywhere. Two network paths do exist in the emitted bundle and are deliberate:
+`/advise` may use `WebSearch`/`WebFetch` to check a claim against a source, and the optional
+cross-model second opinion passes your diff to the `codex` CLI at `high` tier when enabled.
+Both are documented, with the opt-out, in **[SECURITY.md](./SECURITY.md)** — which also
+covers the threat model, a known `npx` look-alike limitation, and how to report a
+vulnerability. veriloop never suggests `--dangerously-skip-permissions`.
+
 ## Install
 
 veriloop ships as one public repo that is *also* its own plugin marketplace:
@@ -48,6 +75,20 @@ npx skills add BenjaminL1/veriloop
 /plugin marketplace add BenjaminL1/veriloop
 /plugin install veriloop@veriloop
 ```
+
+**Pin it.** Releases are tagged `veriloop-vX.Y.Z`, and for anything you rely on you should
+install a tag or a commit SHA rather than tracking a branch — a tool that runs your commands
+should not change under you silently:
+
+```bash
+npx skills add BenjaminL1/veriloop#veriloop-v0.4.0
+```
+
+The version in `.claude-plugin/plugin.json` is canonical (it wins over marketplace-entry
+versions at install time); `package.json`, both `marketplace.json` fields, `VERILOOP_VERSION`
+in `scripts/generate.mjs`, and the top `CHANGELOG.md` heading are kept in lockstep, and the
+self-test fails if they disagree. Tagging currently lags the version stamps — the CHANGELOG
+is authoritative.
 
 Then, in the repo you want to set up:
 
@@ -172,7 +213,19 @@ scripts/selftest.mjs                deterministic self-test (asserts detect/veri
 scripts/templates/dev-loop.template.js   the portable workflow machinery
 scripts/lib/                        detectors, parsers (toml/makefile/ci), roster, renderers
 fixtures/                           fixture repos exercised by the self-test
+SECURITY.md                         threat model, safety tiers, network paths, reporting
 ```
+
+Every script is in-repo, dependency-free and meant to be read — there is no `curl | bash`
+step and nothing is minified or fetched at install time. One reader's note: `selftest.mjs` is
+the outlier at ~1,400 lines. It is a flat sequence of independent assertion blocks with
+section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
+for the behavior you care about.
+
+**On the skill directory name.** The skill lives at `skills/veriloop/`, which means the plugin
+form is the slightly redundant `/veriloop:veriloop`. That is deliberate: the standalone skill
+name is the thing `npx skills` users type and see, so it stays `veriloop` rather than being
+renamed or hoisted to the plugin root to tidy up a namespace prefix.
 
 Publishing is just `git push`. Requires Node ≥ 18.
 
