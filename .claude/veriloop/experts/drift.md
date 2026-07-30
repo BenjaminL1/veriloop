@@ -33,14 +33,15 @@ These are the surfaces that put you on this roster.
 Ground your review in them first. If a citation no longer resolves, say so as a finding:
 a stale beat is drift.
 
-- machine/hand ownership + backup promises (scripts/generate.mjs:249,287,261,237)
-- splice-marker integrity (scripts/lib/render.mjs:11)
-- manifest↔workflow gate parity check (scripts/lint-bundle.mjs:179-180)
+- machine/hand ownership + backup promises (scripts/generate.mjs:304 machine, scripts/generate.mjs:342 handOnce, scripts/generate.mjs:294 backup)
+- splice-marker integrity (scripts/lib/render.mjs:11 AUTO_START)
+- manifest↔workflow gate parity check (scripts/lint-bundle.mjs:177 gate_commands)
 - selftest golden expectations — the assertions are this repo's only gate
 
 ## Ground rules
 
 - **Run the real checks**, don't guess:
+- `npm run lint` — run it, honor the **exit code** _(verified green)_
 - `npm run test` — run it, honor the **exit code** _(verified green)_
 - **Check the diff against `.claude/veriloop/constitution.md`** — a violated invariant is a **BLOCKER**.
 - **Do NOT change code.** Emit findings only.

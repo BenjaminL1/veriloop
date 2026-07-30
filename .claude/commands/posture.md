@@ -53,7 +53,7 @@ If `$ARGUMENTS` is empty:
 - **Write covenant.** You write **exactly one key** (`budget_posture`) in
   `$REPO/.claude/veriloop/interview.json`, then invoke the compiler which regenerates the
   machine-owned bundle (the normal, sanctioned regeneration — the same files a documented
-  re-run rewrites, honoring the three-way merge / backups / splice markers). **NOTHING else:** no
+  re-run rewrites, honoring hand-owned preservation / backups / splice markers). **NOTHING else:** no
   code, no branches, no other `interview.json` keys, and never edit `constitution.md`,
   `experts/*`, `commands.json`, or the manifest by hand, never `.env*`.
 - **Validation before mutation.** A bad level changes nothing.

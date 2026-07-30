@@ -20,21 +20,32 @@
       "verified": null,
       "verify_skipped": "safety=ask — not included (re-run with --include install)"
     },
-    "test": {
-      "cmd": "npm run test",
+    "lint": {
+      "cmd": "npm run lint",
       "cwd": ".",
       "source": "package.json:8",
       "from": "node",
-      "safety": "ask",
-      "verified_by_ci": false,
+      "safety": "safe",
+      "verified_by_ci": true,
       "verified": true,
       "verify_exit": 0,
-      "verify_ms": 1584
+      "verify_ms": 198
+    },
+    "test": {
+      "cmd": "npm run test",
+      "cwd": ".",
+      "source": "package.json:9",
+      "from": "node",
+      "safety": "ask",
+      "verified_by_ci": true,
+      "verified": true,
+      "verify_exit": 0,
+      "verify_ms": 2668
     },
     "test_single": {
       "cmd": "npm run test -- <file>",
       "cwd": ".",
-      "source": "package.json:8",
+      "source": "package.json:9",
       "from": "node",
       "safety": "ask",
       "verified_by_ci": false,
@@ -43,7 +54,18 @@
     }
   },
   "scopes": [],
-  "ci_commands": [],
-  "ci_files": [],
-  "verified_at": "2026-07-14T02:16:41.064Z"
+  "ci_commands": [
+    {
+      "cmd": "npm run lint",
+      "source": ".github/workflows/ci.yml:21"
+    },
+    {
+      "cmd": "npm run test",
+      "source": ".github/workflows/ci.yml:22"
+    }
+  ],
+  "ci_files": [
+    ".github/workflows/ci.yml"
+  ],
+  "verified_at": "2026-07-30T01:15:55.481Z"
 }

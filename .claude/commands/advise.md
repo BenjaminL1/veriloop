@@ -1,6 +1,6 @@
 ---
 description: Use when the owner wants to brainstorm a feature or direction, sanity-check a design decision, weigh priorities, or pressure-test an idea BEFORE building — a consultation with veriloop's expert personas (code-review, security, drift) in ADVISE mode. The dialogue is inline; a MANDATORY read-only premise-council then pressure-tests the recommendation before it lands. Read-only; produces advice + tradeoffs, never a PASS/FAIL verdict (verdicts belong to /dev-loop).
-allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, WebSearch, WebFetch, Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(npm run test:*)
+allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, WebSearch, WebFetch, Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(npm run lint:*), Bash(npm run test:*)
 ---
 
 Consult **veriloop's experts** on an idea — the DIALOGUE runs **inline, in the main

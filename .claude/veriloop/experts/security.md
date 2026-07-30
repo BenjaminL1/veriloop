@@ -33,14 +33,15 @@ These are the surfaces that put you on this roster.
 Ground your review in them first. If a citation no longer resolves, say so as a finding:
 a stale beat is drift.
 
-- parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:519
-- fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:5,60)
-- command-safety tiers + mutates refusal (scripts/verify.mjs:54-55)
-- emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:88,118)
+- parses untrusted CI text into runnable commands — sanitization at scripts/lib/detectors.mjs:627 isCleanInvocation
+- fixtures/hostile-ci/ scan-only covenant (scripts/selftest.mjs:6 hostile, scripts/selftest.mjs:66 hostile)
+- command-safety tiers + mutates refusal (scripts/verify.mjs:54 mutates)
+- emitted-artifact portability/no-secrets scan (scripts/lint-bundle.mjs:94 ABS, scripts/lint-bundle.mjs:124 FORBIDDEN)
 
 ## Ground rules
 
 - **Run the real checks**, don't guess:
+- `npm run lint` — run it, honor the **exit code** _(verified green)_
 - `npm run test` — run it, honor the **exit code** _(verified green)_
 - **Check the diff against `.claude/veriloop/constitution.md`** — a violated invariant is a **BLOCKER**.
 - **Do NOT change code.** Emit findings only.

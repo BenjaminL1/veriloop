@@ -1321,10 +1321,18 @@ function assert(cond, desc) {
 // existence-only check, so an existence-only check would not have caught the very bug
 // this assertion was written for. Requiring the token is what makes it a guard.
 {
+  // Both the SOURCES and the EMITTED ARTIFACTS are checked. Fixing a source is not
+  // enough: `generate.mjs:369-373` reads interview answers from the PRIOR MANIFEST and
+  // merges `interview.json` only when `--interview` is passed, so a repair to
+  // `interview.json` alone leaves the rendered personas — the files a lens actually
+  // reads — still citing dead lines. That happened during this milestone.
   const CITED = [
     '.claude/veriloop/constitution.md',
     '.claude/veriloop/experts/security.overrides.md',
     '.claude/veriloop/experts/drift.overrides.md',
+    '.claude/veriloop/experts/security.md',
+    '.claude/veriloop/experts/drift.md',
+    '.claude/veriloop/experts/baseline-reviewer.md',
   ];
   // (?!\d) anchors the FULL line number — without it the pattern backtracks and
   // reads `:627 isCleanInvocation` as `:62` followed by `7`, silently dropping the token.
@@ -1347,6 +1355,14 @@ function assert(cond, desc) {
     const ev = (iv.roster_add || []).flatMap((e) => e.evidence || []).join('\n');
     blobs.push(['.claude/veriloop/interview.json (roster_add evidence)', ev]);
   }
+  // the manifest's persisted interview_answers are the ACTUAL source a bare re-run
+  // renders from (generate.mjs:369-371) — stale evidence here is re-emitted forever
+  const mfPath = join(here, '..', '.claude/veriloop/veriloop-manifest.json');
+  if (existsSync(mfPath)) {
+    const mf = JSON.parse(readFileSync(mfPath, 'utf8'));
+    const ev = ((mf.interview_answers || {}).roster_add || []).flatMap((e) => e.evidence || []).join('\n');
+    if (ev) blobs.push(['veriloop-manifest.json (interview_answers.roster_add)', ev]);
+  }
 
   const dead = [];
   let checked = 0;
@@ -1365,7 +1381,7 @@ function assert(cond, desc) {
   assert(checked >= 20, `self-host citations: the scan found citations to check (${checked} found)`);
   assert(
     dead.length === 0,
-    `self-host citations: every scripts/*.mjs citation in the constitution, the hand-owned overrides, and interview.json's roster evidence resolves${dead.length ? ` [${dead.join('; ')}]` : ` (${checked} checked)`}`,
+    `self-host citations: every scripts/*.mjs citation resolves — constitution, hand-owned overrides, emitted personas, interview.json and the manifest's persisted roster evidence${dead.length ? ` [${dead.join('; ')}]` : ` (${checked} checked)`}`,
   );
 }
 

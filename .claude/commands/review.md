@@ -32,5 +32,5 @@ the same issue repeated once per lens.
   auto-fix anything.
 - **Advisory, NOT the gate.** This produces **no verdict**; passing `/review` **never**
   substitutes for the `/dev-loop` gate. It is a cheap second look, not sign-off.
-- It does **not** run the real exit-code checks (`npm run test`) —
+- It does **not** run the real exit-code checks (`npm run lint` + `npm run test`) —
   only the `/dev-loop` gate does. `/review` is lenses only.

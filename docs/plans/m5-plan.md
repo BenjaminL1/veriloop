@@ -506,3 +506,42 @@ git diff --stat docs/plans/roadmap-v1.md        # → 1 file, +2/-1 (pointer onl
   git diff -U0 .claude/veriloop/constitution.md | grep '^[+-]' | grep -v '^[+-][+-]' | grep -vc 'mjs:'   # → 0
   grep -cE '^[0-9]+\. \*\*' .claude/veriloop/constitution.md   # → 10, unchanged
   ```
+
+### S4 — the regenerate needs `--interview`, and the citation guard must cover the ARTIFACTS
+
+- **Superseded clause:** m5:129-130 specifies a one-step regenerate
+  (`node scripts/generate.mjs --repo . --commands .claude/veriloop/commands.json`).
+- **Falsifying evidence, part 1 — the input was stale.** That `commands.json` carried
+  `verified_at: 2026-07-14`, `ci_files: []`, no `lint` key, and `test.source: package.json:8`
+  (now the `lint` line). Run literally it flips nothing and **fails m5's own Verify at
+  :147-149**. m5's How and Verify were mutually unsatisfiable at this SHA. The working
+  sequence is three steps: `detect` -> `verify --include test` -> `generate`. The middle step
+  is mandatory: `detect` does not smoke-run, so `detect -> generate` alone **downgrades a
+  true `verified: true` attestation to `null`** (measured).
+- **Falsifying evidence, part 2 — `--interview` is required, and this was missed.**
+  `generate.mjs:369-373` reads interview answers from the **prior manifest's**
+  `interview_answers`, merging `interview.json` only when `--interview` is passed. So the
+  repaired citations in `interview.json` had **no effect** on the first regenerate: the
+  emitted `experts/security.md` and `experts/drift.md` came back still citing
+  `detectors.mjs:519`, `lint-bundle.mjs:88,118` and `generate.mjs:249,287,261,237` — the
+  exact laundering this repair existed to prevent, one indirection further out. The correct
+  command adds `--interview .claude/veriloop/interview.json`. `interview.json` is NOT the
+  source of truth on a re-run; the manifest is, unless you say otherwise.
+- **Consequence for the guard, and this is the substantive finding.** Fixing a source does
+  not fix an artifact. `self-host CITATION LIVENESS` now also covers the **emitted**
+  `experts/*.md` and the **manifest's** persisted `interview_answers.roster_add` — 34
+  citations checked before, **56** after. Both new surfaces mutation-tested RED
+  independently: breaking only an emitted persona, and breaking only the manifest's
+  persisted evidence. Without this, "source correct, artifact stale" passes green — which is
+  the same defect class as the stale persona bundle found earlier in this repo's history.
+- **Verified after:** roster intact (`code-review, security, drift` — no `--out`, so no
+  roster drop); gate `npm run lint | npm run test`; both entries `ci: true, verified: true`;
+  **no `cmd` string renamed anywhere** (S2 paying for itself); `constitution.md` and all
+  three `*.overrides.md` reported `preserved`; the changed-file set matched the written
+  prediction exactly, 10 for 10. Idempotent apart from `generated_at` and
+  `written`->`unchanged` status fields.
+- **Verify:**
+  ```bash
+  npm test 2>&1 | grep 'self-host citations'    # 56 checked
+  git diff .claude/veriloop/veriloop-manifest.json | grep '^-.*"cmd"'   # NO OUTPUT
+  ```

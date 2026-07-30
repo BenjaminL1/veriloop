@@ -38,7 +38,7 @@ It then runs autonomously on a dedicated **git worktree + branch** (never the ow
    against `constitution.md`. If the plan violates an invariant, it stops and reports instead of coding.
 2. **Risk triage** — classifies the change (trivial / standard / high) so gate depth scales with risk.
 3. **Implement** in the worktree.
-4. **GO/NO-GO gate** — REAL `npm run test` that must actually pass (exit codes decide), plus the
+4. **GO/NO-GO gate** — REAL `npm run lint` + `npm run test` that must actually pass (exit codes decide), plus the
    review lenses (code-review, security, drift) and an optional cross-model second opinion. A failing check is re-run
    against the base tree, so a **pre-existing** red check is a concern, not a blocker — but a NEW failure
    stacked on a red baseline still blocks. Emits **PASS / CONCERNS / FAIL / WAIVED**.

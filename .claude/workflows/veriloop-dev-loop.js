@@ -59,10 +59,16 @@ const VERILOOP = {
   "constitution": ".claude/veriloop/constitution.md",
   "gate": [
     {
+      "name": "lint",
+      "cmd": "npm run lint",
+      "verified": true,
+      "ci": true
+    },
+    {
       "name": "test",
       "cmd": "npm run test",
       "verified": true,
-      "ci": false
+      "ci": true
     }
   ],
   "e2e": null,
