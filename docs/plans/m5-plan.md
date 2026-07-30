@@ -545,3 +545,53 @@ git diff --stat docs/plans/roadmap-v1.md        # → 1 file, +2/-1 (pointer onl
   npm test 2>&1 | grep 'self-host citations'    # 56 checked
   git diff .claude/veriloop/veriloop-manifest.json | grep '^-.*"cmd"'   # NO OUTPUT
   ```
+
+### Discrepancy notes — two more of this plan's verifies are unsound
+
+**N4 (code wins) — m5:162's T2 pattern is malformed and passes on nothing.** The pattern
+`'curl.*\|.*bash\|curl.*\|.*sh\b'` is a BRE alternation in which `.*bash` and `.*sh\b` are
+their own branches, so it matches any line containing "bash" or "sh" anywhere. Run verbatim
+against a clean tree at this SHA it returns **153 lines and exit 0**, while m5 expects no
+output and exit 1. An executor trusting it would conclude the repo pipes curl into a shell.
+**Replaced with a pattern that tests the actual property:**
+
+```bash
+grep -rnE 'curl[^|]*\|[[:space:]]*(ba)?sh|wget[^|]*\|[[:space:]]*(ba)?sh' \
+  scripts/ README.md skills/ SECURITY.md ; test $? -eq 1
+```
+
+T2's reader note is also now due on a second count: `scripts/selftest.mjs` is **1389 lines**,
+over m5:162's 800-line threshold.
+
+**N5 (code wins) — m5:163's T4 verify fails on the trust pack's own security statement.**
+T4 requires that veriloop never *suggest* `--dangerously-skip-permissions`. m5:164 already
+concedes that a **negated mention** is not a violation — it excludes `docs/` on exactly that
+basis. But `SECURITY.md` now states *"veriloop never suggests
+`--dangerously-skip-permissions`"*, which is the trust pack doing its job, and a raw-text ban
+flags it. Same failure shape as N2. **Replaced with a check of the requirement rather than
+the substring:** every occurrence must be a negated mention, none an instruction.
+
+```bash
+python3 - <<'PY'
+import re, pathlib
+NEG = re.compile(r"\b(never|not|no|don't|do not|avoid|without|refus)\w*\b", re.I)
+FLAG = '--dangerously-skip-permissions'
+bad = []
+for r in ['README.md', 'SECURITY.md', 'skills', '.claude/commands']:
+    p = pathlib.Path(r)
+    files = [p] if p.is_file() else [f for f in p.rglob('*') if f.is_file() and '.backups' not in str(f)]
+    for f in files:
+        for line in f.read_text().splitlines():
+            if FLAG in line and not NEG.search(line):
+                bad.append(f'{f}: {line.strip()[:90]}')
+assert not bad, bad
+print('T4 ok — every occurrence is a negated mention')
+PY
+```
+
+**A pattern worth naming, since three of this plan's five verifies had it.** N2, N4 and N5
+are the same defect: a verify written as a **substring ban** on a security-relevant token,
+where the requirement is about **use**. Banning the string also bans documenting that you
+avoided it, so the check fires on correct, well-documented work and stays silent on the real
+hazard. When the property is "X is never used", assert it against parsed structure or against
+negation context — never against raw text.
