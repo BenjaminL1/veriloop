@@ -614,3 +614,158 @@ where the requirement is about **use**. Banning the string also bans documenting
 avoided it, so the check fires on correct, well-documented work and stays silent on the real
 hazard. When the property is "X is never used", assert it against parsed structure or against
 negation context — never against raw text.
+
+---
+
+## Implementation notes — actual vs planned (2026-07-29, v0.4.0)
+
+M5 was executed autonomously while the owner was away, with the six contested calls settled
+by a multi-agent debate and a deciding ruling. **Three of five exit criteria are MET; two are
+NOT MET and are reported as such rather than closed on weak evidence.** Every deviation from
+this plan is recorded in `## Supersessions` above with a falsifying citation.
+
+### Criterion 1 — Trust pack complete (T1-T8) — **MET**
+
+T1-T8 all verify by exit code. `SECURITY.md` (T6) and `LICENSE` (T8) were absent while
+`plugin.json` and the README both advertised MIT; both now exist. T3 added an `allowed-tools`
+fence to `skills/veriloop/SKILL.md` — a **scoped** grant, not read-only, since veriloop's job
+is to write a bundle; unscoped `Bash` is excluded and there is no commit/push/branch verb.
+T1's tier table is read off `DEFAULT_SAFETY`, not paraphrased.
+
+T2 carries its required reader note: `scripts/selftest.mjs` is ~1,400 lines, over m5:162's
+800-line threshold. **Three of this plan's own verifies were unsound and are repaired** (N2,
+N4, N5) — all three banned a security-relevant token as raw text where the requirement is
+about *use*, so each fired on correct, well-documented work. All trust-pack checks now assert
+`exit == 1` explicitly rather than `!= 0`, and `SECURITY.md` was written **before** any of them
+ran: those greps exit **2** on a missing file, so a "non-zero ⇒ pass" checklist would have
+marked T4/T5/T7 green on absence — a fabricated green produced by the trust pack's own command.
+
+### Criterion 2 — CI live — **MET WITH STATED LIMIT**
+
+`.github/workflows/ci.yml` conforms to the Part 1 spec with two recorded supersessions (S1,
+S2). Both actions pinned by 40-char SHA; `permissions: contents: read`; no
+`pull_request_target`. `npm run lint` and `npm run test` were confirmed green **from a fresh
+clone** on node v20.13.1. The self-host manifest flip is recorded: `gate_commands[test].ci`
+`false → true`, and `lint` joined the gate.
+
+**The limit:** *"a push runs `npm test` green on node 18/20/22"* is **UNOBSERVED.** The branch
+has not been pushed, so no GitHub Actions run exists, and **nodes 18 and 22 have never been
+exercised on any runner** — only v20.13.1 locally. Pushing is M6 and the owner asked to review
+first. Residual owner action: push `ci/wire-the-gate` and confirm three green matrix legs
+(~2 min).
+
+### Criterion 3 — Demo + recording — **NOT MET (partial)**
+
+**DA1 met. DA2 not met, and nothing was synthesized.**
+
+DA1: `docs/demo/make-demo.sh` materializes a demo repo outside the veriloop tree (it refuses
+to run inside it) with three exit-code defect classes plus a fourth lens-only footgun. All
+three captured at real **exit 1**, each for its seeded reason, in `docs/demo/gate-record.md`,
+re-executable via `docs/demo/replay.sh` (mutation-verified: repairing the seeded bug makes it
+report MISMATCH). The demo repo is unpublished — public URL is M6.
+
+DA2: **no `.cast`, no `.gif`, no README link to a recording.** `/dev-loop` emits no capturable
+terminal stream — `.claude/workflows/veriloop-dev-loop.js` and
+`scripts/templates/dev-loop.template.js` contain **zero** `child_process`/`spawnSync`/
+`execSync` calls, and the gate's commands go to an LLM subagent as a prompt string. A `.cast`
+of `/dev-loop` would therefore be authored frame by frame, so the "real output, synthetic
+timings" option was not merely unethical but **unavailable**: there is no real output of the
+depicted process to stretch. A footnote can repair a claim about pacing; never one about
+occurrence. Recording tools are also absent from the authoring machine (`asciinema`, `agg`,
+`vhs`, `termtosvg` all missing). **m5:265-266's verify is unsound** and is replaced: `grep
+'asciinema\|.gif\|.cast' README.md → exit 0` goes green on an honest sentence saying no
+recording exists, so any executor optimizing for green criteria closes DA2 with a disclaimer.
+Residual owner action: ~10 min, runbook at `docs/demo/dev-loop-capture.md`.
+
+### Criterion 4 — 5-minute quickstart proven on a clean clone — **NOT MET (partial)**
+
+`⟨quickstart-clone-result⟩ = PASS (deterministic spine, 14s) · NOT MEASURED (LLM phases 3-5)`
+
+On a fresh `git clone` at this SHA, `detect → verify → generate → lint-bundle` ran against
+**Torevan** — a repo the executor did not author — and emitted
+`.claude/workflows/torevan-dev-loop.js` (999 lines) with the bundle linting clean and
+veriloop's own gate green in the clone, in **14 seconds**. Re-runnable as
+`docs/demo/quickstart-check.sh`.
+
+**This is not the criterion.** The criterion's subject is a stranger following the README,
+whose first instruction is `/veriloop` — an LLM-driven skill whose phases 3-5 (deep scan,
+constitution mining, interview) were **not executed**. The five-minute claim is measured for
+the scripted half and unmeasured end to end. **The word "proven" is not used for this
+criterion anywhere.** The existing "Five minutes to first gate" heading was deliberately not
+upgraded: a target is not a proof.
+
+The same script surfaced a real behavior. Run against `obra/superpowers`, which declares no
+npm scripts at all, veriloop emits a bundle with an **empty gate** and `lint-bundle` exits 1
+("empty/unwired gate"). That is correct fail-closed behavior — an unwired gate cannot pass —
+so the script reports `NO COMMAND SURFACE` (exit 3) distinctly from a spine failure.
+
+### Criterion 5 — Docs synced — **MET**
+
+README comparison table present (`/init` · Spec Kit · aider · CodeRabbit), every sourced cell
+carrying a primary-source URL and a fetch date, with **no** audit vocabulary in the section.
+The claims-discipline sentence concedes **aider's** exit-code fix loop and Claude Code's
+`Stop`/`PostToolUse` hooks by name. **Both** stale Status paragraphs addressed — m5:284 named
+only one, at the wrong version; there were two (`v0.3.3` and `v0.3.0`).
+
+CHANGELOG entry at `## 0.4.0` with a PARTIAL qualification in the heading. Version stamps
+agree across all six enforced locations plus the seventh, unenforced
+`veriloop-manifest.json` `veriloop_version`, which the selftest does not check
+(`scripts/selftest.mjs:1042`) and which only the regenerate sets.
+
+`⟨benchmark-number⟩` is **omitted** per m5:24-27: nothing is published and
+`scripts/bench-score.mjs` was deleted in 0.3.22. **`bakeoff-results.md` is NOT cited in the
+README.** Its veriloop arm was the deterministic miner run with docs deliberately unread, and
+that subsystem was deleted the same day by `c88f130` — so both its recall loss (4th of 6, 11.0
+vs Spec Kit's 17.0) and its precision win describe code that no longer ships. It also ran with
+every interview step marked `[INFERRED]`, i.e. with the elicitation channel veriloop now calls
+its spine switched off.
+
+Also corrected: the repo claimed a **three-way merge** of the constitution in nine live
+places, including installer instruction in `SKILL.md` and `render.mjs:562`, which emitted the
+claim into every target repo's `posture.md`. `handOnce` is preserve-or-write; there is no
+merge. And `CHANGELOG.md` 0.3.21's claim that a cold regenerate "would clobber the hand-owned
+constitution and overrides" is **false** — it was the stated reason that release hand-edited
+three machine-owned files, which produced the drift it then had to guard. Corrected by a dated
+note in the 0.4.0 entry rather than by rewriting history.
+
+### D1-D5
+
+D1 kept (both `name` and `description` retained). D2 kept — `skills/veriloop/` stays, the
+`/veriloop:veriloop` consequence is now explained in the README rather than left as an oddity.
+D3 done as a doc correction, **not** by deleting stamps: `plugin.json` is canonical, all six
+agree, the selftest enforces it. D4 documented in both README and `SECURITY.md`; actual
+tagging is M6 and **tags currently stop at `veriloop-v0.3.1`, 21 releases behind** — stated
+rather than implied. D5 recorded here as an evaluated decision with no implementation work:
+cross-tool install adapters are the approach superpowers takes (11 harness manifests over one
+skill directory); veriloop remains Claude-Code-only and hard-depends on a workflow harness
+providing `agent()`/`parallel()`/`phase()` plus `.claude/commands`.
+
+### Assertion count (governance, m5:327)
+
+**251 → 253.** It did not drop. The two additions are the citation-liveness guard, which
+checks 56 citations across the constitution, the hand-owned overrides, the emitted personas,
+`interview.json` and the manifest's persisted roster evidence.
+
+### Governance debt — for the owner, flagged and NOT acted on
+
+1. **`roadmap-v1.md` has no §11 check-off for M4**, no mention of M3 anywhere, and the entire
+   0.3.15-0.3.22 body of work (`/advise` council, `/dev-plan`, premise-rider, personas, roster
+   tiers) appears in **no M plan**. The roadmap's milestone-to-version mapping is fiction:
+   M4 is labelled "v0.5" while its Rust core shipped inside 0.3.4. Re-baselining it is an
+   owner act; m5:328-329 defers the check-off and m5:345-346 bars editing the roadmap.
+2. **M4 §§5-6 remain undone and are not Rust work.** `commands.overrides.json` (a hand
+   override for a mis-detected command) and Windows portability + detect-only OSS validation
+   are generic, and they bear directly on "any repo can run it."
+3. **Constitution rule 1 names only `npm test`** while the gate now runs two commands. Adding
+   `lint` would **add an invariant**, which is the owner's act, not the executor's.
+4. **Four "three-way merge" claims remain**, all deliberate: `constitution.md:9` and
+   `specs/posture-command.md:54` are hand-owned; `docs/plans/m2-plan.md:49` is historical.
+   (`.claude/commands/posture.md` was fixed by the regenerate.)
+5. **Five research reports at the repo root are untracked** (`bakeoff-results.md`,
+   `council-research.md`, `prior-art-research.md`, `persona-debate-verdict.md`,
+   `constitution-enforcement-experiment.md`). Nothing tracked cites them, so there is no dead
+   link — but they are unversioned and will not survive a fresh clone.
+6. **`.claude/veriloop/specs/constitution-enforcer-partition.md` is still untracked** and was
+   deliberately left so: it is an unratified draft recommended for send-back.
+7. **`dev-loop.md` and `review.md` carry no `allowed-tools` fence**, while `advise.md`,
+   `dev-plan.md` and `posture.md` do.

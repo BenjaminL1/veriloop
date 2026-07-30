@@ -49,6 +49,49 @@ emitted it into every target repo's `posture.md`. Hand-owned files are *preserve
 untouched* — there is no merge, so a constitution you have edited will never receive later
 generator improvements. Now stated accurately, with the consequence spelled out.
 
+**Trust pack.** `LICENSE` (MIT) and `SECURITY.md` now exist — both were absent while
+`plugin.json` and the README advertised MIT. `SECURITY.md` states the threat model that
+actually applies (veriloop reads other repos' CI text, runs commands from it, writes into
+them), cites the enforcing line for every claim, and **discloses rather than glosses** three
+things: an `npx` look-alike limitation in command adoption, the fact that the deterministic
+scripts make zero network calls **but** `/advise` carries `WebSearch`/`WebFetch` and the
+cross-model second opinion hands your diff to the `codex` CLI at `high` tier, and that
+hand-owned files are preserved rather than merged. `skills/veriloop/SKILL.md` gained an
+`allowed-tools` fence — scoped, not read-only, since writing the bundle is the job; unscoped
+`Bash` is excluded and there is no commit/push/branch verb.
+
+**Demo.** `docs/demo/make-demo.sh` generates a broken app outside the veriloop tree with four
+seeded defects on four different signals — an off-by-one failing `test`, a type error failing
+`typecheck`, an unused binding failing `lint`, and an `innerHTML` footgun that **passes all
+three** and is visible only to a reviewing lens. Real exit codes are captured in
+`gate-record.md` and re-executable via `replay.sh`, which fails if any recorded code stops
+reproducing. Two bugs in the demo itself are recorded rather than hidden: the first version's
+test failed on a module-syntax error instead of the seeded defect, and `eslint` was flagging
+the "lens-only" file for `no-undef`, so it was not actually lens-only.
+
+**README.** A comparison table against `/init`, Spec Kit, aider and CodeRabbit, every sourced
+cell carrying a primary source and a fetch date, with no audit vocabulary — the rows are
+veriloop's own axes, so the section says it is positioning rather than a benchmark. The
+claims-discipline paragraph concedes by name that **aider already drives fixes off non-zero
+exit codes** and that Claude Code's `Stop`/`PostToolUse` hooks can gate on a real command.
+And the old thesis line *"Instructions can be ignored; exit codes can't"* is retired: `runChecks`
+is an `agent()` call and the emitted workflow is structurally forbidden from spawning a
+process, so the exit code arrives through a model. The narrower, defensible claim replaces it.
+
+**Two M5 exit criteria are NOT met, deliberately.** There is no recorded `/dev-loop`
+screencast: the loop emits no capturable terminal stream (zero `child_process` calls in the
+emitted workflow or its template), so any `.cast` would be authored frame by frame rather than
+recorded, and none was made. And the five-minute quickstart is measured only for the scripted
+spine — `detect → verify → generate → lint` completes in **14s** on a clean clone against a
+third-party repo, while the LLM phases were not executed, so the word "proven" is not used for
+it. Both have a residual owner action and a runbook. Full ledger, including seven items of
+governance debt and the fact that M4 is being skipped by owner decision, in
+`docs/plans/m5-plan.md § Implementation notes — actual vs planned`.
+
+**Gate: 251 → 253 assertions.** The two additions are the citation-liveness guard, covering 56
+citations across the constitution, the hand-owned overrides, the emitted personas,
+`interview.json` and the manifest's persisted roster evidence.
+
 ## 0.3.22 — 2026-07-27
 - **Removed the deterministic constitution-mining line.** Deleted `scripts/scan.mjs`, `scripts/mine.mjs`, `scripts/bench-score.mjs` and `scripts/lib/mined-query.mjs` (1,247 lines), their five fixture bundles, the rule-ownership referee in `lint-bundle.mjs`, and every plan and spec describing them. The approach was abandoned: code-mining reaches only a handful of lint-shaped rules, and a constitution's spine is **elicited**, not mined — so the deterministic miner was solving the wrong half of the problem. The LLM-authored path (SKILL.md phases 3 and 4) is unchanged and remains the direction.
 - Gate: 391 → **247** assertions; `lint-bundle` 23 → **21** checks. Both green. The drop is the removed subsystem's own coverage — no assertion was weakened to accommodate the deletion.
