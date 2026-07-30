@@ -30,11 +30,50 @@ discovered deterministically from `package.json` / `Makefile` / `pyproject.toml`
 
 The popular methodology plugins (superpowers et al.) *instruct* the agent to
 verify its work — prose rules the model may or may not follow on any given turn.
-veriloop **wires** the verification: the gate is generated code that runs your
-repo's own commands and reads their exit codes, and the reviewers are compiled
-*from your repo* (personas cite your actual danger surfaces; the constitution
-cites your actual code), not generic best-practice essays. Instructions can be
-ignored; exit codes can't.
+veriloop **wires** the verification instead: the commands are discovered from your
+repo and baked into the gate, and the reviewers are compiled *from your repo*
+(personas cite your actual danger surfaces; the constitution cites your actual
+code), not generic best-practice essays.
+
+Precisely what that buys, stated without overclaiming. The checks are your real
+commands and the numbers are their real process exit codes — but a subagent runs
+them and reports the integer back through a fixed schema, so this narrows what the
+model is trusted for rather than eliminating it: from *"is this code good?"* down to
+*"what number did the command print?"* What is **not** a judgment call is the
+verdict: `verdictFrom` is a pure function the harness executes over those reported
+results, it fails closed when any scheduled check is missing, and only a human can
+waive a blocker. The selftest extracts that function out of the emitted artifact and
+runs it against a case table, so the decision logic is tested rather than described.
+
+## How it compares
+
+Rows are the axes veriloop is built around, so read this as positioning rather than an
+even-handed survey — a table whose dimensions the author chose is an argument, not a
+benchmark. Sources checked 2026-07-29; each claim links the primary source it came from.
+
+| | **veriloop** | **`/init`** <sup>[1]</sup> | **Spec Kit** <sup>[2]</sup> | **aider** <sup>[3]</sup> | **CodeRabbit** <sup>[4]</sup> |
+|---|---|---|---|---|---|
+| **Gate built per repo** | commands parsed from `package.json` / Makefile / `pyproject.toml` and reconciled against CI, each with a `source` citation and a safety tier | writes a `CLAUDE.md` guide; no gate | — the docs describe specs, plans and task lists, not command detection | you supply the commands (`--lint-cmd`, `--test-cmd`) | not its layer |
+| **Code-cited constitution** | rules carry `file:line` anchors, and the selftest fails if a citation stops resolving | conventions in prose | `/speckit.constitution` produces governing principles as markdown | — | — |
+| **What decides a verdict** | your commands' real exit codes, reported through a schema, then aggregated by a pure fail-closed function with human-only waivers | nothing decides; it is a context file | — no execution described | non-zero exit from your lint/test command triggers a fix attempt | LLM review of the diff |
+| **Where it sits** | upstream, pre-PR: plan → gate → preview branch, stops before merge | session start | upstream, pre-development | upstream, in the edit loop | PR-time, plus a CLI and IDE surface |
+
+**Claims discipline.** Exit-code-driven correction is not new and veriloop does not claim it.
+**aider already does this** — *"Aider will try and fix any errors if the command returns a
+non-zero exit code"* <sup>[3]</sup> — and Claude Code's own `Stop` and `PostToolUse` hooks can
+gate a session on a real command. What veriloop adds is narrower: it **derives** the command
+surface for a given repo instead of asking you to name it, cross-checks it against CI, and
+compiles the reviewers and invariants from that repo's own code. The aggregation being a
+tested pure function with fail-closed semantics is the second half. Neither is a new idea
+about running commands.
+
+<sup>[1]</sup> <https://code.claude.com/docs/en/commands> — *"Initialize project with a `CLAUDE.md` guide."*
+<sup>[2]</sup> <https://github.com/github/spec-kit> — constitution → specify → plan → tasks → implement, emitted as markdown.
+<sup>[3]</sup> <https://aider.chat/docs/usage/lint-test.html> — `--lint-cmd` / `--test-cmd` / `--auto-test`.
+<sup>[4]</sup> <https://docs.coderabbit.ai/> — PR reviews plus a pre-commit CLI and IDE extensions.
+
+Cells marked "—" are ones the tool's own documentation does not claim; they are gaps in the
+public docs as read on the date above, not measured absences.
 
 ## What veriloop runs
 
@@ -252,6 +291,20 @@ renamed or hoisted to the plugin root to tidy up a namespace prefix.
 Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
+
+**v0.4.0 — launch machinery (partial).** veriloop's own gate is now enforced rather than
+remembered: `.github/workflows/ci.yml` runs `npm run lint` + `npm run test` on push and PR
+across node 18/20/22, with both actions pinned by commit SHA. `lint-bundle` joined the
+compiled gate, so `/dev-loop` now runs the enforcer for constitution rules 7 and 9. Nine dead
+`file:line` citations in the constitution were repaired and a selftest assertion now fails the
+build when any citation stops resolving. `LICENSE` and [`SECURITY.md`](./SECURITY.md) exist
+for the first time. **Two launch items are open:** there is no recorded `/dev-loop` screencast
+(it needs a live interactive session — see
+[`docs/demo/dev-loop-capture.md`](./docs/demo/dev-loop-capture.md)), and the five-minute
+quickstart is measured only for the scripted half — `detect → verify → generate → lint`
+completes in ~14s on a clean clone against a real third-party repo, while the LLM phases
+(deep scan, constitution mining, interview) are unmeasured end to end. Details in
+`docs/plans/m5-plan.md`.
 
 **v0.3.3 — `/dev-plan` emitted command (spec interview + expert council)** enables
 binding spec ratification before `/dev-loop` builds. The other two spec on-ramps shrink
