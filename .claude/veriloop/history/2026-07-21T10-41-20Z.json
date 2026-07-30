@@ -1,0 +1,129 @@
+{
+  "ts": "2026-07-21T10-41-20Z",
+  "feature": "M3 §2 — scripts/mine.mjs: deterministic constitution-mining pipeline (in-process core). Turns scan-notes.md surfaces + docs-claims-verified-against-code into candidate rules — witness-or-drop (≥2 real file:line citations), deterministic re-verification IN-PROCESS ONLY (regex/AST in Node, spawns nothing → §3-safe by construction), conformance ≥90%/≥5 sites or dropped as hypothesis, refuse unfalsifiable prose, provenance + governance metadata → mined.json. PROPOSES only; never writes/confirms the constitution (owner-gated). Defers git-history mining, spawned-check execution (full §3 contract), three-way merge. Stacks on feat/m3-scan-deep-scan (consumes scan-notes.md). Spec at .claude/veriloop/specs/m3-mine.md (binding, incl. BASE BRANCH step 0); authority docs/plans/m3-plan.md §2.",
+  "repo": "veriloop",
+  "tier": "high",
+  "baseSha": "42763c1d47050ce534b4d73b5703fe9c9cf75cf8",
+  "headSha": "a586887b9ab74bbd3899acc7539a25d33507c019",
+  "verdict": "CONCERNS",
+  "checks": [
+    {
+      "name": "test",
+      "command": "npm run test",
+      "exit": 0,
+      "tail": "ok   - mine: source never references child_process (imports node:fs + node:path only)\nok   - mine: source contains no spawn/exec call (spawns nothing)\nok   - mine: source contains no shell:true options object (danger regex is fragment-assembled)\n\n247 ok, 0 failed"
+    }
+  ],
+  "baselineProbe": null,
+  "screenshots": [],
+  "screenshotVerdict": null,
+  "fixPasses": 0,
+  "blockers": [],
+  "concerns": [
+    "[Baseline Reviewer (senior engineer — correctness &amp; craft), MODE: REVIEW] readHeadSha only handles the `.git`-DIRECTORY layout: it does `readFileSync(join(repo, '.git', 'HEAD'))`. In a git WORKTREE (and submodules) `.git` is a FILE containing `gitdir: <path>`, so that read throws ENOTDIR, is swallowed by the catch, and corpus_sha/confirmed_at_sha resolve to null. I reproduced both: a normal `.git`-dir repo yields the real HEAD sha (73e1bfe...), but the current worktree checkout (`.git` is a 70-byte text file) yields corpus_sha: null. Since veriloop runs its own dev-loop inside isolated worktrees, the spec-required governance field confirmed_at_sha (the §6 bench-score provenance anchor) will be null in every real self-host mine. It is 'graceful' but the field is effectively dead in the primary execution environment. Compounding it: the selftest only ever asserts corpus_sha === null (fixtures/mine-target has no .git), so the populated-sha path has ZERO coverage — a regression making the sha always-null would stay green.",
+    "[security (Supply-Chain & Input-Safety Reviewer) — MODE: REVIEW] The unknown-surface guard `const query = MINE_QUERIES[seed.surface]; if (!query) continue;` uses an unhardened object bracket-lookup on attacker-influenced input. scan-notes.md is untrusted input to mine (mine accepts any --scan path; the selftest itself hand-authors notes). A `## surface:` line whose name is an inherited Object.prototype key (`__proto__`, `constructor`, `toString`, `valueOf`, `hasOwnProperty`) makes MINE_QUERIES[name] return a truthy prototype value, bypassing the `if (!query) continue` unfalsifiable-refusal path; verify() then dereferences `query.violating.test` (undefined) and CRASHES with an uncaught TypeError, exit 1. Reproduced: a notes file with `## surface: __proto__` aborts mine.mjs at line 222 instead of gracefully skipping. This defeats the intended 'unknown surface -> skip' invariant and turns crafted/corrupt input into a hard crash on the trust boundary the security lens owns."
+  ],
+  "waived": [],
+  "filesChanged": [
+    "%REPO%/scripts/mine.mjs",
+    "%REPO%/fixtures/mine-target/src/spawn-a.mjs",
+    "%REPO%/fixtures/mine-target/src/spawn-b.mjs",
+    "%REPO%/fixtures/mine-target/src/spawn-c.mjs",
+    "%REPO%/fixtures/mine-target/src/spawn-d.mjs",
+    "%REPO%/fixtures/mine-target/src/spawn-e.mjs",
+    "%REPO%/fixtures/mine-target/docs/GUIDELINES.md",
+    "%REPO%/scripts/selftest.mjs",
+    "%REPO%/scripts/generate.mjs",
+    "%REPO%/package.json",
+    "%REPO%/.claude-plugin/plugin.json",
+    "%REPO%/.claude-plugin/marketplace.json",
+    "%REPO%/CHANGELOG.md",
+    "%REPO%/docs/plans/m3-plan.md"
+  ],
+  "implSummary": "Implemented M3 §2 scripts/mine.mjs — the deterministic, IN-PROCESS constitution-mining core — stacked on feat/m3-scan-deep-scan (verified gate: `grep -q renderSurfaceBlock scripts/scan.mjs` present). Base branch was at v0.3.8, selftest baseline 227.\n\nmine.mjs (new, compiler-side sibling of scan.mjs; NOT emitted): CLI `--repo/--scan/--out`. Imports node:fs+node:path ONLY, reads files as TEXT, spawns NOTHING — §3(b)-safe by construction. Candidate sources this slice: (a) scan-notes.md nominations (owner from `expert=`, provenance `scan-surface:<name>`) and (d) rule-shaped docs/CLAUDE.md claims mapped to a compiled query by keyword then VERIFIED against code (provenance `docs:<path:line>`); git-history/SZZ deferred. Each candidate compiles to a {conforming,violating} regex query RUN in process (violating wins ties); citations are the real repo-RELATIVE file:line conforming sites. Drop precedence: no compiled query ⇒ unfalsifiable-refused; <2 citations ⇒ witness-or-drop; ratio<0.9 || sites<5 ⇒ hypothesis dropped. Governance metadata per survivor with confirmed_by/ratification left null (owner-gated). corpus_sha/confirmed_at_sha read from <repo>/.git/HEAD (ref + packed-refs) WITHOUT spawning git, degrading to null when no .git. Ranked by citation count then distinct-file spread. Halt: writes mined.json, prints `review mined.json — the owner confirms which candidates become rules`, exit 0 — never writes/confirms constitution.md.\n\nSpawn-free-under-grep hardening: the shell-option danger regexes are assembled from string FRAGMENTS (SHELL + ':\\\\s*' + 'true') so the source carries no literal `shell:true`/`child_process`/spawn-call token — the selftest asserts this on the source.\n\nfixtures/mine-target/: src/spawn-{a..e}.mjs (5 conforming shell:false sites, each importing child_process so scan nominates the surface; 0 violating ⇒ conformance 1.0) + docs/GUIDELINES.md (prose-only \"always write clean code\" ⇒ 0 candidates).\n\nselftest.mjs: +20 assertions running the REAL pipeline (scan.mjs → mine.mjs) end-to-end plus a synthesized 1-citation-drop case and the spawns-nothing source greps. 227 → 247 ok, 0 failed.\n\nVersion bumped 0.3.8 → 0.3.9 across all six stamps (generate.mjs VERILOOP_VERSION, package.json, plugin.json, marketplace.json metadata+plugins[0], CHANGELOG.md new entry) — agreement selftest green. docs/plans/m3-plan.md §2 got an \"Implementation notes (shipped v0.3.9)\" paragraph reflecting what shipped and what stayed deferred.\n\nNOTE: an earlier Write introduced a stray NUL byte in mine.mjs (from an escape typo in the binary-check line); I detected it (grep flagged the file as binary) and repaired it with a node fixer, restoring the intended `t.includes('\\\\u0000')` check. Final source is clean and parses. No commit/push/review performed, per instructions.",
+  "lenses": [
+    {
+      "lens": "Baseline Reviewer (senior engineer — correctness &amp; craft), MODE: REVIEW",
+      "summary": "The change implements M3 §2 faithfully and the gate is green: npm test passes 247 (grew from the 227 baseline as the spec requires), lint-bundle exits 0 (mine.mjs is compiler-side, not emitted), and the six version stamps agree at 0.3.9. I verified the load-bearing invariants against the real code: no LLM and zero spawns inside mine.mjs (imports node:fs+node:path only; the shell danger-regex is fragment-assembled so the source carries no literal spawn/argv token — the §3(b) in-process covenant holds by construction, confirming constitution rules 2/4), witness-or-drop is enforced before output (<2 citations dropped, verified via the drop-repo test), re-verification is deterministic and in-process (>=90%/>=5 sites), unfalsifiable prose is refused (the prose-only fixture yields 0 candidates), citations are repo-relative and re-derived from code rather than trusted from the scan evidence (scan says line 3, mine independently cites line 8 — exactly the rule-3 discipline), and the owner-gated halt is respected (writes mined.json, prints the confirm message, exits 0, never touches constitution.md — rule 8). Docs are synced (CHANGELOG + m3-plan.md §2 implementation notes). No BLOCKERs and no constitution violations. One SHOULD-FIX: readHeadSha does not handle the `.git`-as-file (worktree/submodule) layout, so the spec-required confirmed_at_sha provenance is silently null in exactly the worktree environment veriloop self-hosts in, and no test covers the populated-sha path. One NIT: the docs-claim source and the 'secret/env' query are entirely unexercised by fixtures.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/mine.mjs:141-160 (readHeadSha)",
+          "issue": "readHeadSha only handles the `.git`-DIRECTORY layout: it does `readFileSync(join(repo, '.git', 'HEAD'))`. In a git WORKTREE (and submodules) `.git` is a FILE containing `gitdir: <path>`, so that read throws ENOTDIR, is swallowed by the catch, and corpus_sha/confirmed_at_sha resolve to null. I reproduced both: a normal `.git`-dir repo yields the real HEAD sha (73e1bfe...), but the current worktree checkout (`.git` is a 70-byte text file) yields corpus_sha: null. Since veriloop runs its own dev-loop inside isolated worktrees, the spec-required governance field confirmed_at_sha (the §6 bench-score provenance anchor) will be null in every real self-host mine. It is 'graceful' but the field is effectively dead in the primary execution environment. Compounding it: the selftest only ever asserts corpus_sha === null (fixtures/mine-target has no .git), so the populated-sha path has ZERO coverage — a regression making the sha always-null would stay green.",
+          "fix": "In readHeadSha, detect the `.git`-file form: if statSync(join(repo,'.git')) is a file, parse its `gitdir: <path>` pointer and read HEAD/refs (and commondir for packed-refs) from that gitdir instead of `<repo>/.git`. Add a selftest that mines a tmp repo with a real `.git` (or a synthesized worktree pointer) and asserts corpus_sha equals the known HEAD sha, so the populated path is actually covered."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/mine.mjs:70-83, 185-204 (MINE_QUERIES 'secret / env handling' + parseDocsClaims)",
+          "issue": "The docs-claim source (d) and the second compiled query ('secret / env handling') are never exercised end-to-end. fixtures/mine-target only drives the 'shell-string execution' query via a scan nomination; the prose-only doc is (correctly) refused, so no candidate ever flows through the docs path or the env query. If the env violating regex `console\\.\\w+\\([^)]*process\\.env\\b` were wrong (its `[^)]*` stops at the first `)`, so `console.log(f(), process.env.X)` is miscounted as conforming rather than violating), nothing would catch it. The shipped/covered surface is real; the second query and docs pipeline are untested code.",
+          "fix": "Add a fixture with a code-backed docs claim (a doc line containing a keyword + never/always/must, plus >=5 conforming code sites) so source (d) and the env query classification are covered, or note the coverage gap explicitly in the plan's implementation notes."
+        }
+      ]
+    },
+    {
+      "lens": "security (Supply-Chain & Input-Safety Reviewer) — MODE: REVIEW",
+      "summary": "No BLOCKERs. The change faithfully implements the M3 §2 spec and honors the security-critical invariants: the IN-PROCESS-ONLY covenant holds (imports node:fs/node:path only, no child_process, no eval/dynamic-import of scanned content — verified by grep and by the selftest's spawns-nothing lock), fixture content is read as text and never executed (rules 2/4), citations are repo-relative with no absolute-path leak into mined.json (rule 7), rule text comes from the hardcoded MINE_QUERIES rather than untrusted prose, and the owner-gated halt (confirmed_by/ratification stay null; never writes constitution.md) is respected (rule 8). npm test is green (247 ok, grew from 227), lint-bundle exits 0, mine.mjs is not emitted into bundles, six version stamps agree at 0.3.9, and the acceptance pipeline (scan.mjs -> mine.mjs on fixtures/mine-target) exits 0 with prose-only -> 0 candidates. One SHOULD-FIX: an unhardened MINE_QUERIES bracket lookup lets an inherited-prototype surface name (e.g. `__proto__`) in the untrusted scan-notes bypass the unknown-surface guard and crash the miner (reproduced, exit 1) — it cannot arise from real scan.mjs output (surfaces are hardcoded) but scan-notes is a genuine trust boundary. Two NITs: owner key from scan-notes is unvalidated, and the conformance-ratio DROP / violating-count branch has no end-to-end test.",
+      "findings": [
+        {
+          "severity": "SHOULD-FIX",
+          "location": "scripts/mine.mjs:262",
+          "issue": "The unknown-surface guard `const query = MINE_QUERIES[seed.surface]; if (!query) continue;` uses an unhardened object bracket-lookup on attacker-influenced input. scan-notes.md is untrusted input to mine (mine accepts any --scan path; the selftest itself hand-authors notes). A `## surface:` line whose name is an inherited Object.prototype key (`__proto__`, `constructor`, `toString`, `valueOf`, `hasOwnProperty`) makes MINE_QUERIES[name] return a truthy prototype value, bypassing the `if (!query) continue` unfalsifiable-refusal path; verify() then dereferences `query.violating.test` (undefined) and CRASHES with an uncaught TypeError, exit 1. Reproduced: a notes file with `## surface: __proto__` aborts mine.mjs at line 222 instead of gracefully skipping. This defeats the intended 'unknown surface -> skip' invariant and turns crafted/corrupt input into a hard crash on the trust boundary the security lens owns.",
+          "fix": "Reject inherited keys before the lookup: `if (!Object.hasOwn(MINE_QUERIES, seed.surface)) continue;` (or build MINE_QUERIES/DOCS map via `Object.create(null)`, or use a Map). Same hardening applies wherever seed.surface indexes MINE_QUERIES."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/mine.mjs:173",
+          "issue": "`owner` parsed from scan-notes via `nominates:\\s*expert=([a-z-]+)` is not validated against the allowed set (security|drift|ux|code-review). Since scan-notes is untrusted, any lowercase/hyphen string flows unchecked into mined.json's `owner`, which the spec defines as a bounded expert key and which bench-score.mjs (§6) will consume. Risk is low (charset-constrained, no injection/execution), a data-integrity gap only.",
+          "fix": "Validate against the SPECIALIST_DEFAULTS set + 'code-review' and fall back to `query.owner` when the nominated key is not recognized (mirrors scan.mjs's own SPECIALIST_DEFAULTS restriction)."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/selftest.mjs:1189",
+          "issue": "Test-coverage gap for a core spec behavior. The mine-target fixture is 5 byte-identical `shell:false` sites (5 conforming / 0 violating => ratio 1.0), and the drop-repo case has 1 conforming / 0 violating. So verify()'s `violating++` branch and the ratio-DROP path (a candidate with >=2 citations and >=5 sites but ratio <0.9 -> dropped as a hypothesis, spec: 'conformance >=90%/>=5 sites or dropped') are never exercised end-to-end. The re-verification's violating-counting — the heart of the conformance ratio — has no witnessing test.",
+          "fix": "Add a fixture/notes case with a mix (e.g. 5 conforming + 2 violating shell:true sites -> ratio ~0.71 over 7 sites) and assert it is DROPPED, so the violating branch and the ratio threshold are both covered."
+        }
+      ]
+    },
+    {
+      "lens": "drift (REVIEW mode) — Drift Sentinel",
+      "summary": "GO. scripts/mine.mjs implements the M3 §2 spec faithfully: deterministic, in-process-only constitution mining (imports node:fs+node:path only, spawns nothing — §3(b)-safe by construction), witness-or-drop (<2 citations rejected), ≥0.9/≥5-site re-verification, unfalsifiable-prose refusal, provenance + governance metadata with confirmed_by/ratification left null, ranking by citation count then distinct-file spread, and an owner-gated halt that PROPOSES-only (never writes constitution.md). Verified against the real code and constitution: base branch correct (renderSurfaceBlock present), npm test green (247 ok / 0 failed, grown from 227), lint-bundle exit 0, six version stamps agree at 0.3.9, mine.mjs not emitted into bundles, citations repo-relative (no absolute-path leak, rule 7), corpus_sha degrades to null without .git. No constitution invariant is violated. No BLOCKERs. Docs (CHANGELOG, m3-plan implementation notes) accurately reflect what shipped — no doc/schema drift. Two minor soundness NITs on the illustrative query catalog and a scale NIT on unbounded citations; none block.",
+      "findings": [
+        {
+          "severity": "NIT",
+          "location": "scripts/mine.mjs:70-75",
+          "issue": "The bundled 'secret / env handling' query defines a CONFORMING witness as any line matching /process\\.env\\b/, so every benign env read is counted as a witnessing 'site' and emitted as a citation. A plain `process.env.X` read does not actually witness the invariant 'env reads stay out of logs' — it is just a use — so conformance ratio and citation counts for this rule would be semantically inflated. The shell-string query (the one the fixtures exercise) is sound; this dormant second query is not. Purely illustrative this slice and never nominated by the fixtures, so it does not affect acceptance.",
+          "fix": "Tighten the conforming witness for the env query to lines that genuinely demonstrate the invariant (e.g. an env read that is NOT inside a console/log call), or drop the second query until a fixture exercises it. Owner review of mined.json is the current backstop."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/mine.mjs:185-204",
+          "issue": "Source (d) maps a rule-shaped doc line to a compiled query by KEYWORD only (shell|spawn|argv vs env|secret|token). The prose's actual semantic claim is never compared to the query's semantics, so a doc line like 'always sanitize env tokens' would be attributed (provenance docs:<path:line>) to the unrelated 'process.env never passed to console' query. The code re-verification is real, but the prose→query linkage can mis-attribute. Mitigated because scan-surface seeds precede docs seeds and dedupe by rule, so the primary candidate is scan-sourced, and the owner reviews mined.json before anything is confirmed.",
+          "fix": "Acceptable as a cheap in-process proxy for this slice (spec permits it). If desired later, require the doc line to also contain a token matching the query's own rule text before attributing, to avoid provenance mis-linkage."
+        },
+        {
+          "severity": "NIT",
+          "location": "scripts/mine.mjs:211-231",
+          "issue": "verify() pushes a citation for EVERY conforming line across the whole tree with no cap, so on a large real repo a single candidate's `citations` array (and thus mined.json) can grow to thousands of entries. Fine for the fixture and for correctness; a size/readability concern for the downstream owner review and bench-score.mjs consumer.",
+          "fix": "Consider capping citations to the top-N witnessing sites (still keeping the true conforming/violating/sites counts) so mined.json stays reviewable. Not required by the spec."
+        }
+      ]
+    }
+  ],
+  "gateHistory": [
+    {
+      "verdict": "CONCERNS",
+      "blockers": 0,
+      "concerns": 2,
+      "waived": 0
+    }
+  ],
+  "crossModel": null,
+  "missingGateJobs": [],
+  "implPreflight": "All green (judged by exit code). Acceptance mine command: `node scripts/mine.mjs --repo fixtures/mine-target --scan <notes> --out <out>` exit 0; acceptance-invariant probe (every candidate ≥2 citations + numeric conformance ratio, ≥1 candidate) exit 0; prose-only doc yields 0 candidates. npm test (node scripts/selftest.mjs) exit 0 — 247 ok, 0 failed (grew from baseline 227). lint-bundle exit 0 (mine.mjs is compiler-side, not emitted). `grep \"shell: *true\" scripts/mine.mjs` exit 1 (no match). All six version stamps agree at 0.3.9 (the version-stamp-agreement selftest passes). No mutating commands run; nothing committed/pushed.",
+  "dryRun": false,
+  "land": {
+    "sha": "a586887b9ab74bbd3899acc7539a25d33507c019",
+    "pushed": true,
+    "branch": "feat/m3-mine"
+  }
+}
