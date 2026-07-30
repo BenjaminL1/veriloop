@@ -344,3 +344,123 @@ lands (a later step — this plan does not edit the roadmap).
   canary only, never in `ci.yml`'s blocking path.
 - **Editing the emitted bundle, target repos, or the roadmap** — this plan writes only
   `m5-plan.md`; the CI/README/trust-pack edits are the executor's implementation step.
+
+---
+
+## Supersessions
+
+Executor amendments to this BINDING plan, made 2026-07-29 during M5 execution. This plan
+already ranks the tree above itself — see the three `**Discrepancy note (code wins):**`
+blocks at m5:105-108, m5:170-172 and m5:213-218 — so an amendment is legitimate ONLY with
+all four of: (a) the superseded clause named by line, (b) falsifying `file:line` evidence
+that POST-DATES the 2026-07-14 settlement, (c) the substitute, (d) a verify command.
+Anything lacking all four reverts to the literal spec. The Part 1 spec block above is
+deliberately left unedited — amending it in place would destroy the record.
+
+### S1 — the `npm run lint` step is RETAINED in `ci.yml`
+
+- **Superseded clause:** m5:75-77 — *"**`npm test` only.** No build, no publish, no extra
+  jobs. `package.json:8` is `"test": "node scripts/selftest.mjs"` — that is the whole gate."*
+- **Falsifying evidence:** the clause grounds itself in a citation that is now false.
+  `package.json:8` is `"lint": "node scripts/lint-bundle.mjs --bundle ."`; `test` moved to
+  `package.json:9`. Changed by commit `0b9e604` (2026-07-27), **13 days after settlement**,
+  whose message states the reason: constitution rules 7 and 9 both name `lint-bundle.mjs`
+  as their enforcer and nothing executed it. Corroborating: `scripts/generate.mjs:235`
+  `gateOrder = ['typecheck','lint','format','test']` — veriloop's own compiler puts `lint`
+  in the gate of every target repo, so hand-written CI that ran test-but-not-lint would put
+  the drift tool out of parity with its own emitted output.
+- **Substitute:** one additional `run:` in the SAME job. m5:75's "no build, no publish, no
+  extra jobs" remains literally enforced — there is still exactly one job.
+- **Falsifier checked before adopting:** `npm run lint` was run from a fresh `git clone`
+  (`git clone . /tmp/vl-cleanclone`) and exited **0** (`21 ok, 0 warn, 0 fail`). Had it
+  depended on untracked `.claude/**` state it would have turned CI red for every
+  contributor, and this supersession would have been withdrawn.
+- **Verify:** `python3 -c "import yaml;j=yaml.safe_load(open('.github/workflows/ci.yml'))['jobs']['test'];assert [s['run'] for s in j['steps'] if 'run' in s]==['npm run lint','npm run test']"`
+
+### S2 — `run: npm run test`, NOT `run: npm test`
+
+- **Superseded clause:** m5:71 — the sample snippet's `- run: npm test`.
+- **Falsifying evidence:** m5's own checkable criterion contradicts its illustrative
+  snippet, and the criterion wins. m5:130-131 requires the regenerate diff to flip
+  *"only `test`'s `ci`/`verified_by_ci` to `true` (plus `generated_at`)"*. Measured on
+  identical trees at this SHA: with `run: npm test`, `scripts/lib/detectors.mjs` adopts CI's
+  exact string as ground truth and `commands.json` `test.cmd` becomes `npm test` with
+  `from: "ci"`, `source: ".github/workflows/ci.yml"` — a **rename**, cascading into the
+  manifest, `commands_summary`, the emitted workflow's `gate` array, three `experts/*.md`
+  gate lines and `advise.md`'s derived `allowed-tools` fence. That is not m5:130-131's diff.
+  With `run: npm run test`, `test.cmd` stays `npm run test` with `source: package.json:9`.
+- **Both spellings meet m5's stated goal:** `verified_by_ci` flips `false → true` either
+  way, and m5:147-149's assert (`ci is True`) passes either way. This amendment is
+  intent-preserving and costs 4 characters.
+- **Why the rename is wrong on principle:** it re-roots the command's provenance from
+  `package.json` (the declaration) to the CI file (a consumer), making CI the source of the
+  command CI is supposed to independently corroborate — collapsing the evidence relation
+  `verified_by_ci` exists to express, and violating constitution rule 9 (one source of truth).
+- **Verify:** `python3 -c "import json;c=json.load(open('.claude/veriloop/commands.json'));assert c['commands']['test']['cmd']=='npm run test' and c['commands']['test']['source']=='package.json:9'"`
+
+> **Six deviations REVERTED, not superseded.** The `ci.yml` committed at `5ff3e73` also
+> carried `name: gate`, job id `gate`, `on:` as a mapping, a string matrix, a `concurrency`
+> block, `fail-fast: false`, and per-step `name:` keys. None had a falsifying citation, and
+> three of them break this plan's own verify (`d['jobs']['test']`, `== [18,20,22]`). All
+> reverted to the literal spec. `concurrency` was additionally wrong on the merits:
+> `cancel-in-progress` discards a superseded push's gate result, so some commits would
+> never obtain a recorded green — the wrong default for a product selling recorded
+> exit-code evidence. No `.github/dependabot.yml`: absent from this plan and from
+> `roadmap-v1.md:200-238`, a pin rots into staleness rather than insecurity, and the
+> pin-refresh procedure is documented in `SECURITY.md` per T6 instead.
+
+### Discrepancy notes — repairs to THIS plan's own text
+
+**N1 (code wins) — m5:139's verify raises `KeyError` on a conformant file.** YAML 1.1
+resolves the unquoted key `on:` to boolean `True`, so `yaml.safe_load(...)` yields keys
+`['name', True, 'permissions', 'jobs']` and `d['on']` fails. Confirmed at this SHA:
+`'on' in d` → `False`. Any executor running m5:137-141 against a *correct* file would
+conclude the file was wrong. Repaired below.
+
+**N2 (code wins) — a raw-text ban on `pull_request_target` fails on m5's own comment.**
+m5:57 mandates the comment `# NEVER pull_request_target`, which contains the string, so
+asserting `'pull_request_target' not in text` fails on a conformant file and forbids
+documenting the hazard avoided. The real safety property is that it is not a **trigger**.
+Repaired below: assert it is absent from the parsed `on:` list and from all non-comment
+text.
+
+**Repaired Part-1 verify (replaces m5:137-141):**
+
+```bash
+python3 - <<'PY'
+import yaml, re
+t = open('.github/workflows/ci.yml').read(); d = yaml.safe_load(t)
+on = d['on'] if 'on' in d else d[True]          # N1: YAML 1.1 coerces bare `on` to True
+assert on == ['push', 'pull_request'], on
+assert d['permissions'] == {'contents': 'read'}
+assert list(d['jobs']) == ['test'], list(d['jobs'])
+j = d['jobs']['test']
+assert j['strategy']['matrix']['node'] == [18, 20, 22]
+assert 'concurrency' not in d and 'fail-fast' not in j['strategy']
+assert [s['run'] for s in j['steps'] if 'run' in s] == ['npm run lint', 'npm run test']  # S1, S2
+assert len(re.findall(r'actions/(?:checkout|setup-node)@[0-9a-f]{40}', t)) == 2
+assert 'pull_request_target' not in on          # N2: a trigger check, not a substring ban
+code = '\n'.join(l.split('#')[0] for l in t.splitlines())
+assert 'pull_request_target' not in code and 'claude plugin validate' not in code
+assert not any(re.search(r'\$\{\{\s*github\.event\.', s.get('run', '')) for s in j['steps'])
+print('Part 1 ok')
+PY
+```
+
+**N3 (executor note) — the annotation obligation vs the no-roadmap-edits rule.** The ruling
+that produced these supersessions required annotating all three artifacts carrying the
+superseded clause (m5:75-77, `roadmap-v1.md:214`, `specs/ci-adopt-coverage.md:132`) so the
+amendment does not itself create a rule-9 violation — three artifacts asserting two truths.
+It ALSO barred editing `roadmap-v1.md` (per m5:345-346) and deferred the §11 check-off (per
+m5:328-329). Resolved as follows: the bar is on **substantive** roadmap change — the §11
+milestone check-off and any reconciliation of the off-roadmap 0.3.15-0.3.22 work — and a
+one-line pointer that prevents a contradiction is a different act. Both annotations are
+therefore a single inline sentence each, adding no milestone claim and reconciling nothing.
+The §11 check-off remains undone and is listed in the governance debt below.
+
+**Verify the annotations:**
+```bash
+grep -c 'm5-plan.md#supersessions' docs/plans/roadmap-v1.md \
+  .claude/veriloop/specs/ci-adopt-coverage.md   # → both 1
+git diff --stat docs/plans/roadmap-v1.md        # → 1 file, +2/-1 (pointer only)
+```

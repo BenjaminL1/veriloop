@@ -211,7 +211,9 @@ Distribution fixes (verified against current official specs):
 - `version` in `plugin.json` ONLY (it silently wins over marketplace-entry
   versions); tag releases `veriloop-vX.Y.Z`; CHANGELOG.
 - Add CI to the veriloop repo itself: selftest on push (the compiler gets its own
-  exit-code gate — good story, good safety). Push gate is `npm test` ONLY;
+  exit-code gate — good story, good safety). Push gate is `npm test` ONLY
+  — **SUPERSEDED 2026-07-29**, the gate is `npm run lint` + `npm run test`; see
+  [m5-plan.md § Supersessions](./m5-plan.md#supersessions) S1;
   `claude plugin validate .` moved to the release checklist (consultation
   2026-07-14: zero schema drift observed, and it would put the Claude CLI on the
   runner) — spec in [m5-plan](./m5-plan.md).

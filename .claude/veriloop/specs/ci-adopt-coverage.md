@@ -131,6 +131,10 @@ evidence. This distinction may be recorded in the plan/report but needs no code.
 - **NO `.github/workflows/` for veriloop itself.** Deferred to M5 by unanimous
   expert conclusion (`npm test` only, node matrix, SHA-pinned checkout — when it
   comes). Nothing in this change creates `.github/` at the repo root.
+  **Discharged 2026-07-29:** M5 came; `.github/workflows/ci.yml` now exists with the
+  node matrix and SHA-pinned actions. The `npm test` only clause was superseded —
+  the gate is `npm run lint` + `npm run test`; see
+  [m5-plan.md § Supersessions](../../../docs/plans/m5-plan.md#supersessions) S1.
 - **NO `claude plugin validate` anywhere** — killed for the push gate (zero
   schema-drift observed; it checks schema, not stamp agreement); it is an M5/M6
   release-checklist item.

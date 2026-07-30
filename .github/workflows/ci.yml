@@ -1,41 +1,22 @@
-name: gate
-
-# veriloop's own gate, enforced. Until this existed the gate was a habit:
-# `npm test` and `npm run lint` only ran when a human remembered to run them.
-on:
-  push:
-  pull_request:
-
-# A newer push to the same ref supersedes the older run.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+# .github/workflows/ci.yml
+name: ci
+on: [push, pull_request]          # NEVER pull_request_target
 permissions:
-  contents: read
-
+  contents: read                  # minimum; no write scopes
 jobs:
-  gate:
+  test:
     runs-on: ubuntu-latest
     strategy:
-      # Report every Node version, don't stop at the first red one.
-      fail-fast: false
       matrix:
-        # package.json declares engines.node >=18 — this is what proves it.
-        node: ['18', '20', '22']
-    name: gate (node ${{ matrix.node }})
+        node: [18, 20, 22]        # matches package.json engines ">=18"
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      # Pin refresh: git ls-remote https://github.com/actions/<action> refs/tags/v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262    # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: ${{ matrix.node }}
-
-      # No install step and no dependency cache on purpose: veriloop is
-      # deliberately dependency-free and ships no lockfile, so `npm ci` would
-      # fail. If a dependency is ever added, add `npm ci` here — and a lockfile.
-      - name: lint the emitted bundle
-        run: npm run lint
-
-      - name: selftest
-        run: npm test
+      # No install step and no cache on purpose: veriloop is deliberately
+      # dependency-free and ships no lockfile, so `npm ci` would fail.
+      # If a dependency is ever added, add `npm ci` here — and a lockfile.
+      - run: npm run lint
+      - run: npm run test
