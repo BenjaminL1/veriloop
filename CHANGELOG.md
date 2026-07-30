@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.4.0 — 2026-07-29 — M5 launch machinery (PARTIAL: the DA2 recording and the clean-clone quickstart are NOT met — see the exit-criteria ledger in `docs/plans/m5-plan.md`)
+
+**On the version number.** `docs/plans/m5-plan.md:132` asks for a `## 0.6.x` entry. That
+`0.6` is a **milestone label** inherited from `roadmap-v1.md:200` ("M5 · v0.6"), not a
+version decision. **No 0.4.x or 0.5.x release ever shipped** — `grep '^## ' CHANGELOG.md`
+goes 0.3.22 straight back to 0.2.x. Stamping 0.6.0 in `plugin.json` and both
+`marketplace.json` fields would assert two releases a reader cannot find, in the
+machine-readable install surface, in the milestone whose subject is trustworthiness. So
+this is 0.4.0, and no bridging history was fabricated. M4 (labelled "v0.5") is being
+skipped by owner decision; its Rust core already shipped inside 0.3.4.
+
+**veriloop's own gate is now enforced, not remembered.** `.github/workflows/ci.yml` runs
+`npm run lint` then `npm run test` on push and pull_request across node 18/20/22, with both
+actions pinned by 40-char commit SHA and `permissions: contents: read`. Until this existed
+the gate ran only when a human typed it. Conforms to m5's BINDING Part 1 spec with **two
+recorded supersessions** (`docs/plans/m5-plan.md § Supersessions`): the `npm run lint` step
+is retained, because m5's "npm test only" clause grounds itself in a citation that rotted
+13 days after settlement (`package.json:8` is now `"lint"`, not `"test"` — commit
+`0b9e604`); and the step is spelled `npm run test`, not `npm test`, because the latter makes
+the detector adopt CI's string as ground truth and **renames** the gate command across the
+manifest, the workflow gate array, three personas and `advise.md`'s allowed-tools fence —
+which m5:130-131's own acceptance criterion forbids. Six other deviations in the file as
+first committed were reverted to the literal spec.
+
+**Nine dead code citations in the constitution, repaired — and a guard so they cannot rot
+silently again.** The constitution says of itself "every rule cites the enforcing line" and
+the README calls it "code-cited"; both were false for four of ten rules. Rule 5 cited
+`detectors.mjs:519` after the sanitizer had moved 108 lines; rule 8's four `generate.mjs`
+anchors were all wrong; rules 4 and 7 likewise. The deliverable is the new `self-host
+CITATION LIVENESS` assertion, not the renumber: every `scripts/*.mjs` citation in the
+constitution, the hand-owned overrides, and `interview.json`'s roster evidence must name an
+existing file, an in-range line, **and a symbol token present within ±6 lines**. The token
+is mandatory because mutation testing showed an existence-only check does not catch the
+original bug — line 519 still exists, it just no longer holds the sanitizer. Five mutations
+confirmed RED before the guard was trusted. No rule was reworded, added or removed.
+
+**Correcting 0.3.21's record.** That entry claimed *"a cold regenerate would clobber the
+hand-owned constitution and overrides"*, and used it as the reason to hand-edit three
+machine-owned files instead — which is what produced the drift it then had to guard.
+The claim is **false**: `generate.mjs:342` `handOnce` is preserve-or-write, and returns
+untouched when the file exists and `--force` is absent. History is not rewritten; the
+correction is recorded here.
+
+**veriloop does not three-way-merge anything.** That claim appeared in nine live places
+including `skills/veriloop/SKILL.md` (installer instruction) and `render.mjs:562`, which
+emitted it into every target repo's `posture.md`. Hand-owned files are *preserved
+untouched* — there is no merge, so a constitution you have edited will never receive later
+generator improvements. Now stated accurately, with the consequence spelled out.
+
 ## 0.3.22 — 2026-07-27
 - **Removed the deterministic constitution-mining line.** Deleted `scripts/scan.mjs`, `scripts/mine.mjs`, `scripts/bench-score.mjs` and `scripts/lib/mined-query.mjs` (1,247 lines), their five fixture bundles, the rule-ownership referee in `lint-bundle.mjs`, and every plan and spec describing them. The approach was abandoned: code-mining reaches only a handful of lint-shaped rules, and a constitution's spine is **elicited**, not mined — so the deterministic miner was solving the wrong half of the problem. The LLM-authored path (SKILL.md phases 3 and 4) is unchanged and remains the direction.
 - Gate: 391 → **247** assertions; `lint-bundle` 23 → **21** checks. Both green. The drop is the removed subsystem's own coverage — no assertion was weakened to accommodate the deletion.
