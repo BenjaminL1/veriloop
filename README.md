@@ -183,6 +183,28 @@ loop had — they must be declared through the interview.
    warnings-as-errors toolchain verify **red** even when it is locally green — the
    stored failure tail shows the real output.
 
+## See it catch something
+
+`docs/demo/make-demo.sh` generates a tiny broken app with four seeded defects, each tripping
+a different signal — an off-by-one that fails `test`, a type error that fails `typecheck`, an
+unused binding that fails `lint`, and a `innerHTML` footgun that **passes all three** and is
+only visible to a reviewing lens.
+
+```bash
+bash docs/demo/make-demo.sh /tmp/veriloop-demo   # builds it outside this tree
+bash docs/demo/replay.sh    /tmp/veriloop-demo   # re-runs it, diffs against the record
+```
+
+The captured output and real exit codes are in
+[`docs/demo/gate-record.md`](./docs/demo/gate-record.md); `replay.sh` re-executes every
+command and fails if any recorded exit code stops reproducing. The demo repo itself is not
+yet published — publishing is part of the launch step.
+
+**There is no recorded screencast yet.** A recorded `/dev-loop` run needs a live interactive
+session, so what is published is the machine-verifiable half above rather than a
+reconstruction. The runbook for capturing a real one is
+[`docs/demo/dev-loop-capture.md`](./docs/demo/dev-loop-capture.md).
+
 ## Proven on two very different stacks
 
 The deterministic spine is validated against two real repos; detection reproduces
