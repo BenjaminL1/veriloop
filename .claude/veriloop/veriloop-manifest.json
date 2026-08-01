@@ -247,7 +247,7 @@
     ],
     "census_bounds": {
       "listed": 4,
-      "top_level_dirs": 7,
+      "top_level_dirs": 4,
       "dir_cap": 24,
       "max_depth": 4,
       "truncated": false

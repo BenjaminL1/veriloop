@@ -157,7 +157,7 @@ Subprocess use in the scripts is limited to three things:
      (`.claude/veriloop/domain/references.json`), whose `url`, `title` and `rationale` are
      **third-party data**. That is the same untrusted-prose-steers-a-URL-choice chain
      path 3 documents for SETUP time, now also firing at CONSULT time — and with **no host
-     allowlist**, because `hostAllowed` (`scripts/lib/domain.mjs:485`) is a generate-time
+     allowlist**, because `hostAllowed` (`scripts/lib/domain.mjs:494 hostAllowed`) is a generate-time
      check that never runs inside `/advise`. The mitigations that do apply are narrower and
      stated as such: the command labels those three fields as data and never as
      instructions, and it holds no `Write`, no `Edit` and no unscoped `Bash`, so a fetched
@@ -201,9 +201,13 @@ Subprocess use in the scripts is limited to three things:
      therefore re-arms the fetch rather than disabling it.** There is no switch today —
      `parseArgs` has no suppress flag and the interview has no domain toggle — so the
      opt-out is an instruction to the agent, which is prose and can be ignored; this
-     document does not claim otherwise. What *is* structural: once `domain.json` exists, a
-     bare `node generate.mjs` re-emits `domain/` from it byte-identically and reaches no
-     network.
+     document does not claim otherwise. What *is* structural: once `domain.json` exists,
+     re-running the generator alone — `node generate.mjs --repo <repo> --commands
+     <commands.json>`, no skill phase — re-emits `domain/` from it byte-identically and
+     reaches no network. Byte-identically is meant literally and was measured: two
+     consecutive runs, and a run against the committed bundle, all `diff` clean. It holds
+     because every fact the audit renders is filtered the same way the listing is, so nothing
+     in `domain/` moves with the clone (a `.git/`, a `.github/`, a tool's cache directory).
 
    **Known weaknesses, stated as weaknesses.** Three, and none of them is a defense:
 
@@ -255,6 +259,23 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   unmerged settings.json, wiring their own `SessionStart` hook instead, or deleting the file
   veriloop added — WARNs, exit 0. "veriloop's own" hook is decided by the exact script path
   veriloop writes, so a settings.json wiring *your* hook is never mistaken for it. See §2.
+- a `.claude/veriloop/session-start.mjs` that is not byte-identical to what
+  `renderSessionStartHook()` emits. Ranked ABOVE the payload above, not below it: the payload
+  is text the harness reads, this is code the harness **executes** at every session start.
+- a `.claude/veriloop/domain/audit.md` or `domain/expert.md` that is not byte-identical to what
+  the renderers emit from `domain.json` plus the manifest's `domain_facts`. Both are
+  machine-owned; `expert.md` is adopted **verbatim** by four `/advise` stance seats plus the
+  main session, and `audit.md` is where those seats are sent for the evidence behind it.
+  Existence was the whole guard until 0.5.0's verification sweep — appending text to either
+  file passed both gates.
+
+  The scope is exact, and narrower than "veriloop notices tampering": the comparison is
+  against the bundle's own committed inputs, so editing `domain.json` and re-running the
+  generator is the supported way to change these files, and this check has nothing to say
+  about an edit made to *both* an artifact and the manifest that generated it. The census is
+  deliberately **not** recomputed from the live tree — that would make "somebody added a
+  directory" a hard gate failure, which is staleness, not tampering. None of these failures
+  echoes the differing text: it arrives by the same third-party route the artifacts do.
 
 `.env*` is never staged and never read into an artifact. This is constitution rule 7.
 

@@ -319,7 +319,16 @@ function collectCensus(repo) {
   // resulting count ("File census (4 top-level directories)") for a repo with 7 — reading
   // as a complete enumeration when it is a filtered, capped, depth-limited sample. The
   // bounds travel with the facts so the renderer can state them beside the number.
-  const topLevelDirs = listDir(repo).filter((n) => isDir(join(repo, n))).length;
+  //
+  // The DENOMINATOR runs the SAME `skipDir` filter as the loop below, and that is
+  // load-bearing twice over. Without it the heading advertised "hidden and vendor
+  // directories excluded" over a count that INCLUDED `.git`, `.github` and `.claude` —
+  // and worse, the number then moved with the clone: a checkout that had run `ruff` or
+  // gained a `.github/` emitted a different denominator than the committed bundle, so
+  // the published claim that a bare `node generate.mjs` re-emits `domain/`
+  // byte-identically was false in any normal working copy. `listed < top_level_dirs`
+  // now means exactly one thing — the CENSUS_DIR_CAP truncated the listing.
+  const topLevelDirs = listDir(repo).filter((n) => !skipDir(n) && isDir(join(repo, n))).length;
   let truncated = false;
   for (const name of listDir(repo).sort()) {
     if (skipDir(name)) continue;

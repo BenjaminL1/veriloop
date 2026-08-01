@@ -370,7 +370,62 @@ function main() {
         fail(`the domain subsystem is installed but .claude/veriloop/domain/${f} was never emitted — re-run generate`);
       }
     }
-    if (!absent) ok('domain subsystem: the domain input has all three machine-owned artifacts');
+    if (!absent) {
+      ok('domain subsystem: the domain input has all three machine-owned artifacts');
+
+      // 7b. INTEGRITY of `audit.md` and `expert.md` — the same bar check 8b holds
+      //     `session-routing.md` to, and for the same reason it was invented. `expert.md` is
+      //     adopted VERBATIM by four stance seats plus the main session in `/advise`, and
+      //     `audit.md` is where those seats are sent for the evidence behind it. Both are
+      //     machine-owned and committed, and until now the existence check above was the whole
+      //     guard: verified by mutation on a pristine `git archive` copy, appending a line to
+      //     either file left both gates fully green, 0 fail, exit 0. Presence is not integrity.
+      //
+      //     Byte equality is DECIDABLE here because both renderers are pure functions of two
+      //     committed inputs: `domain.json` (the hand/LLM-owned judgment half) and the
+      //     manifest's `domain_facts` (the script-owned facts half, written by the SAME
+      //     generate run that wrote these files). The census is deliberately NOT recomputed
+      //     from the live tree — that would turn "somebody added a directory" into a hard gate
+      //     failure, which is staleness, not tampering, and the recomputation is exactly what
+      //     `selftest.mjs` pins instead.
+      //
+      //     FAIL, not warn: machine-owned means "I edited it" is not an ownership right the way
+      //     an edited `*.overrides.md` is, and `node generate.mjs` restores it. The differing
+      //     text is NOT echoed — `domain.json` carries third-party dependency and source
+      //     metadata, so anything spliced into these files is attacker-controlled by the same
+      //     route `session-routing.md`'s diff is.
+      let canon = null;
+      if (!existsSync(domainInputPath) || !existsSync(man)) {
+        // `--domain <path>` can point outside the bundle, and then the input simply is not
+        // here to re-render from. Say so rather than printing an `ok` for a check that never
+        // ran — the reassurance-on-absence failure check 7 exists to stop.
+        warn('domain subsystem: the domain INPUT is not in the bundle (built with --domain pointing elsewhere?), so audit.md / expert.md could not be checked for byte-integrity — they are machine-owned and a hand edit there is invisible to this gate');
+      } else {
+        try {
+          const di = JSON.parse(readFileSync(domainInputPath, 'utf8'));
+          const mf = JSON.parse(readFileSync(man, 'utf8'));
+          const opts = { repoName: mf.repo_name || args.name || '(bundle)', repo: args.bundle };
+          canon = {
+            'audit.md': renderDomainAudit(di, mf.domain_facts || {}, opts),
+            'expert.md': renderDomainExpert(di, buildReferences(di), opts),
+          };
+        } catch {
+          // The render threw — a `domain.json` that no longer parses, or a citation in it
+          // that no longer resolves. A real defect, but not this check's verdict to
+          // describe, and the exception message quotes `domain.json` text.
+          fail('.claude/veriloop/domain/{audit,expert}.md could not be re-rendered from domain.json + the manifest\'s domain_facts, so their integrity is UNKNOWN — run `node generate.mjs`, which reports the underlying error (not echoed here: it quotes third-party text)');
+        }
+      }
+      let tampered = 0;
+      for (const f of canon ? Object.keys(canon) : []) {
+        const doc = readFileSync(join(args.bundle, '.claude/veriloop/domain', f), 'utf8');
+        if (doc === canon[f]) continue;
+        tampered++;
+        const shape = doc.startsWith(canon[f]) ? `${doc.length - canon[f].length} bytes APPENDED after the canonical render` : `${doc.length} bytes vs ${canon[f].length} canonical`;
+        fail(`.claude/veriloop/domain/${f} does not match what veriloop emits from domain.json + the manifest's domain_facts (${shape}) — it is machine-owned and /advise adopts it verbatim, so a hand edit here is an edit to every consult. Re-run generate to restore it; to change it for real, change domain.json. (The differing text is deliberately not echoed.)`);
+      }
+      if (canon && !tampered) ok('domain subsystem: audit.md and expert.md are byte-identical to what the renderers emit from domain.json + the manifest\'s domain_facts');
+    }
   } else if (existsSync(join(args.bundle, '.claude/commands/advise.md'))) {
     // The DEGRADED PATH, named rather than reported as a clean skip. Since the Phase 2
     // `/advise` redesign the domain expert is that command's SOLE lens, so a bundle with
@@ -381,7 +436,13 @@ function main() {
     // nothing. A plain `ok` here would report "check skipped" for a command running at a
     // fraction of its documented council. WARN, not fail: the degradation is disclosed and
     // supported, so it must not break a pre-existing adopter's gate (exit stays 0).
-    warn('domain subsystem not installed — /advise has NO lens seats and degrades to the PREMISE reviewer alone (run generate with --domain to seat the domain expert)');
+    // The remediation names the path that WORKS. It used to say "run generate with
+    // --domain", which hard-errors for exactly the adopter this WARN describes: `--domain`
+    // names an EXISTING input file (`generate.mjs:43`) and generate passes
+    // `{ required: !!args.domain }`, so an adopter with no `domain.json` — the state this
+    // line reports — gets an ENOENT throw for following the advice. `domain.json` is
+    // AUTHORED by the skill's Phase 7.5, never by the generator.
+    warn('domain subsystem not installed — /advise has NO lens seats and degrades to the PREMISE reviewer alone (run /veriloop: its Phase 7.5 authors .claude/veriloop/domain.json, which generate then reads. Do NOT pass --domain for this — it names an input file that must already exist and throws ENOENT when it does not)');
   } else {
     ok('domain subsystem not installed — check skipped');
   }
@@ -474,6 +535,22 @@ function main() {
       if (!existsSync(join(args.bundle, SESSION_HOOK_SCRIPT))) {
         bad++;
         fail(`${SESSION_HOOK_SCRIPT} — the script the SessionStart entry names — is machine-owned and emitted by veriloop, but is not in the bundle; re-run generate`);
+      } else {
+        // INTEGRITY of the hook SCRIPT, held to the same bar as the payload below and ranked
+        // above it in consequence: `session-routing.md` is text Claude Code reads, this is
+        // CODE Claude Code EXECUTES at every session start. The check used to stop at
+        // "the file exists" — mutation-verified on a pristine `git archive` copy, appending
+        // to `session-start.mjs` left both gates green, 0 fail, exit 0, while the gate
+        // printed a "routing hook wired" line vouching for it. `renderSessionStartHook()`
+        // takes no arguments, so its output is canonical for every bundle at this version.
+        // FAIL, machine-owned, and the differing text is NOT echoed.
+        const hook = readFileSync(join(args.bundle, SESSION_HOOK_SCRIPT), 'utf8');
+        const canonHook = renderSessionStartHook();
+        if (hook !== canonHook) {
+          bad++;
+          const shape = hook.startsWith(canonHook) ? `${hook.length - canonHook.length} bytes APPENDED after the canonical script` : `${hook.length} bytes vs ${canonHook.length} canonical`;
+          fail(`${SESSION_HOOK_SCRIPT} does not match what veriloop emits (${shape}) — it is machine-owned and Claude Code EXECUTES it at every session start, so a hand edit here runs on every startup. Re-run generate to restore it; to change it for real, change renderSessionStartHook() in the generator. (The differing text is deliberately not echoed.)`);
+        }
       }
       const routingPath = join(args.bundle, SESSION_ROUTING_DOC);
       if (!existsSync(routingPath)) {
@@ -521,7 +598,7 @@ function main() {
           .filter((n) => !EMITTED_COMMANDS.includes(`${n}.md`));
         for (const n of dangling) { bad++; fail(`session-routing.md's route table sends the session to /${n}, which veriloop does not emit`); }
       }
-      if (!bad) ok(`SessionStart routing payload intact: ${SESSION_ROUTING_DOC} byte-identical to what veriloop emits (<SUBAGENT-STOP>, <ALREADY-ROUTED>, routes ${ROUTED.join(' ')})`);
+      if (!bad) ok(`SessionStart routing payload intact: ${SESSION_ROUTING_DOC} and ${SESSION_HOOK_SCRIPT} both byte-identical to what veriloop emits (<SUBAGENT-STOP>, <ALREADY-ROUTED>, routes ${ROUTED.join(' ')})`);
     }
   }
 
@@ -547,7 +624,12 @@ function main() {
 // `constitution.md` and the manifest all cite checks in this file BY LINE NUMBER, and an
 // import at the top would silently move every one of them. ESM hoists the binding, so both
 // `lintable` and check 8 see it.
-import { SESSION_HOOK_SCRIPT, SESSION_ROUTING_DOC, CLAUDE_SETTINGS, renderClaudeSettings, renderSessionRouting, wiresSessionHook } from './lib/render.mjs';
+import { SESSION_HOOK_SCRIPT, SESSION_ROUTING_DOC, CLAUDE_SETTINGS, renderClaudeSettings, renderSessionRouting, renderSessionStartHook, wiresSessionHook } from './lib/render.mjs';
+// Check 7b's two renderers, imported for the same reason and placed with them. Re-rendering
+// `audit.md` / `expert.md` from `domain.json` + the manifest's `domain_facts` is the only way
+// to decide whether the committed files are veriloop's; `SECRET_TRIGGER` above already comes
+// from this module, so the dependency edge is not new.
+import { renderDomainAudit, renderDomainExpert, buildReferences } from './lib/domain.mjs';
 
 /**
  * Which `emitted_files` entries `bundleFiles` may hand to the content checks. Everything

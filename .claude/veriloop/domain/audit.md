@@ -16,7 +16,7 @@ generator computes. The audit **cites** these; it never re-derives them
 
 - _no dependency was parsed from `package.json`, `pyproject.toml` or `Cargo.toml`. That is the absence of a PARSED declaration, not evidence the repo declares none — no other manifest format is read._
 
-### File census (4 of 7 top-level directories; hidden and vendor directories excluded, walk depth <= 4)
+### File census (4 of 4 top-level directories; hidden and vendor directories excluded, walk depth <= 4)
 
 - `docs/` — 13 files (.md:10, .sh:3)
 - `fixtures/` — 12 files (.toml:6, .json:3, .yaml:2, .rs:1)

@@ -326,7 +326,12 @@ checked by nothing:
 5. `/advise` `allowed-tools` keeps `WebSearch` + `WebFetch` and still has **no `Write`, no `Edit`,
    no unscoped `Bash`** (`selftest.mjs:1116-1122`). "Staging for owner approval" must therefore
    happen **outside** `/advise`, or the read-only covenant becomes prose.
-6. All four guard-wiring items above are in the same commit as `domain/`.
+6. Guard-wiring items **1, 3 and 4** are in the same commit as `domain/`. **Amended
+   2026-07-31**, to agree with § Guard wiring above rather than contradict it: item 2 is
+   struck there as **MOOT** by owner ruling — T12 deleted the cap that item names, and § Open
+   RISKS declined a replacement in as many words — so there is no item 2 left to be in any
+   commit. This criterion still read "all four" after that amendment landed, which made the
+   spec unsatisfiable by its own terms.
 7. **Every retirement T1–T11 is executed**, and specifically:
    - T2 edits **both** `render.mjs:151` and `.claude/veriloop/constitution.md:68` — the `handOnce()`
      `'starter'` semantics mean the template edit alone leaves the committed file disagreeing with
@@ -378,10 +383,22 @@ seen or approved it.
   `experts/drift.md` — carry the new line.
 - **Why it is a deviation.** The Non-goal says *"Do NOT touch `detectRoster`, `PERSONA_BODY`, or
   the existing `experts/*` personas."* It names `PERSONA_BODY`, not `PERSONA_HEAD`, and the
-  three touched files are MACHINE-owned (regenerated on every run; the hand-owned
-  `*.overrides.md` siblings were NOT touched — `drift.overrides.md` has zero changes). On that
+  three touched files are MACHINE-owned (regenerated on every run). On that
   reading the edit is outside the Non-goal. That reading is the orchestrator's, and it may be
   wrong.
+- **CORRECTION, 2026-07-31: one hand-owned file WAS changed — by a different edit.** The bullet
+  above used to end *"…; the hand-owned `*.overrides.md` siblings were NOT touched —
+  `drift.overrides.md` has zero changes"*. **Both halves are false**, and neither was checked
+  against the diff before it was written. `experts/drift.overrides.md` carries **two changed
+  lines** from Phase 1: `generate.mjs` grew, so its four ownership citations were re-pointed
+  — `:304 machine` → `:313`, `:342 handOnce` → `:351`, `:316 spliceBlock` → `:325`, `:294
+  backup` → `:303` — and each new line was re-read against the symbol it names and resolves.
+  That edit is **not** `PERSONA_HEAD` and does not bear on the deviation this section records;
+  the other two siblings, `security.overrides.md` and `baseline-reviewer.overrides.md`, are
+  genuinely unchanged. The re-points are **correct and they stay** — the old lines are dead,
+  and reverting would ship four dead citations inside the lens whose beat is citation rot —
+  but a file the constitution reserves to the owner (rule 8, never regenerated) changed and no
+  published surface said so. It is now disclosed in the 0.5.0 CHANGELOG entry.
 - **The alternative was shipping a false claim.** After T13, `/advise` provably does not load
   `experts/*.md` — it is forbidden to. Keeping the old sentence would publish, in every adopter's
   bundle, a statement the same release makes untrue — the exact claims-discipline failure this

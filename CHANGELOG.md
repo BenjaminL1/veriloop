@@ -518,13 +518,31 @@ hand re-points in six committed files — including `constitution.md` and
 `experts/drift.overrides.md`, which are hand-owned and never regenerated (constitution rule
 8), so those edits would have been permanent and invisible to every future `generate`. ESM
 `import` declarations hoist, so the statement was moved **below** `AUTO_END` instead.
-`AUTO_START` keeps its historical line and **all six citations ship untouched**:
-`constitution.md`, `experts/drift.overrides.md`, `interview.json`, `scan-notes.md`,
-`experts/drift.md` and `veriloop-manifest.json` (×2) carry zero citation edits from this
-release. The only citation RE-POINTS in 0.5.0 are inside
+`AUTO_START` keeps its historical line and **all six `render.mjs:11 AUTO_START` citations
+ship untouched**: `constitution.md`, `experts/drift.overrides.md`, `interview.json`,
+`scan-notes.md`, `experts/drift.md` and `veriloop-manifest.json` (×2) carry zero edits to
+*that* citation.
+
+**A hand-owned file WAS re-pointed, and no published surface said so** (disclosed
+2026-07-31; the sentence above previously claimed those six files carried "zero citation
+edits from this release", full stop, which was false and is corrected here rather than
+reworded around). `.claude/veriloop/experts/drift.overrides.md` is hand-owned — constitution
+rule 8, never regenerated — so an edit there is permanent and invisible to every later
+`generate`. Phase 1 changed **two of its lines**: `generate.mjs` grew, and its four ownership
+citations were re-pointed `:304 machine` → `:313`, `:342 handOnce` → `:351`, `:316
+spliceBlock` → `:325`, `:294 backup` → `:303`. Every new line was re-read against the symbol
+it names and resolves. They are **correct and they stay**: the old lines are dead, and
+reverting would ship four dead citations inside the very lens whose beat is citation rot.
+What was missing was the disclosure, not the edit.
+
+The remaining citation RE-POINTS in 0.5.0 are inside
 `.claude/veriloop/specs/advise-premise-council-sharpeners.md`, whose T9 note left seven
 `render.mjs` / `selftest.mjs` line references pointing at code this change rewrote; they now
-carry the verified post-change lines alongside the originals.
+carry the verified post-change lines alongside the originals — plus one from the verification
+sweep below: `SECURITY.md`'s `scripts/lib/domain.mjs:485` → `:494 hostAllowed`, which moved
+when `collectCensus` was fixed. It gains a symbol token in the same edit, so the next time
+that line moves the published-docs citation scan turns red instead of the citation rotting
+silently.
 
 **A guard that could not fire, fixed.** The `/advise` sole-lens assertion carried the
 conjunct `!/adopt[^.]{0,120}veriloop\/experts\//i` — which can **never** match, because
@@ -539,20 +557,22 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 395, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 413, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their
 agreement, the portability redaction, the `--domain` failure modes, the `attempted_at`
 requirement, the url-rewrite fail-closed rule, audit-prose sanitization, the census bounds,
 the published-doc citation scan, the `SKILL.md` fence, and — from Phase 2 — the `/advise`
-sole-lens property (scoped to the load step and the spawn block, never a file-wide substring
-ban on the words "security" or "drift"), the stance assignment, both persona files reaching
+sole-lens property (originally scoped to the load step and the spawn block; the verification
+sweep below found that scoping evadable by PLACEMENT and widened it to the whole command
+body), the stance assignment, both persona files reaching
 the seats' own prompt, the citation protocol, the offline disclosure, the cross-category
 conflict rule, emission-only staging **and its honest promotion path**, the degraded
 PREMISE-only fallback in the command / the description / the cross-examination bullet /
 `lint-bundle`, and the T13 scope pin on both the committed files and the templates.
-**From Phase 3, 49 more** (100 from Phases 1–2 + 49 = 149; 246 + 149 = 395)**:**
+**From Phase 3, 49 more** (100 from Phases 1–2 + 49 = 149; 246 + 149 = 395, and the
+verification sweep below adds the last 18: 395 + 18 = 413)**:**
 preserve-or-write in BOTH directions (a seeded settings.json is
 byte-for-byte identical after generate, is still registered `preserved` rather than silently
 skipped, and the block printed to stderr itself parses as JSON) — the trio is a
@@ -624,8 +644,19 @@ the spec is amended to say so, and guard-wiring items 1, 3 and 4 ship in the sam
 - **T6/T7/T8** — `SECURITY.md` §3 rewritten and `README.md` corrected. See below.
 - **T11 remainder** — a dated supersession note appended to `persona-debate-verdict.md`
   itself. The five research documents were already tracked as of `fc378f1`.
+- **T12** — all three length caps deleted, with the ~7 assertions accounted for individually
+  under *"T12 — three length caps deleted, and the exact accounting"* above, and the
+  1,200-word replacement tripwire deleted after the owner declined a replacement.
 
-**T5, T9, T10 and T13 are NOT executed** — they belong to Phases 2 and 3.
+**T5, T9, T10 and T13 are executed too**, in Phases 2 and 3 of this same release, and each is
+documented in its own paragraph above: **T5** (README locked decision #3 rewritten, not
+deleted), **T9** (the `/advise` edit discipline retired, which is what permits the wholesale
+`renderAdviseCommand` rewrite), **T10** (the unmeasured "Five minutes to first gate" claim
+replaced with the measured 14s spine) and **T13** (`/advise` no longer reads the
+constitution). This paragraph previously read *"T5, T9, T10 and T13 are NOT executed — they
+belong to Phases 2 and 3"*: it was a Phase-1 ledger carried into the merged entry unedited,
+and it published a false claim about the release inside the artifact that accounts for the
+release. **Every retirement T1–T13 is executed in 0.5.0.**
 
 **Network claims corrected, not reworded around (T6/T7/T8).** veriloop's **setup** now
 performs network I/O: the domain phase spawns a subagent whose only network grant is
@@ -654,6 +685,77 @@ three categories. All six are on allowlisted hosts and each was fetched and retu
 distinction is the point: the allowlist and the status recomputation are script-owned; the
 HTTP result and the timestamp are the verification subagent's report, and `references.json`
 says so in `attempted_at_note`.
+
+**Adversarial verification sweep of this release (2026-07-31), and what it found.** Eight
+findings, all fixed in the same commit as this paragraph. They are recorded here rather than
+squashed into the sections above because several of them are *this release's own published
+claims being false*, and this repo's claims discipline says a retraction is a shipped work
+item, not a wording pass.
+
+- **The census denominator was unfiltered, which falsified two determinism claims.**
+  `collectCensus` applied `skipDir` to the listing loop and **not** to the `top_level_dirs`
+  count beside it, so the denominator included `.git`, `.github`, `.claude` and
+  `.ruff_cache`. Two consequences, both load-bearing: the heading advertised *"hidden and
+  vendor directories excluded"* over a number that included them, and — worse — the number
+  **moved with the clone**. This repo's committed `audit.md` said `4 of 7` where a live
+  working copy computed `9`, so `SECURITY.md`'s *"a bare `node generate.mjs` re-emits
+  `domain/` from it byte-identically and reaches no network"* and `SKILL.md`'s *"re-emits
+  `domain/` from the existing `domain.json` byte-identically"* were **false in any normal
+  checkout**. The denominator now runs the same filter as the loop; `audit.md` and the
+  manifest were regenerated (`4 of 4`); `listed < top_level_dirs` now means exactly one
+  thing, that the dir cap truncated. Re-proved rather than re-asserted: two consecutive bare
+  generates emit a byte-identical `domain/`, and that output is byte-identical to the four
+  committed files. Two assertions pin it — the denominator is checked against a fixture
+  carrying hidden *and* vendored trees, and adding `.ruff_cache/`, `.claude/`,
+  `node_modules/` and `dist/` to a tree must change the bounds by nothing.
+- **Three machine-owned artifacts had no content-integrity guard.** This release invented
+  byte-equality enforcement for `session-routing.md` and argued in `SECURITY.md` exactly why
+  a machine-owned file injected into a session needs it — then applied it to that one file.
+  Mutation-verified on a pristine `git archive` copy: appending text to
+  `domain/expert.md`, to `domain/audit.md` or to `session-start.mjs` left **both gates fully
+  green, exit 0**. `expert.md` is adopted verbatim by four stance seats plus the main
+  session, and `session-start.mjs` is code Claude Code **executes** at every session start —
+  the ranking was backwards, since the payload is text the harness reads and the hook is code
+  it runs. New `lint-bundle` check **7b** re-renders `audit.md` and `expert.md` from
+  `domain.json` + the manifest's `domain_facts` and FAILs on any difference; the hook script
+  is now byte-checked alongside the payload in check 8b. Both are doubled onto the COMMITTED
+  files in `selftest.mjs`, the way `session-routing.md` already was — the existing
+  byte-identity assertion ran against a `mkdtemp` fixture and compared it to *itself* after a
+  regenerate, which is why it stayed green while finding 1 was true. Every mutant is
+  asserted, and no failure message echoes the differing text.
+- **The `/advise` sole-lens guard was evadable by placement.** It was scoped to two regex
+  windows — the step-1 load block and the spawn block — leaving steps 2, 3, 4, 6 and the tail
+  of step 5 unchecked. Mutation-verified: a `5b. **Seat the review lenses too.**` step naming
+  `experts/code-review.md`, `experts/security.md` and `experts/drift.md` inserted immediately
+  before `6. **Off-ramp.**` left both gates green, while the identical text inside step 1 went
+  red. The guard now checks the **whole command body**: `experts/` may appear exactly once in
+  the file (the do-NOT-substitute clause, which the window-scoped assertion still pins to step
+  1) and no roster key may appear at all.
+- **`README.md` published a number this release invalidated.** *"`selftest.mjs` is the outlier
+  at ~1,400 lines"* was true at the 0.5.0 base (1,389); this release added ~1,370 lines to
+  that file while editing that very sentence. Corrected, and pinned to the real `wc -l` with a
+  10% tolerance — `~` is an honest approximation, a three-line commit should not turn the gate
+  red, and a doubling should.
+- **The new degraded-path WARN gave remediation that hard-errors if followed.** It said *"run
+  generate with `--domain` to seat the domain expert"*, but `--domain` names an **existing**
+  input file and `generate.mjs` passes `{ required: !!args.domain }` — so the adopter in
+  exactly the state the WARN describes gets an ENOENT throw for doing what it says. This is
+  the message every pre-0.5.0 adopter sees on their first lint after upgrading. It now names
+  `/veriloop`, whose Phase 7.5 authors `domain.json`, and says plainly not to reach for
+  `--domain`. Asserted, including the negative.
+- **This entry contradicted itself about its own retirements** — see the corrected paragraph
+  above. It carried a Phase-1 ledger line claiming T5, T9, T10 and T13 were *not* executed,
+  inside an entry that executes and documents all four; T12 was missing from the executed
+  list. Both fixed.
+- **Two false statements in the ratified spec, and a self-contradiction** — see
+  `.claude/veriloop/specs/domain-expert-persona.md`. The `drift.overrides.md` re-point is
+  disclosed above.
+- **Two unpinned numbers.** `veriloop-manifest.json`'s `veriloop_version` was the one stamp
+  the spec's acceptance criterion 9 names that nothing read — mutating it to `0.4.0` left both
+  gates green — and is now the seventh location in the stamp-agreement check. The gate-figure
+  guard pinned README to CHANGELOG, two copies of one number that agree happily while both are
+  stale, and both were; a final assertion now pins the published figure to the count the run
+  actually prints.
 
 ## 0.4.0 — 2026-07-29 — M5 launch machinery (PARTIAL: the DA2 recording and the clean-clone quickstart are NOT met — see the exit-criteria ledger in `docs/plans/m5-plan.md`)
 

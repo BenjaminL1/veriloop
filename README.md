@@ -332,7 +332,7 @@ for code. Note the condition, because the intuitive guess is backwards: the fetc
 of the *skill*, not anything in `scripts/`, and it runs when `.claude/veriloop/domain.json` is
 **absent** (a first install) or `--refresh` is asked for. An existing `domain.json` is what
 suppresses it. One reader's note: `selftest.mjs` is
-the outlier at ~1,400 lines. It is a flat sequence of independent assertion blocks with
+the outlier at ~2,800 lines. It is a flat sequence of independent assertion blocks with
 section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
 for the behavior you care about.
 
@@ -358,7 +358,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 395 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 413 and `CHANGELOG.md` names every
 removal individually. **Phase 2 also ships:** `/advise` now consults that domain expert as
 its **sole lens**, seated four times under different stances (`RESEARCH`, `PRACTICE`,
 `FIELD`, `SKEPTIC`) plus the dedicated PREMISE reviewer — and every
