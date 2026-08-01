@@ -347,7 +347,11 @@ overlays it. Present the final report: roster + evidence, the exact gate command
 ### Phase 10 — Maintenance (re-run)
 Re-run reads the committed manifest first, regenerates only marked machine
 sections, and never clobbers hand-owned files — `constitution.md` and
-`.overrides.md` are preserved untouched (not merged).
+`.overrides.md` are preserved untouched (not merged). If the re-rendered
+`domain/expert.md` is more than 20% longer than the size the prior manifest
+recorded (`domain_expert_size`), the report prints a **review prompt** asking the
+owner to re-read it — that file is adopted verbatim by every `/advise` seat. It is
+a prompt, not a cap: there is no length limit and the exit code is unaffected.
 
 ---
 

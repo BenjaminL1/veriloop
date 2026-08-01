@@ -422,9 +422,24 @@ function main() {
         if (doc === canon[f]) continue;
         tampered++;
         const shape = doc.startsWith(canon[f]) ? `${doc.length - canon[f].length} bytes APPENDED after the canonical render` : `${doc.length} bytes vs ${canon[f].length} canonical`;
-        fail(`.claude/veriloop/domain/${f} does not match what veriloop emits from domain.json + the manifest's domain_facts (${shape}) — it is machine-owned and /advise adopts it verbatim, so a hand edit here is an edit to every consult. Re-run generate to restore it; to change it for real, change domain.json. (The differing text is deliberately not echoed.)`);
+        fail(`.claude/veriloop/domain/${f} does not match what veriloop emits from domain.json + the manifest's domain_facts (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and /advise adopts it verbatim, so a hand edit here is an edit to every consult. Re-run generate to restore it; to change it for real, change domain.json. (The differing text is deliberately not echoed.)`);
       }
       if (canon && !tampered) ok('domain subsystem: audit.md and expert.md are byte-identical to what the renderers emit from domain.json + the manifest\'s domain_facts');
+
+      // SIZE, INFORMATIONAL ONLY. Not a check: it cannot fail, cannot warn, and cannot move
+      // this run's exit code. `expert.md` is adopted verbatim by every /advise consult and by
+      // four stance subagents, so its length is a cost every consult pays and a number worth
+      // seeing — but the owner retired all three length caps (T12) and chose a review-on-growth
+      // PROMPT over a replacement cap, so the gate has no opinion about this number. The prompt
+      // that does have one lives in `generate.mjs` (EXPERT_GROWTH_MARGIN), fires on GROWTH
+      // against the manifest's recorded baseline, and also only prints.
+      {
+        const p = join(args.bundle, '.claude/veriloop/domain/expert.md');
+        if (existsSync(p)) {
+          const t = readFileSync(p, 'utf8');
+          ok(`domain subsystem: expert.md is ${(t.match(/\S+/g) || []).length} words / ${Buffer.byteLength(t, 'utf8')} bytes — informational, NOT a limit (there is no length cap; generate prompts a re-read on growth)`);
+        }
+      }
     }
   } else if (existsSync(join(args.bundle, '.claude/commands/advise.md'))) {
     // The DEGRADED PATH, named rather than reported as a clean skip. Since the Phase 2
@@ -549,7 +564,7 @@ function main() {
         if (hook !== canonHook) {
           bad++;
           const shape = hook.startsWith(canonHook) ? `${hook.length - canonHook.length} bytes APPENDED after the canonical script` : `${hook.length} bytes vs ${canonHook.length} canonical`;
-          fail(`${SESSION_HOOK_SCRIPT} does not match what veriloop emits (${shape}) — it is machine-owned and Claude Code EXECUTES it at every session start, so a hand edit here runs on every startup. Re-run generate to restore it; to change it for real, change renderSessionStartHook() in the generator. (The differing text is deliberately not echoed.)`);
+          fail(`${SESSION_HOOK_SCRIPT} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and Claude Code EXECUTES it at every session start, so a hand edit here runs on every startup. Re-run generate to restore it; to change it for real, change renderSessionStartHook() in the generator. (The differing text is deliberately not echoed.)`);
         }
       }
       const routingPath = join(args.bundle, SESSION_ROUTING_DOC);
@@ -573,7 +588,7 @@ function main() {
           bad++;
           const canon = renderSessionRouting();
           const shape = doc.startsWith(canon) ? `${doc.length - canon.length} bytes APPENDED after the canonical payload` : `${doc.length} bytes vs ${canon.length} canonical`;
-          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — it is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS in the generator. (The differing text is deliberately not echoed.)`);
+          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS in the generator. (The differing text is deliberately not echoed.)`);
         }
         // The properties, checked SEPARATELY from the byte-equality above and not folded into
         // it. Byte-equality answers "is this veriloop's file"; these answer "does veriloop's

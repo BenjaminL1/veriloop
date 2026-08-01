@@ -358,8 +358,11 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 413 and `CHANGELOG.md` names every
-removal individually. **Phase 2 also ships:** `/advise` now consults that domain expert as
+`lint-bundle` WARN checks removed; the gate went 253 → 423 and `CHANGELOG.md` names every
+removal individually. The one cap the owner later wanted back came back as a **prompt**: a
+re-render of `domain/expert.md` more than 20% longer than the size recorded in
+`veriloop-manifest.json` makes `generate` ask you to re-read the file. It has no ceiling and
+never changes an exit code. **Phase 2 also ships:** `/advise` now consults that domain expert as
 its **sole lens**, seated four times under different stances (`RESEARCH`, `PRACTICE`,
 `FIELD`, `SKEPTIC`) plus the dedicated PREMISE reviewer — and every
 seat's prompt names `domain/expert.md` **and** `domain/expert.overrides.md`, the owner's only

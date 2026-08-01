@@ -363,6 +363,43 @@ function makeWriter(outRoot, force) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Review-on-growth prompt for `.claude/veriloop/domain/expert.md`
+// (owner decision, 2026-08-01; spec § Open RISKS "Cap-removal risk")
+// ---------------------------------------------------------------------------
+//
+// THIS IS A PROMPT, NOT A LIMIT. It has no ceiling, no threshold that blocks, and it
+// cannot fail a run or change an exit code. It asks a human to re-read a file. T12
+// retired all three length caps and the spec declined a replacement in as many words —
+// *"a review-on-growth prompt costs less than a cap and does not constrain length"* —
+// and this is that prompt, chosen by the owner over a cap and over doing nothing.
+//
+// WHY it exists: `persona-debate-verdict.md:26` measured that **longer personas damage
+// more**, and that models better at system-prompt steering take LARGER hits. `expert.md`
+// is adopted verbatim by every `/advise` consult and by four stance subagents, so its
+// length is a cost every consult pays. Nothing else in the repo notices accretion since
+// T12. But "damages more" is a reason to LOOK, not a number to enforce: the right length
+// is a judgment about content, and a cap would make the generator the judge.
+//
+// WHY growth and not absolute size: an absolute number is a cap wearing a different hat —
+// it would fire forever once crossed, and it would fire on a repo whose domain is simply
+// large. Growth fires once, on the run that caused it, at the one moment a human can
+// still cheaply read the diff.
+//
+// WHY at generate time: `expert.md` is byte-integrity-checked by lint check 7b, so the
+// file cannot change without a regenerate. Growth therefore only ever happens HERE, when
+// a changed `domain.json` renders a longer artifact over the one it replaces.
+const EXPERT_GROWTH_MARGIN = 0.2;
+// 20%, and the number is a judgment about NOISE, not about a safe size. At this repo's
+// ~680-word `expert.md` a reference entry renders as one ~15-word bullet, so ordinary
+// curation of `domain.json` — add a source, add a vocabulary term — moves the render by
+// 1-3%. 20% is ~135 words: a whole new section, or a batch of eight-plus entries landing
+// at once. That is an accretion event, which is what the prompt is for. 15% (~100 words)
+// sits close enough to a routine multi-entry batch to fire on normal work, and a prompt
+// that fires on normal work is one the owner learns to scroll past — the failure mode a
+// prompt has no defense against, unlike a cap, which is obeyed whether or not it is read.
+const measureExpert = (text) => ({ words: (text.match(/\S+/g) || []).length, bytes: Buffer.byteLength(text, 'utf8') });
+
 function main() {
   const args = parseArgs(process.argv);
   if (args.help || !args.commands) {
@@ -375,9 +412,18 @@ function main() {
   // interview answers: prior manifest's answers survive a re-run; a --interview
   // file merges over them. They are USER data — never silently reset.
   let interview = {};
+  // The BASELINE for the review-on-growth prompt: the size the LAST generate run recorded
+  // for the `domain/expert.md` it wrote — i.e. the size of the file this run is about to
+  // replace. Read from the same prior manifest, and absent on a first-ever generate, which
+  // is why a first run cannot prompt (there is nothing to have grown from).
+  let priorExpertSize = null;
   const priorManifestPath = join(args.out, '.claude/veriloop/veriloop-manifest.json');
   if (existsSync(priorManifestPath)) {
-    try { interview = JSON.parse(readFileSync(priorManifestPath, 'utf8')).interview_answers || {}; } catch { /* ignore */ }
+    try {
+      const pm = JSON.parse(readFileSync(priorManifestPath, 'utf8'));
+      interview = pm.interview_answers || {};
+      priorExpertSize = pm.domain_expert_size || null;
+    } catch { /* ignore */ }
   }
   if (args.interview) interview = { ...interview, ...JSON.parse(readFileSync(args.interview, 'utf8')) };
   // owner-confirmed roster additions (finding #11) — applied BEFORE buildConfig so
@@ -437,13 +483,24 @@ function main() {
   // the failure mode lint check 7 exists to prevent.
   const domainInput = readDomainInput(args.domain || P('.claude/veriloop/domain.json'), { required: !!args.domain });
   let references = null;
+  let expertSize = null;
   if (domainInput) {
     references = buildReferences(domainInput, { warn: (m) => console.error(m) });
     // `repo` is passed so every `source` in domain.json is RESOLVED against the real
     // tree — a citation that does not exist fails the build instead of rendering into
     // audit.md reading exactly like a checked one.
     w.machine(P('.claude/veriloop/domain/audit.md'), renderDomainAudit(domainInput, domainFacts, { repoName, repo: args.repo }));
-    w.machine(P('.claude/veriloop/domain/expert.md'), renderDomainExpert(domainInput, references, { repoName, repo: args.repo }));
+    // Measured BEFORE the write, because `w.machine` replaces the file this size is
+    // compared against. Fallback baseline: a bundle generated by a veriloop old enough to
+    // predate `domain_expert_size` still has the previous artifact on disk, and skipping
+    // the check on that run would silence it on exactly the upgrade where domain.json
+    // most often changes. The manifest field stays the primary source — it is what the
+    // run that wrote the file recorded, so it cannot be moved by editing the file.
+    const expertPath = P('.claude/veriloop/domain/expert.md');
+    const expertDoc = renderDomainExpert(domainInput, references, { repoName, repo: args.repo });
+    if (!priorExpertSize && existsSync(expertPath)) priorExpertSize = measureExpert(readFileSync(expertPath, 'utf8'));
+    expertSize = measureExpert(expertDoc);
+    w.machine(expertPath, expertDoc);
     w.machine(P('.claude/veriloop/domain/references.json'), JSON.stringify(references, null, 2) + '\n');
     w.handOnce(P('.claude/veriloop/domain/expert.overrides.md'), renderDomainOverrides(repoName), 'hand');
   }
@@ -512,6 +569,11 @@ function main() {
     e2e: config.e2e,
     commands_summary: Object.fromEntries(Object.entries(cj.commands).map(([k, c]) => [k, { cmd: c.cmd, safety: c.safety, verified: c.verified, verified_by_ci: c.verified_by_ci }])),
     domain_facts: domainFacts,
+    // The BASELINE the next run compares against (null when no domain bundle is emitted).
+    // Recorded, not enforced: nothing reads it to fail a build — `lint-bundle` reports the
+    // live size as an informational line and the only consumer that acts on it is the
+    // review-on-growth prompt below, which prints and returns.
+    domain_expert_size: expertSize,
     verified_at: cj.verified_at || null,
     emitted_files: w.emitted,
     interview_answers: interview,
@@ -532,6 +594,31 @@ function main() {
   console.error('  emitted:');
   for (const f of w.emitted) console.error(`    [${f.ownership}/${f.status}] ${f.path}`);
   console.error(`  backups (if any): .claude/veriloop/.backups/`);
+  // REVIEW-ON-GROWTH PROMPT (see EXPERT_GROWTH_MARGIN above). Printed, never enforced:
+  // this branch has no `process.exit`, no non-zero status, and no effect on anything the
+  // gate reads. A run that prints it and a run that does not are the same run to every
+  // caller. `priorExpertSize.words > 0` guards the ratio — a zero-word baseline is not a
+  // 100%-growth event, it is a bundle with nothing to compare against.
+  if (expertSize && priorExpertSize && priorExpertSize.words > 0 && expertSize.words > priorExpertSize.words * (1 + EXPERT_GROWTH_MARGIN)) {
+    const pct = Math.round((expertSize.words / priorExpertSize.words - 1) * 100);
+    const bar = '='.repeat(72);
+    console.error('');
+    console.error(`  ${bar}`);
+    console.error('  REVIEW PROMPT — .claude/veriloop/domain/expert.md GREW. Please re-read it.');
+    console.error(`  ${bar}`);
+    console.error(`    was:   ${priorExpertSize.words} words / ${priorExpertSize.bytes} bytes`);
+    console.error(`    now:   ${expertSize.words} words / ${expertSize.bytes} bytes`);
+    console.error(`    delta: +${expertSize.words - priorExpertSize.words} words (+${pct}%, past the ${Math.round(EXPERT_GROWTH_MARGIN * 100)}% review margin)`);
+    console.error('');
+    console.error('    This file is adopted VERBATIM by every /advise consult and by four stance');
+    console.error('    subagents, so every word is a word all five seats pay for. Longer personas');
+    console.error('    measurably damage more (persona-debate-verdict.md:26). Read the new text and');
+    console.error('    cut what does not earn its place — edit domain.json, then re-generate.');
+    console.error('');
+    console.error('    This is a PROMPT, not a limit: there is no length cap, nothing failed, and');
+    console.error('    this run\'s exit status is exactly what it would be without this notice.');
+    console.error(`  ${bar}`);
+  }
   // Preserve-or-write, reported. veriloop never merges an existing settings.json, so the
   // routing hook is NOT wired for this adopter until they merge the entry themselves.
   // Printed AFTER the emitted list so it is the last thing on stderr and cannot scroll off.
