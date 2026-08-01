@@ -3087,6 +3087,64 @@ function assert(cond, desc) {
   assert(/\b14s\b/.test(readmeSrc) && /unmeasured/i.test(readmeSrc), 'T10: README publishes the MEASURED spine figure (14s) and states plainly that the LLM phases are unmeasured');
 }
 
+// --- depsSetup: worktrees must SHARE one cargo target dir -------------------------
+// A cargo build tree is ~1.3 GB and cargo writes it to `<cwd>/target`, so a per-feature
+// worktree compiled its own copy and nothing reclaimed them. Measured before the fix:
+// four worktrees of one repo held 5.2 GB of duplicate `target/`. The node branch had
+// always avoided the equivalent by symlinking `node_modules`; cargo had NOTHING, and a
+// rust-PRIMARY repo fell through to a generic branch that never mentions cargo at all.
+{
+  const depsSetupOf = (dir, files) => {
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+    const cj = detectCommands(dir);
+    const cjPath = join(dir, 'commands.json');
+    writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+    spawnSync(process.execPath, [generatePath, '--repo', dir, '--commands', cjPath, '--out', dir], { encoding: 'utf8' });
+    const wfDir = join(dir, '.claude/workflows');
+    const wf = readdirSync(wfDir).find((f) => f.endsWith('-dev-loop.js'));
+    assert(!!wf, `depsSetup fixture: a *-dev-loop.js was emitted into ${wfDir}`);
+    const src = readFileSync(join(wfDir, wf), 'utf8');
+    const m = src.match(/"depsSetup":\s*"((?:[^"\\]|\\.)*)"/);
+    assert(!!m, 'depsSetup fixture: the emitted workflow carries a depsSetup string');
+    return { deps: m ? m[1] : '', stack: cj.stack };
+  };
+  const CARGO_CRATE = '[package]\nname = "probe"\nversion = "0.1.0"\nedition = "2021"\n';
+
+  // (a) rust-PRIMARY — previously hit the generic fallback with no cargo guidance at all.
+  const rustDir = mkdtempSync(join(tmpdir(), 'veriloop-deps-rust-'));
+  const rust = depsSetupOf(rustDir, { 'Cargo.toml': CARGO_CRATE });
+  assert(rust.stack.includes('rust'), `depsSetup: a Cargo.toml crate detects as rust (stack: ${rust.stack.join('+')})`);
+  assert(
+    /CARGO_TARGET_DIR/.test(rust.deps),
+    'depsSetup: a rust repo tells the worktree to export CARGO_TARGET_DIR so worktrees share ONE build dir (~1.3 GB each otherwise)',
+  );
+  assert(/serialize/i.test(rust.deps), 'depsSetup: the shared-target instruction states the cargo-lock serialization tradeoff rather than hiding it');
+
+  // (b) python + rust (the maturin shape — this is what catan_rl_v2 detects). The maturin
+  //     build is exactly what fills `target/`, so this branch needs the share too.
+  const mixDir = mkdtempSync(join(tmpdir(), 'veriloop-deps-mix-'));
+  const mix = depsSetupOf(mixDir, {
+    'Cargo.toml': CARGO_CRATE,
+    'pyproject.toml': '[project]\nname = "probe"\nversion = "0.1.0"\n\n[build-system]\nrequires = ["maturin"]\nbuild-backend = "maturin"\n',
+  });
+  assert(mix.stack.includes('python') && mix.stack.includes('rust'), `depsSetup: a maturin repo detects python+rust (stack: ${mix.stack.join('+')})`);
+  assert(
+    /CARGO_TARGET_DIR/.test(mix.deps),
+    'depsSetup: a python+rust (maturin) repo ALSO shares the cargo target dir — the maturin build is what fills target/',
+  );
+
+  // (c) NON-VACUITY — a node repo must NOT carry the cargo clause, or the assertions
+  //     above would pass on a string that simply always contains it.
+  const nodeDir = mkdtempSync(join(tmpdir(), 'veriloop-deps-node-'));
+  const node = depsSetupOf(nodeDir, { 'package.json': JSON.stringify({ name: 'p', scripts: { test: 'vitest run' } }) });
+  assert(
+    !/CARGO_TARGET_DIR/.test(node.deps) && /node_modules/.test(node.deps),
+    'depsSetup: a node repo symlinks node_modules and carries NO cargo clause (proves the cargo branch is conditional)',
+  );
+
+  for (const d of [rustDir, mixDir, nodeDir]) rmSync(d, { recursive: true, force: true });
+}
+
 // --- the PUBLISHED gate figure, pinned to what this run actually PRINTS. The check in the
 //     published-docs block pins README to CHANGELOG — two copies of one number, which agree
 //     perfectly while both are stale, and both were: they said 395 for a gate that had moved.

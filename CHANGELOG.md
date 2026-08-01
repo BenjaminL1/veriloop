@@ -663,7 +663,7 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 436, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 448, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their

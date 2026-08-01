@@ -73,11 +73,10 @@ function buildDepsSetup(cj) {
     let s = install
       ? `create/enter a virtualenv (or reuse the project's), then \`${install}\` inside the worktree so imports + entry points resolve.`
       : 'ensure the package is importable in the worktree (editable install into a virtualenv).';
-    if ((cj.polyglot || []).some((p) => /rust|maturin/i.test(p))) {
-      s += ` This repo ships a compiled (Rust/maturin) extension — also run \`${build && /maturin|rust/.test(build) ? build : 'maturin develop --release'}\` in the worktree so the extension is importable.`;
-    }
+    if (usesCargo(cj)) s += ` This repo ships a compiled (Rust/maturin) extension — also run \`${build && /maturin|rust/.test(build) ? build : 'maturin develop --release'}\` in the worktree so the extension is importable.${cargoShare()}`;
     return s;
   }
+  if (cj.stack.includes('rust')) return rustDepsSetup();
   return install ? `run \`${install}\` inside the worktree so its dependencies resolve.` : 'make the repo\'s dependencies available inside the worktree.';
 }
 
@@ -662,3 +661,43 @@ function main() {
 }
 
 main();
+
+// ---------------------------------------------------------------------------
+// Cargo target-dir sharing (used by `buildDepsSetup` above).
+//
+// These are FUNCTION DECLARATIONS, and they live at the very bottom on purpose:
+// declarations hoist, so `buildDepsSetup` resolves them fine, and defining them
+// here shifts NO line above — this file is cited by `file:line` from the
+// constitution, both hand-owned `*.overrides.md` files, `interview.json`, the
+// manifest, SECURITY.md and README.md, and the first draft of this change moved
+// `machine`/`handOnce`/`spliceBlock`/`backup` far enough to rot six of them.
+//
+// WHY THIS EXISTS: cargo writes its build tree to `<cwd>/target`, so a per-feature
+// worktree compiled its OWN copy and nothing ever reclaimed it. Measured before the
+// fix: four worktrees of one repo held 5.2 GB of duplicate `target/` on top of the
+// main checkout's 1.4 GB. The node branch had always avoided the equivalent by
+// symlinking `node_modules`; cargo had nothing, and a rust-PRIMARY repo fell through
+// to a generic branch that never mentioned cargo at all.
+// ---------------------------------------------------------------------------
+
+/** The shared-target instruction. States the lock tradeoff rather than hiding it. */
+function cargoShare() {
+  return (
+    ' Before any `cargo` or `maturin` command in the worktree, `export CARGO_TARGET_DIR=$REPO/target`' +
+    ' so every worktree SHARES one build directory instead of compiling its own (~1.3 GB apiece) —' +
+    ' cargo locks it, so concurrent worktree builds serialize rather than corrupt each other.'
+  );
+}
+
+/** Rust as the primary stack OR as a maturin extension alongside python. */
+function usesCargo(cj) {
+  return cj.stack.includes('rust') || (cj.polyglot || []).some((p) => /rust|maturin/i.test(p));
+}
+
+/** Rust-primary: no install step needed — the registry cache is already shared. */
+function rustDepsSetup() {
+  return (
+    'cargo resolves dependencies from the registry cache in `$CARGO_HOME`, which is already shared ' +
+    'across worktrees, so no install step is needed inside the worktree.' + cargoShare()
+  );
+}
