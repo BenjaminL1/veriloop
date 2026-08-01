@@ -973,3 +973,74 @@ mechanism behind it, and none is claimed to.
 scope: 1 and 10 met; 7 now covers T5 and T10, completing T1–T13. The Non-goals on
 `<SUBAGENT-STOP>`, on "forcing" language, on `--force`, and on a JSON-aware merge were all
 observed — the second of them by a gate assertion rather than by care alone.
+
+---
+
+## Implementation notes — owner decisions of 2026-08-01, second pass (v0.5.0)
+
+Three post-ratification owner decisions, implemented on top of the shipped spec. **The
+authority note in the Phase 1 section governs this one too:** it is the *implementer's*
+self-report inside a RATIFIED — BINDING owner artifact. It records what shipped; it amends
+nothing.
+
+**1. The domain expert is now a REPO expert, by the roster's mechanism.** § What ships put
+*"the generated domain-expert persona"* in `expert.md` and left its repo-specific content
+entirely to `persona.body` — LLM-authored, unrequired, unchecked. The result was a FIELD
+expert with self-reported repo knowledge: about four repo path references in the whole file,
+and no assertion anywhere pinning repo grounding. The owner chose the mechanism the ROSTER
+personas already have — `beatSection` (`scripts/lib/render.mjs:97 beatSection`), which bolts
+the nominating evidence on with real `file:line` the model cannot drop. `renderDomainExpert`
+now appends a **script-owned repo-evidence section** after the model's text, beside the
+existing script-owned STANCES block: what the repo is, its stack and declared dependencies
+with citations, its architecture and data flow, and the tier evidence behind the
+classification.
+
+Nothing new is derived, per rule 2 and R3: the content is re-rendered from
+`buildClassification`'s already-cited evidence, from `architecture`, and from the
+script-owned `domain_facts` block — all of which `resolveSource` already resolves against
+the tree at generate time. Four render helpers (`tierEvidenceBlocks`, `censusHeading`,
+`architectureBlock`, `depLines`) are now shared with `renderDomainAudit` so the two
+artifacts cannot disagree about one fact (rule 9); `audit.md` is byte-identical apart from
+three citations deliberately sharpened from a bare path to `path:line`. The dependency list
+is bounded at 40 with the truncation stated beside it — a bound on a LIST, `audit.md` still
+carrying the complete one, not a length cap on the persona. `renderDomainExpert` REFUSES to
+render without `domain_facts`; the alternative is a caller silently emitting the persona
+this change exists to end.
+
+**§ Guard wiring item 3 did not cover what this change needed, and Phase 1 note 1b already
+half-said so.** `domain/expert.md` is in the citation-liveness `CITED` list, but that scan
+only matches the `scripts/*.mjs:<line>` form and the persona cites none of it, while the
+domain citation scan Phase 1 added as the real guard was scoped to `audit.md` alone. The new
+citations would therefore have been re-resolved by **nothing**. The domain citation scan is
+now scoped to both files, each file's PRESENCE is asserted rather than `existsSync`-guarded,
+and the persona's evidence section is separately required to carry at least one resolving
+`path:line`. Mutation-verified in both directions: a dead citation in the committed persona
+→ RED (named citation failure plus the byte-integrity failure), and deleting the section
+from the renderer → RED (four assertions plus lint check 7b).
+
+**Growth, as expected.** `domain/expert.md` went 681 → 1,448 words and the review-on-growth
+prompt of decision 1 fired at +113% on the regenerate. That is the prompt working, not a
+regression, and it is the first real exercise of it outside its own fixtures.
+
+**2 and 3. The payload asks the model to announce the route and to record it — and both are
+ASKS.** `session-routing.md` carried no instruction to say anything, so a hook-routed reply
+was indistinguishable from any other and the owner, who never sees the payload, could not
+tell. It now carries the superpowers shape (`using-superpowers/SKILL.md:24`): announce the
+command and why that route before doing the work, distinguish a hook-routed invocation from
+the owner typing the command themselves, and note the fired command and its provenance in
+the session's working notes.
+
+**Stated exactly, because the distinction is the whole of it.** These are PROSE INSTRUCTIONS
+in an injected payload. They raise the odds of compliance; they do not compel it, and no
+mechanism exists behind them. The gate asserts the payload **CARRIES** them — three
+assertions on the rendered payload, one on the committed copy, two content checks in
+`lint-bundle` check 8b so a renderer regression cannot hide behind a byte-equality check
+that compares the file to the regression. **No check asserts the model obeyed them, because
+nothing in either gate observes a reply.** This is not enforcement. The record lives in the
+session notes and NOT in a committed attestation: `/advise` is read-only by gate assertion
+(`selftest.mjs`, no `Write` / `Edit` / unscoped `Bash`), so it cannot write a record of its
+own invocation, and no read-only command gained history-record writing in this pass.
+
+**Gate:** 423 → 436 assertions, 30 lint checks unchanged (the two new payload checks are
+`fail()` branches inside the existing check 8b, so a green run prints the same count).
+Version stays `0.5.0` at all seven stamps — nothing has shipped yet.

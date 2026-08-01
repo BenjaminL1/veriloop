@@ -23,14 +23,14 @@
         "field": "AI developer tooling — agentic code review and gating",
         "score": 3,
         "claim": "the repo carries the Claude Code plugin/marketplace contract and a skill manifest, so its topology is mandated by an agent harness rather than chosen",
-        "source": ".claude-plugin/marketplace.json"
+        "source": ".claude-plugin/marketplace.json:12"
       },
       {
         "tier": 2,
         "field": "software supply-chain and artifact trust",
         "score": 2,
         "claim": "a published threat model with safety tiers, declared network paths and a reporting path is a supply-chain artifact, not application documentation",
-        "source": "SECURITY.md"
+        "source": "SECURITY.md:47"
       },
       {
         "tier": 3,
@@ -51,7 +51,7 @@
         "field": "AI developer tooling — agentic code review and gating",
         "score": 1,
         "claim": "the skill states the mental model outright: veriloop is a compiler and the dev-loop it emits is the compiled output",
-        "source": "skills/veriloop/SKILL.md"
+        "source": "skills/veriloop/SKILL.md:38"
       }
     ]
   },

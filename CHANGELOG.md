@@ -7,7 +7,7 @@ domain-expert persona and the verified reference library. Phase 2: the `/advise`
 with retirements T9 and T13. Phase 3: the `SessionStart` routing hook, with retirements T5
 and T10. Plus the retirements Phase 1 depends on.
 
-### Owner decisions, 2026-08-01 — three open questions answered
+### Owner decisions, 2026-08-01 — six open questions answered
 
 **1. The retired length cap comes back as a PROMPT, not a cap.** T12 removed all three length
 caps and § Open RISKS declined a replacement, noting only that *"a review-on-growth prompt costs
@@ -57,6 +57,61 @@ does not read a routine staleness failure as an accusation. No behavior change; 
 pin the wording, and the existing exit-1 assertions are untouched. The rejected alternative —
 version-stamping each artifact so the cases could be reported separately — is recorded in the
 spec's § Open RISKS rather than forgotten.
+
+**4. The domain expert becomes a REPO expert, enforced by a script-owned evidence section.**
+`domain/expert.md` was a FIELD expert with **self-reported** repo knowledge: everything
+repo-specific in it was prose the model wrote into `domain.json`, nothing required that prose to
+exist, nothing checked it, and the whole persona carried about four repo path references. The
+roster personas have never had that problem, because `beatSection` (`scripts/lib/render.mjs:97
+beatSection`) bolts their nominating evidence on **mechanically**, with real `file:line` the model
+cannot drop. The owner chose the same mechanism here. `renderDomainExpert` now appends a
+**script-owned repo-evidence section** after whatever persona body the LLM authored — what the
+repo is, its stack and declared dependencies with citations, its architecture and data flow, and
+the tier evidence behind the classification — rendered from the audit's **own already-cited**
+evidence (`buildClassification`, `architecture`) plus the script-owned `domain_facts` block in
+`veriloop-manifest.json`. No new evidence channel and nothing re-derived (constitution rule 2):
+those citations are already resolved against the tree at generate time by `domain.mjs
+resolveSource`, so a dead path or a line past EOF fails the build. Every interpolated
+LLM-authored string goes through `sanitizeField` at the field's existing cap, and the dependency
+list is bounded at 40 with the truncation stated beside it — a bound on a *list*, with `audit.md`
+still carrying the complete one, not a length cap on the persona (T12 retired those and the owner
+declined a replacement). `renderDomainExpert` now **refuses to render** without `domain_facts`
+rather than quietly emitting a persona with no repo evidence in it. Four renderer helpers are
+shared with `renderDomainAudit` so the two artifacts cannot disagree about the same fact (rule 9);
+`audit.md` is byte-identical apart from three citations deliberately sharpened from a bare path to
+`path:line`. **This repo's own persona went 681 → 1,448 words, and the review-on-growth prompt
+from decision 1 fired on the regenerate at +113%** — which is the prompt doing its job, not a
+regression. **The guard named in the plan for this change did not exist.** `domain/expert.md` was
+already in the citation-liveness `CITED` list, but that scan only ever matched the
+`scripts/*.mjs:<line>` form and the persona cites none of it, while the domain citation scan was
+scoped to `audit.md` alone — so the new citations would have been re-resolved by nothing. The
+domain citation scan is now scoped to **both** files and asserts each one's presence rather than
+skipping when it is absent.
+
+**5. The hook asks the model to ANNOUNCE that it routed.** `session-routing.md` carried no
+instruction to say anything. Superpowers does — `using-superpowers/SKILL.md:24`: *"Then announce
+\"Using [skill] to [purpose]\" and follow the skill exactly."* Without it the hook can change how
+a reply was produced and the owner, who never sees the payload, cannot tell that it did. The
+payload now asks the model, in that shape, to announce a hook-routed invocation before doing the
+work — naming the command and which row of the route table it matched — and to distinguish it from
+the owner typing the command themselves, or from declining to route.
+
+**6. A hook-routed command is recorded in the session's working notes.** The payload asks the
+session to note which veriloop command fired and whether the hook routed it or the owner invoked
+it directly. The owner chose the session-summary line over committed attestation records, and that
+is the right call: `/advise` is read-only **by gate assertion** (no `Write`, no `Edit`, no unscoped
+`Bash`), so it cannot write a record of its own invocation, and granting it write access to do so
+would trade a real covenant for a bookkeeping entry. No read-only command gained history-record
+writing.
+
+**What decisions 5 and 6 are, stated exactly.** They are **prose instructions in an injected
+payload**. They raise the odds the model announces and records the route; they do not compel it,
+and there is no mechanism behind them. The gate asserts that the payload **carries** the
+instructions — three assertions on the rendered payload, one on this repo's committed copy, and
+two content checks in `lint-bundle` check 8b so a renderer regression cannot hide behind a
+byte-equality check that compares the file to the regression. **No check asserts that the model
+obeyed them, because nothing in either gate observes a reply.** This is not enforcement, and
+describing it as such would be exactly the class of overclaim this release retires by hand.
 
 **Phase 3 — a `SessionStart` hook that BIASES routing, and is described that way.** Three plain
 files emitted through the existing writer, so all three land in `manifest.emitted_files`:
@@ -608,7 +663,7 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 423, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 436, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their
@@ -624,7 +679,12 @@ PREMISE-only fallback in the command / the description / the cross-examination b
 `lint-bundle`, and the T13 scope pin on both the committed files and the templates.
 **From Phase 3, 49 more** (100 from Phases 1–2 + 49 = 149; 246 + 149 = 395, the
 verification sweep below adds 18: 395 + 18 = 413, and the 2026-08-01 owner-decision pass
-adds the last 10: 413 + 10 = 423)**:**
+adds the last 23 — 10 for decisions 1–3, then 13 for decisions 4–6: the repo-evidence section's
+presence, its resolving `path:line` citations, its survival of a persona body that tries to omit
+it and the render-time refusal without `domain_facts`; the domain citation scan re-scoped across
+`audit.md` **and** `expert.md` with each file's presence asserted; and the payload's announcement
+requirement, its hook-routed-vs-owner-invoked distinction and its session-notes requirement on the
+rendered payload plus all three again on the committed one — 413 + 23 = 436)**:**
 preserve-or-write in BOTH directions (a seeded settings.json is
 byte-for-byte identical after generate, is still registered `preserved` rather than silently
 skipped, and the block printed to stderr itself parses as JSON) — the trio is a

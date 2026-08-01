@@ -45,8 +45,8 @@ scores accumulate within a tier.
 
 #### Tier 2 — framework-mandated topology
 
-- `AI developer tooling — agentic code review and gating` **+3** — the repo carries the Claude Code plugin/marketplace contract and a skill manifest, so its topology is mandated by an agent harness rather than chosen _(`.claude-plugin/marketplace.json`)_
-- `software supply-chain and artifact trust` **+2** — a published threat model with safety tiers, declared network paths and a reporting path is a supply-chain artifact, not application documentation _(`SECURITY.md`)_
+- `AI developer tooling — agentic code review and gating` **+3** — the repo carries the Claude Code plugin/marketplace contract and a skill manifest, so its topology is mandated by an agent harness rather than chosen _(`.claude-plugin/marketplace.json:12`)_
+- `software supply-chain and artifact trust` **+2** — a published threat model with safety tiers, declared network paths and a reporting path is a supply-chain artifact, not application documentation _(`SECURITY.md:47`)_
 
 #### Tier 3 — file census
 
@@ -55,7 +55,7 @@ scores accumulate within a tier.
 
 #### Tier 4 — prose
 
-- `AI developer tooling — agentic code review and gating` **+1** — the skill states the mental model outright: veriloop is a compiler and the dev-loop it emits is the compiled output _(`skills/veriloop/SKILL.md`)_
+- `AI developer tooling — agentic code review and gating` **+1** — the skill states the mental model outright: veriloop is a compiler and the dev-loop it emits is the compiled output _(`skills/veriloop/SKILL.md:38`)_
 
 ## Domain vocabulary
 

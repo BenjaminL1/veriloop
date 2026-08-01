@@ -86,6 +86,19 @@ discovered:
   implementers — do not inherit the routing, and an `<ALREADY-ROUTED>` clause so a main
   session already inside a veriloop command continues the task in flight instead of
   re-entering it.
+- **It asks the session to say that it routed, and to record it — and that is an ASK.** Since
+  2026-08-01 the payload asks the model to announce a hook-routed invocation in its reply
+  (naming the command, and distinguishing it from you typing that command yourself) and to note
+  the fired command and its provenance in the session's working notes. You never see this
+  payload, so without an announcement a reply shaped by it is indistinguishable from one that
+  was not. **State it exactly:** these are prose instructions in an injected context window.
+  They raise the odds of compliance; they do not compel it, and there is no mechanism behind
+  them. `lint-bundle` check 8b and `selftest.mjs` assert that the payload **carries** the
+  instructions — nothing observes a reply, so no check asserts the model obeyed them, and none
+  is claimed. Read as enforcement this would be an overclaim; it is a prompting device. The
+  record lives in the session notes rather than in a committed attestation because `/advise` is
+  read-only by gate assertion and cannot write a record of its own invocation, and granting it
+  write access to do so would trade a real covenant for a bookkeeping entry.
 - **veriloop never rewrites your `settings.json` — except under `--force`.** Preserve-or-write:
   absent → written; present → left byte-for-byte alone, and a complete settings.json carrying
   nothing but the hook entry is printed to stderr for you to **merge** the `SessionStart` entry
@@ -250,7 +263,8 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 - a `session-routing.md` that is not byte-identical to what `renderSessionRouting()` emits —
   it is machine-owned and its entire text is injected into every session verbatim, so a hand
   edit there is an injection into every session; a routing payload missing its
-  `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, or one of the three routes; a
+  `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, one of the three routes, its
+  announcement requirement or its session-notes requirement; a
   payload routing the session to a command veriloop does not emit; or a missing hook script.
   **These payload checks run whether or not the hook is wired**, because the payload is
   emitted either way and goes live the moment you merge the entry (or wire it in

@@ -632,7 +632,8 @@ const MACHINE_BANNER = (what) =>
   `> \`.claude/veriloop/domain.json\`. Do not hand-edit it; put manual tweaks in\n` +
   `> \`.claude/veriloop/domain/expert.overrides.md\` (never overwritten, wins on conflict).\n`;
 
-// Prose caps for `audit.md`. `sanitizeField`'s 200-char default is a URL/version budget and
+// Prose caps for `audit.md` and for the persona's repo-evidence section (see the note
+// below). `sanitizeField`'s 200-char default is a URL/version budget and
 // is far too small for prose, so each site passes its own. The cap is NOT the load-bearing
 // part — the newline/backtick collapse and the secret/%ABS% scrub are. These fields are
 // LLM-authored and land in a COMMITTED, machine-owned file the owner is told not to
@@ -640,7 +641,25 @@ const MACHINE_BANNER = (what) =>
 // heading, and an absolute path or a secret-shaped line hard-FAILS `lint-bundle`'s ABS /
 // SECRET_PATTERNS checks on a file with no self-service fix (re-running generate
 // reproduces it byte for byte).
+// Shared by BOTH renderers since 0.5.0 — `audit.md` and the persona's repo-evidence
+// section render the same LLM-authored strings into the same kind of committed sink, so
+// they get the same caps. Two cap tables would let one file truncate a claim where the
+// other did not, and the two artifacts would then disagree about a fact.
 const AUDIT_CAP = { name: 120, detail: 400, claim: 400, field: 80, summary: 2000, flow: 400 };
+
+// ONE source of truth (rule 9) for the sentence that states what an EMPTY `deps` block
+// means. Both `audit.md` and the persona's repo-evidence section render it, and a persona
+// that said "this repo has no dependencies" where the audit says "none was PARSED" would
+// be the stronger claim winning by being the one the seats actually read.
+const NO_DEPS_NOTE =
+  '_no dependency was parsed from `package.json`, `pyproject.toml` or `Cargo.toml`. That is the absence of a PARSED declaration, not evidence the repo declares none — no other manifest format is read._';
+
+// The persona lists deps; `audit.md` lists ALL of them. A 400-dependency repo would
+// otherwise render a persona four stance seats adopt verbatim at several thousand words
+// of version strings. This is a bound on a LIST with the truncation stated beside it —
+// the same discipline `census_bounds` already uses — not a length cap on the persona
+// (T12 retired those, and the owner declined a replacement).
+const EXPERT_DEP_CAP = 40;
 
 function citeList(items, where, repo) {
   return items
@@ -653,33 +672,13 @@ function citeList(items, where, repo) {
     .join('\n');
 }
 
-/** `audit.md` — LLM judgment, script-enforced structure and citations. */
-export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
-  const cls = buildClassification(domainInput, { repo });
-  const deps = facts.deps || [];
-  const census = facts.census || [];
-
-  // The empty case states what the COLLECTOR found, not what the repo declares. It
-  // reads `package.json`, PEP 621 / PEP 735 / poetry `pyproject.toml` and `Cargo.toml`;
-  // a manifest it does not read (go.mod, Gemfile, pom.xml, …) is indistinguishable
-  // here from a genuinely dependency-free tree, and "dependency-free" is a Tier 1
-  // conclusion the audit may not have handed to it.
-  const depLines = deps.length
-    ? deps.map((d) => `- \`${d.name}@${d.version}\` — _(\`${d.source}\`)_`).join('\n')
-    : `- _no dependency was parsed from \`package.json\`, \`pyproject.toml\` or \`Cargo.toml\`. That is the absence of a PARSED declaration, not evidence the repo declares none — no other manifest format is read._`;
-  const censusLines = census.length
-    ? census.map((c) => `- \`${c.dir}\` — ${c.files} file${c.files === 1 ? '' : 's'}${c.extensions.length ? ` (${c.extensions.join(', ')})` : ''}`).join('\n')
-    : '- _no top-level directories_';
-  // The census is a FILTERED, CAPPED, DEPTH-LIMITED sample, and the heading used to render
-  // only the surviving count — "File census (4 top-level directories)" for a repo with 7 —
-  // reading as a complete enumeration. State the bounds beside the number.
-  const cb = facts.census_bounds || null;
-  const censusHeading = cb
-    ? `File census (${cb.listed} of ${cb.top_level_dirs} top-level directories; hidden and vendor directories excluded, walk depth <= ${cb.max_depth}${cb.truncated ? `, listing capped at ${cb.dir_cap}` : ''})`
-    : `File census (${census.length} top-level directories)`;
-
-  const byTier = EVIDENCE_TIERS.map((t) => {
-    const rows = cls.evidence.filter((e) => e.tier === t);
+/**
+ * The by-tier evidence listing. Shared by `audit.md` and by the persona's repo-evidence
+ * section so the two can never render the same evidence differently (rule 9).
+ */
+function tierEvidenceBlocks(evidence) {
+  return EVIDENCE_TIERS.map((t) => {
+    const rows = evidence.filter((e) => e.tier === t);
     if (!rows.length) return '';
     return (
       `\n#### ${TIER_LABEL[t]}\n\n` +
@@ -688,14 +687,27 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
       rows.map((e) => `- \`${sanitizeField(e.field, AUDIT_CAP.field)}\` **+${e.score}** — ${sanitizeField(e.claim, AUDIT_CAP.claim)} _(\`${String(e.source).trim()}\`)_`).join('\n') + '\n'
     );
   }).join('');
+}
 
-  const vector = (r) => EVIDENCE_TIERS.map((t) => `T${t} ${r.vector[t]}`).join(' · ');
-  const secondaries = cls.secondaries.length
-    ? cls.secondaries.map((r) => `- **${r.field}** — ${vector(r)} (total ${r.total})`).join('\n')
-    : '- _none — a single field carries every tier_';
+/**
+ * The census is a FILTERED, CAPPED, DEPTH-LIMITED sample, and the heading used to render
+ * only the surviving count — "File census (4 top-level directories)" for a repo with 7 —
+ * reading as a complete enumeration. State the bounds beside the number. Shared, so the
+ * persona cannot advertise a bare count where the audit advertises the bounds.
+ */
+function censusHeading(facts) {
+  const cb = facts.census_bounds || null;
+  return cb
+    ? `File census (${cb.listed} of ${cb.top_level_dirs} top-level directories; hidden and vendor directories excluded, walk depth <= ${cb.max_depth}${cb.truncated ? `, listing capped at ${cb.dir_cap}` : ''})`
+    : `File census (${(facts.census || []).length} top-level directories)`;
+}
 
-  const vocab = Array.isArray(domainInput.vocabulary) ? domainInput.vocabulary : [];
-  const concepts = Array.isArray(domainInput.concepts) ? domainInput.concepts : [];
+/**
+ * Architecture summary + numbered data flow + the cited sources, validated. Shared by both
+ * renderers — including the `resolveSource` call, so the persona's copy of the architecture
+ * narrative is held to the same live-citation bar as the audit's.
+ */
+function architectureBlock(domainInput, repo) {
   const arch = domainInput.architecture || {};
   if (typeof arch.summary !== 'string' || !arch.summary.trim()) {
     throw new Error('domain.json: `architecture.summary` is required');
@@ -704,6 +716,52 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
   const archSources = (Array.isArray(arch.sources) ? arch.sources.filter((s) => typeof s === 'string' && s.trim()) : [])
     .map((s) => resolveSource('architecture.sources[]', s.trim(), repo));
   if (!archSources.length) throw new Error('domain.json: `architecture.sources` must cite at least one path');
+  return (
+    `${sanitizeField(arch.summary, AUDIT_CAP.summary)}\n\n` +
+    (flow.length ? flow.map((s, i) => `${i + 1}. ${sanitizeField(s, AUDIT_CAP.flow)}`).join('\n') + '\n\n' : '') +
+    `Sources: ${archSources.map((s) => `\`${s}\``).join(' · ')}\n`
+  );
+}
+
+/**
+ * The declared-dependency listing. `limit` bounds it for the persona and is absent for the
+ * audit, which is the complete record. The empty case states what the COLLECTOR found, not
+ * what the repo declares: it reads `package.json`, PEP 621 / PEP 735 / poetry
+ * `pyproject.toml` and `Cargo.toml`; a manifest it does not read (go.mod, Gemfile,
+ * pom.xml, …) is indistinguishable here from a genuinely dependency-free tree, and
+ * "dependency-free" is a Tier 1 conclusion the audit may not have handed to it.
+ */
+function depLines(deps, limit) {
+  if (!deps.length) return `- ${NO_DEPS_NOTE}`;
+  const shown = limit ? deps.slice(0, limit) : deps;
+  const line = (d) => `- \`${sanitizeField(d.name)}@${sanitizeField(d.version)}\` — _(\`${String(d.source).trim()}\`)_`;
+  return (
+    shown.map(line).join('\n') +
+    (deps.length > shown.length
+      ? `\n- _…and ${deps.length - shown.length} more, listed in full in \`.claude/veriloop/domain/audit.md\`._`
+      : '')
+  );
+}
+
+/** `audit.md` — LLM judgment, script-enforced structure and citations. */
+export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
+  const cls = buildClassification(domainInput, { repo });
+  const deps = facts.deps || [];
+  const census = facts.census || [];
+
+  const censusLines = census.length
+    ? census.map((c) => `- \`${c.dir}\` — ${c.files} file${c.files === 1 ? '' : 's'}${c.extensions.length ? ` (${c.extensions.join(', ')})` : ''}`).join('\n')
+    : '- _no top-level directories_';
+
+  const byTier = tierEvidenceBlocks(cls.evidence);
+
+  const vector = (r) => EVIDENCE_TIERS.map((t) => `T${t} ${r.vector[t]}`).join(' · ');
+  const secondaries = cls.secondaries.length
+    ? cls.secondaries.map((r) => `- **${r.field}** — ${vector(r)} (total ${r.total})`).join('\n')
+    : '- _none — a single field carries every tier_';
+
+  const vocab = Array.isArray(domainInput.vocabulary) ? domainInput.vocabulary : [];
+  const concepts = Array.isArray(domainInput.concepts) ? domainInput.concepts : [];
 
   return (
     `# ${repoName} — domain audit (veriloop-generated)\n\n` +
@@ -713,8 +771,8 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
     `generator computes. The audit **cites** these; it never re-derives them\n` +
     `(constitution rule 2 — scripts own facts, the LLM owns judgment).\n\n` +
     `**Stack:** ${(facts.stack || []).join(' + ') || '(none detected)'} · **Package manager:** ${facts.package_manager || '(none)'}\n\n` +
-    `### Declared dependencies (${deps.length})\n\n${depLines}\n\n` +
-    `### ${censusHeading}\n\n${censusLines}\n\n` +
+    `### Declared dependencies (${deps.length})\n\n${depLines(deps)}\n\n` +
+    `### ${censusHeading(facts)}\n\n${censusLines}\n\n` +
     `## Field classification\n\n` +
     `**Primary field: ${cls.primary}** — ${vector(cls.ranked[0])} (total ${cls.ranked[0].total})\n\n` +
     `Confidence: **${cls.confidence}**${cls.ownerConfirmed ? ' (owner-confirmed)' : ''}. Tiers are ranked\n` +
@@ -724,9 +782,7 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
     `### Evidence by tier\n${byTier}\n` +
     `## Domain vocabulary\n\n${vocab.length ? citeList(vocab, 'vocabulary[]', repo) : '- _none recorded_'}\n\n` +
     `## Core concepts\n\n${concepts.length ? citeList(concepts, 'concepts[]', repo) : '- _none recorded_'}\n\n` +
-    `## Architecture and data flow\n\n${sanitizeField(arch.summary, AUDIT_CAP.summary)}\n\n` +
-    (flow.length ? flow.map((s, i) => `${i + 1}. ${sanitizeField(s, AUDIT_CAP.flow)}`).join('\n') + '\n\n' : '') +
-    `Sources: ${archSources.map((s) => `\`${s}\``).join(' · ')}\n`
+    `## Architecture and data flow\n\n${architectureBlock(domainInput, repo)}`
   );
 }
 
@@ -748,11 +804,67 @@ export const STANCES = [
   ['SKEPTIC', 'attack the STRONGEST version of the proposal. Refuse to cite any entry whose `status` is not `VERIFIED`, and say plainly when the library cannot support the answer.'],
 ];
 
-export function renderDomainExpert(domainInput, references, { repoName, repo }) {
+/**
+ * The SCRIPT-OWNED repo-evidence section — the domain persona's equivalent of the roster
+ * personas' `beatSection` (`scripts/lib/render.mjs:97 beatSection`), and it exists for the
+ * identical reason. Before it, the ONLY repo-specific thing in this persona was prose the
+ * model wrote into `domain.json`: nothing required it to exist, nothing checked it, and a
+ * "domain expert" whose repo knowledge is self-reported is a FIELD expert wearing the
+ * repo's name. `beatSection` solved this for the roster by bolting the nominating evidence
+ * on mechanically, with real `file:line` the model cannot drop. Same mechanism here.
+ *
+ * NOTHING here is a new fact and nothing is re-derived (constitution rule 2, and the spec's
+ * R3): every line is re-rendered from the audit's OWN already-cited evidence
+ * (`buildClassification`, `architecture`) and from the script-owned `domain_facts` block the
+ * generator writes into `veriloop-manifest.json`. Those citations are already required to
+ * resolve against the tree — `resolveSource` fails the build on a dead path or a line past
+ * EOF — so this section inherits that guarantee rather than opening a second evidence
+ * channel with a weaker one. Every interpolated LLM-authored string goes through
+ * `sanitizeField` at the same cap the audit uses for the same field.
+ */
+function repoEvidenceSection(domainInput, cls, facts, { repoName, repo }) {
+  const deps = Array.isArray(facts.deps) ? facts.deps : [];
+  const census = Array.isArray(facts.census) ? facts.census : [];
+  // One line, not a bullet list: the tree shape is orientation, not evidence, and the
+  // per-directory extension breakdown lives in `audit.md`. `c.dir` is already sanitized at
+  // collection (a POSIX directory name may carry a newline or a backtick); re-running it is
+  // idempotent and keeps every interpolation in this file routed through the same funnel.
+  const censusLine = census.length
+    ? census.map((c) => `\`${sanitizeField(c.dir)}\` ${c.files}`).join(' · ')
+    : '_no top-level directories_';
+  const stack = (facts.stack || []).map((s) => sanitizeField(s, AUDIT_CAP.field)).join(' + ') || '(none detected)';
+  return (
+    `\n## This repo, in evidence (script-owned — regenerated on every run)\n\n` +
+    `You are THIS repo's expert, not the field's in general. Everything below is rendered by\n` +
+    `the generator from the audit's own CITED evidence and from the script-owned \`domain_facts\`\n` +
+    `block in \`.claude/veriloop/veriloop-manifest.json\`. It is appended AFTER the persona text\n` +
+    `above, so no persona body can drop, soften or reword it. Lead with these facts, cite them\n` +
+    `the way they are written here, and if one no longer resolves say so — a stale fact is a\n` +
+    `finding, not a detail. The full audit is \`.claude/veriloop/domain/audit.md\`.\n\n` +
+    `### What this repo is\n\n` +
+    `\`${repoName}\` — primary field **${cls.primary}** (confidence ${cls.confidence}${cls.ownerConfirmed ? ', owner-confirmed' : ''}).\n` +
+    `Stack: **${stack}** · package manager: **${facts.package_manager || '(none)'}**.\n\n` +
+    `${censusHeading(facts)}: ${censusLine}\n\n` +
+    `### Declared dependencies (${deps.length})\n\n${depLines(deps, EXPERT_DEP_CAP)}\n\n` +
+    `### Architecture and data flow\n\n${architectureBlock(domainInput, repo)}\n` +
+    `### Why this field — the evidence, by tier\n` +
+    `${tierEvidenceBlocks(cls.evidence)}\n` +
+    `Tiers are ranked lexicographically on the tier vector, so a lower tier never overrides a\n` +
+    `higher one; scores accumulate within a tier.\n`
+  );
+}
+
+export function renderDomainExpert(domainInput, references, { repoName, repo, facts }) {
   const cls = buildClassification(domainInput, { repo });
   const persona = domainInput.persona || {};
   if (typeof persona.body !== 'string' || !persona.body.trim()) {
     throw new Error('domain.json: `persona.body` is required — the LLM authors the persona, the script owns the invariants below it');
+  }
+  // REQUIRED, and loud when it is missing. A caller that forgot it would silently emit a
+  // persona with no repo-evidence section at all — the exact state this change exists to
+  // end, and one that only a reader of the artifact would ever notice.
+  if (!facts || typeof facts !== 'object') {
+    throw new Error('renderDomainExpert: `facts` (the manifest\'s script-owned domain_facts block) is required — the persona\'s repo-evidence section is rendered from it');
   }
   const outage = references.reachable === false;
   return (
@@ -767,8 +879,9 @@ export function renderDomainExpert(domainInput, references, { repoName, repo }) 
     `## Field\n\n` +
     `Primary: **${cls.primary}** (confidence ${cls.confidence}${cls.ownerConfirmed ? ', owner-confirmed' : ''}).\n` +
     (cls.secondaries.length ? `Secondary: ${cls.secondaries.map((s) => `**${s.field}**`).join(', ')}.\n` : '') +
-    `The evidence behind this classification is in \`.claude/veriloop/domain/audit.md\`.\n\n` +
-    `## Stances (script-owned — regenerated on every run)\n\n` +
+    `The evidence behind this classification is in \`.claude/veriloop/domain/audit.md\`.\n` +
+    repoEvidenceSection(domainInput, cls, facts, { repoName, repo }) +
+    `\n## Stances (script-owned — regenerated on every run)\n\n` +
     `A consult assigns each seat ONE stance. Every seat reads this file; the stance decides\n` +
     `which evidence it leads with, never which conclusion it reaches.\n\n` +
     STANCES.map(([name, text]) => `- **${name}** — ${text}`).join('\n') + '\n\n' +

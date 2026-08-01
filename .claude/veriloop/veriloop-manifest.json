@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-01T07:43:05.284Z",
+  "generated_at": "2026-08-01T19:38:40.623Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "27d7ed8a63d5d44ebbdc770b15fa6887c3ccdd77",
+  "repo_sha": "80da9bc22685f3f386c539a8baa74bd7c0260faf",
   "stack": [
     "node"
   ],
@@ -258,8 +258,8 @@
     "package_manager": "npm"
   },
   "domain_expert_size": {
-    "words": 681,
-    "bytes": 4462
+    "words": 1448,
+    "bytes": 9743
   },
   "verified_at": "2026-07-30T01:15:55.481Z",
   "emitted_files": [

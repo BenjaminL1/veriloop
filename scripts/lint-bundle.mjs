@@ -404,9 +404,10 @@ function main() {
         try {
           const di = JSON.parse(readFileSync(domainInputPath, 'utf8'));
           const mf = JSON.parse(readFileSync(man, 'utf8'));
-          const opts = { repoName: mf.repo_name || args.name || '(bundle)', repo: args.bundle };
+          const facts = mf.domain_facts || {};
+          const opts = { repoName: mf.repo_name || args.name || '(bundle)', repo: args.bundle, facts };
           canon = {
-            'audit.md': renderDomainAudit(di, mf.domain_facts || {}, opts),
+            'audit.md': renderDomainAudit(di, facts, opts),
             'expert.md': renderDomainExpert(di, buildReferences(di), opts),
           };
         } catch {
@@ -588,7 +589,7 @@ function main() {
           bad++;
           const canon = renderSessionRouting();
           const shape = doc.startsWith(canon) ? `${doc.length - canon.length} bytes APPENDED after the canonical payload` : `${doc.length} bytes vs ${canon.length} canonical`;
-          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS in the generator. (The differing text is deliberately not echoed.)`);
+          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS / SESSION_ANNOUNCE in the generator. (The differing text is deliberately not echoed.)`);
         }
         // The properties, checked SEPARATELY from the byte-equality above and not folded into
         // it. Byte-equality answers "is this veriloop's file"; these answer "does veriloop's
@@ -603,6 +604,20 @@ function main() {
         // re-entry the subagent guard says nothing about.
         if (!doc.includes('<SUBAGENT-STOP>')) { bad++; fail('session-routing.md carries no <SUBAGENT-STOP> guard — every subagent would inherit the routing instruction'); }
         if (!doc.includes('<ALREADY-ROUTED>')) { bad++; fail('session-routing.md carries no <ALREADY-ROUTED> clause — a main session already executing a veriloop command would be told to re-enter it'); }
+        // The ANNOUNCEMENT and SESSION-NOTES clauses (owner decisions, 2026-08-01). Checked
+        // here for the same reason the two guards above are: byte-equality compares the file
+        // to whatever the renderer currently emits, so a renderer regression that dropped
+        // these would leave every bundle byte-perfect and silent. What this check can prove
+        // is that the payload CARRIES the instruction. Whether the model then announces or
+        // notes anything is not observable from a bundle linter, and nothing here claims it.
+        if (!/routed by veriloop's SessionStart hook, not requested directly/.test(doc)) {
+          bad++;
+          fail('session-routing.md asks for no ANNOUNCEMENT — a hook-routed reply would be indistinguishable from an ordinary one, and the owner never sees this payload');
+        }
+        if (!/whether this block routed it or\n?\s*the owner invoked it directly/.test(doc)) {
+          bad++;
+          fail('session-routing.md never asks the session to record which command fired and whether the hook routed it or the owner invoked it directly — /advise is read-only and cannot record its own invocation, so the session notes are the only place this is kept');
+        }
         for (const r of ROUTED) if (!doc.includes(r)) { bad++; fail(`session-routing.md never routes to ${r}`); }
         // The INVERSE direction. The loop above only proves the required routes are present;
         // it says nothing about a route the doc adds. Read the route table back out of the

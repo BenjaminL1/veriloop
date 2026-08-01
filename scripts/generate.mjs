@@ -497,7 +497,7 @@ function main() {
     // most often changes. The manifest field stays the primary source — it is what the
     // run that wrote the file recorded, so it cannot be moved by editing the file.
     const expertPath = P('.claude/veriloop/domain/expert.md');
-    const expertDoc = renderDomainExpert(domainInput, references, { repoName, repo: args.repo });
+    const expertDoc = renderDomainExpert(domainInput, references, { repoName, repo: args.repo, facts: domainFacts });
     if (!priorExpertSize && existsSync(expertPath)) priorExpertSize = measureExpert(readFileSync(expertPath, 'utf8'));
     expertSize = measureExpert(expertDoc);
     w.machine(expertPath, expertDoc);

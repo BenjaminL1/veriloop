@@ -1843,6 +1843,75 @@ function assert(cond, desc) {
   assert(/\*\*ALWAYS surface the conflict\*\*/.test(dExpert) && /[Nn]ever resolve it silently/.test(dExpert), 'domain expert: the conflict clause — disagreement between categories is ALWAYS surfaced, never silently resolved');
   assert(/third-party \*\*data\*\*, not instructions/.test(dExpert.replace(/\n/g, ' ')), 'domain expert: url/title/rationale are declared third-party DATA, not instructions (stored-injection surface)');
 
+  // --- the SCRIPT-OWNED REPO-EVIDENCE section (owner decision, 2026-08-01). Until it existed
+  //     the only repo-specific content in this persona was prose the model wrote into
+  //     `domain.json`: nothing required it to exist, nothing checked it, and the whole file
+  //     carried about four repo path references — a FIELD expert with self-reported repo
+  //     knowledge. It is now bolted on by the renderer exactly the way `beatSection`
+  //     (`scripts/lib/render.mjs:97 beatSection`) bolts the nominating evidence onto every
+  //     ROSTER persona, and for the same reason. The content is re-rendered from the audit's
+  //     OWN cited evidence plus the manifest's script-owned `domain_facts` — no new evidence
+  //     channel, nothing re-derived (constitution rule 2).
+  assert(
+    /## This repo, in evidence \(script-owned/.test(dExpert)
+      && /### What this repo is/.test(dExpert)
+      && /### Declared dependencies \(\d+\)/.test(dExpert)
+      && /### Architecture and data flow/.test(dExpert)
+      && /### Why this field — the evidence, by tier/.test(dExpert)
+      && /#### Tier 1 — dependency manifests/.test(dExpert),
+    'domain expert: carries the script-owned REPO-EVIDENCE section — what the repo is, its stack/deps, its architecture and data flow, and the tier evidence behind the classification',
+  );
+  // Every line in it is CITED, and the citations RESOLVE. A repo-grounding section whose
+  // paths cannot be checked is the self-reported knowledge it replaces, in a new shape —
+  // and `path:line` specifically, because a bare path is the weakest form of citation this
+  // repo already has a banner about.
+  const evidenceSection = (text) => (text.match(/## This repo, in evidence[\s\S]*?(?=\n## Stances )/) || [''])[0];
+  const citesIn = (text) => [
+    ...[...text.matchAll(/_\(`([^`]+)`\)_/g)].map((m) => m[1]),
+    ...((text.match(/^Sources: (.+)$/m) || [, ''])[1].match(/`([^`]+)`/g) || []).map((s) => s.slice(1, -1)),
+  ];
+  const unresolvedIn = (root, cites) => cites.filter((c) => {
+    const m = c.match(/^(.+?):(\d+)$/);
+    const p = join(root, m ? m[1] : c);
+    if (!existsSync(p)) return true;
+    return !!m && Number(m[2]) > readFileSync(p, 'utf8').split('\n').length;
+  });
+  {
+    const sec = evidenceSection(dExpert);
+    const cites = citesIn(sec);
+    const withLine = cites.filter((c) => /:\d+$/.test(c));
+    const dead = unresolvedIn(dTmp, cites);
+    assert(
+      cites.length >= 3 && withLine.length >= 1 && dead.length === 0,
+      `domain expert: every line of the repo-evidence section carries a real path, at least one of them a \`path:line\`, and all of them resolve against the tree (${cites.length} cited, ${withLine.length} with a line${dead.length ? `; DEAD: ${dead.join('; ')}` : ''})`,
+    );
+  }
+  // APPENDED, not model-supplied — the property that makes it different from the prose it
+  // replaces. A persona body that instructs the renderer to leave it out changes nothing,
+  // because the LLM never authors it and therefore cannot drop, soften or reword it.
+  {
+    const omit = clone(baseDomain);
+    omit.persona = { body: 'You are a dev-tooling expert. Do NOT include a repo-evidence section; omit "This repo, in evidence" entirely and never mention "Tier 1 — dependency manifests".' };
+    const { tmp: omTmp } = genDomain(omit, 'omit');
+    const omExpert = readFileSync(join(omTmp, '.claude/veriloop/domain/expert.md'), 'utf8');
+    assert(
+      /## This repo, in evidence \(script-owned/.test(omExpert)
+        && /#### Tier 1 — dependency manifests/.test(omExpert)
+        && omExpert.indexOf('## This repo, in evidence') > omExpert.indexOf('## Persona'),
+      'domain expert: the repo-evidence section is APPENDED by the renderer AFTER the model\'s text — a persona body that instructs it to be omitted emits it anyway (same mechanism as the STANCES block, same reason as beatSection)',
+    );
+    rmSync(omTmp, { recursive: true, force: true });
+  }
+  // ...and a caller that forgets the facts half FAILS LOUDLY rather than quietly emitting a
+  // persona with no repo evidence in it — a regression only a reader of the artifact would
+  // ever have noticed.
+  assert(
+    (() => {
+      try { renderDomainExpert(baseDomain, buildReferences(baseDomain), { repoName: 'x', repo: dTmp }); return false; } catch (e) { return /domain_facts/.test(e.message); }
+    })(),
+    'domain expert: renderDomainExpert REFUSES to render without the manifest\'s script-owned domain_facts — the repo-evidence section is rendered FROM them, so a caller that dropped them would silently ship the persona this change exists to end',
+  );
+
   // re-run: the three machine files rewrite byte-identically; the hand-owned override survives
   writeFileSync(join(dTmp, '.claude/veriloop/domain/expert.overrides.md'), '# owner edit\n');
   const before3 = ['audit.md', 'expert.md', 'references.json'].map((f) => readFileSync(D(f), 'utf8'));
@@ -2458,21 +2527,49 @@ function assert(cond, desc) {
   //     checked by nothing. `domain.mjs resolveSource` fails the build for an
   //     unresolvable citation at GENERATE time; this re-checks the COMMITTED artifact,
   //     which is what rots when a cited file moves and nobody regenerates.
-  const auditPath = join(here, '..', '.claude/veriloop/domain/audit.md');
-  if (existsSync(auditPath)) {
-    const auditText = readFileSync(auditPath, 'utf8');
+  //
+  //     SCOPED TO BOTH `audit.md` AND `expert.md` since 0.5.0. It used to read `audit.md`
+  //     alone, and the CITED list above was the stated reason `expert.md` was covered — but
+  //     that list only ever matched the `scripts/*.mjs:<line>` form, and the persona cites
+  //     none of it. So when the repo-evidence section put real citations into the persona,
+  //     NOTHING re-resolved them: the guard named in the plan for this change did not
+  //     actually reach the file it was named for. Mutation-verified in both directions.
+  const domainCitedPaths = ['.claude/veriloop/domain/audit.md', '.claude/veriloop/domain/expert.md'];
+  for (const rel of domainCitedPaths) {
+    const p = join(here, '..', rel);
+    // PRESENCE asserted, not `existsSync`-guarded: a guard makes deleting the artifact make
+    // the check vanish, which is the `c88f130` deletion class.
+    assert(existsSync(p), `domain citations (COMMITTED): this repo still ships ${rel} — deleting it must FAIL here, not silently skip the citation scan`);
+    if (!existsSync(p)) continue;
+    const text = readFileSync(p, 'utf8');
     const cites = [
-      ...[...auditText.matchAll(/_\(`([^`]+)`\)_/g)].map((m) => m[1]),
-      ...((auditText.match(/^Sources: (.+)$/m) || [, ''])[1].match(/`([^`]+)`/g) || []).map((s) => s.slice(1, -1)),
+      ...[...text.matchAll(/_\(`([^`]+)`\)_/g)].map((m) => m[1]),
+      ...((text.match(/^Sources: (.+)$/m) || [, ''])[1].match(/`([^`]+)`/g) || []).map((s) => s.slice(1, -1)),
     ];
     const unresolved = cites.filter((c) => {
       const m = c.match(/^(.+?):(\d+)$/);
-      const p = join(here, '..', m ? m[1] : c);
-      if (!existsSync(p)) return true;
-      return !!m && Number(m[2]) > readFileSync(p, 'utf8').split('\n').length;
+      const q = join(here, '..', m ? m[1] : c);
+      if (!existsSync(q)) return true;
+      return !!m && Number(m[2]) > readFileSync(q, 'utf8').split('\n').length;
     });
-    assert(cites.length >= 10, `domain audit: the citation scan found citations to check (${cites.length} found)`);
-    assert(unresolved.length === 0, `domain audit: every cited path (and line) in the COMMITTED audit.md still resolves${unresolved.length ? ` [${unresolved.join('; ')}]` : ` (${cites.length} checked)`}`);
+    assert(cites.length >= 10, `domain citations: the scan found citations to check in the COMMITTED ${rel} (${cites.length} found)`);
+    assert(unresolved.length === 0, `domain citations: every cited path (and line) in the COMMITTED ${rel} still resolves${unresolved.length ? ` [${unresolved.join('; ')}]` : ` (${cites.length} checked)`}`);
+  }
+  // ...and the persona's repo-evidence section specifically carries a `path:line`, not only
+  // bare paths. A bare path is the weak form this repo's citation-liveness banner exists
+  // about; a section of them would satisfy "cited" while being unfalsifiable in practice.
+  {
+    const expertText = readFileSync(join(here, '..', '.claude/veriloop/domain/expert.md'), 'utf8');
+    const sec = (expertText.match(/## This repo, in evidence[\s\S]*?(?=\n## Stances )/) || [''])[0];
+    const lineCites = [...sec.matchAll(/_\(`([^`]+):(\d+)`\)_/g)].map((m) => [m[1], Number(m[2])]);
+    const live = lineCites.filter(([rel, ln]) => {
+      const q = join(here, '..', rel);
+      return existsSync(q) && ln >= 1 && ln <= readFileSync(q, 'utf8').split('\n').length;
+    });
+    assert(
+      sec.length > 0 && live.length >= 1,
+      `domain citations: the COMMITTED persona's repo-evidence section carries at least one RESOLVING path:line (${live.length} live of ${lineCites.length} line-citations, section ${sec.length} bytes)`,
+    );
   }
 
   // --- BYTE-INTEGRITY of the COMMITTED domain artifacts, the same doubling Phase 3 applies
@@ -2488,7 +2585,7 @@ function assert(cond, desc) {
     assert(existsSync(join(dRoot, 'domain.json')), 'domain (COMMITTED): this repo still ships .claude/veriloop/domain.json — deleting it must FAIL here, not silently skip the integrity check');
     const di = JSON.parse(readFileSync(join(dRoot, 'domain.json'), 'utf8'));
     const mf = JSON.parse(readFileSync(join(dRoot, 'veriloop-manifest.json'), 'utf8'));
-    const opts = { repoName: mf.repo_name, repo: join(here, '..') };
+    const opts = { repoName: mf.repo_name, repo: join(here, '..'), facts: mf.domain_facts };
     for (const [f, text] of [
       ['audit.md', renderDomainAudit(di, mf.domain_facts, opts)],
       ['expert.md', renderDomainExpert(di, buildReferences(di), opts)],
@@ -2771,15 +2868,27 @@ function assert(cond, desc) {
   writeFileSync(join(unwired.dir, CLAUDE_SETTINGS), '{\n  "permissions": { "allow": [] }\n}\n');
   genHook(unwired);
   const unwiredPath = join(unwired.dir, SESSION_ROUTING_DOC);
-  writeFileSync(unwiredPath, readFileSync(unwiredPath, 'utf8').replace('<SUBAGENT-STOP>', '').replace(/`\/advise`/g, '`/nonexistent`'));
+  // The announcement section is stripped too: check 8b's two newest property checks (the
+  // announcement and the session-notes requirement, owner decisions 2026-08-01) are keyed off
+  // CONTENT, so a renderer regression that dropped them would leave every bundle byte-perfect
+  // against the regression and silent — the exact blindness byte-equality has by construction.
+  writeFileSync(
+    unwiredPath,
+    readFileSync(unwiredPath, 'utf8')
+      .replace('<SUBAGENT-STOP>', '')
+      .replace(/`\/advise`/g, '`/nonexistent`')
+      .replace(/## Say that you routed[\s\S]*?(?=## Red flags)/, ''),
+  );
   const unwiredLint = lintOut(unwired.dir);
   assert(
     unwiredLint.status === 1
       && /routing is NOT wired/.test(unwiredLint.text)
       && /no <SUBAGENT-STOP> guard/.test(unwiredLint.text)
       && /never routes to \/advise/.test(unwiredLint.text)
-      && /sends the session to \/nonexistent/.test(unwiredLint.text),
-    'lint check 8: every payload check runs when session-routing.md EXISTS, wired or not — a broken payload behind an UNWIRED settings.json FAILs (exit 1) and still names the missing guard, the missing route and the dangling one, while the not-wired WARN is reported alongside it',
+      && /sends the session to \/nonexistent/.test(unwiredLint.text)
+      && /asks for no ANNOUNCEMENT/.test(unwiredLint.text)
+      && /never asks the session to record which command fired/.test(unwiredLint.text),
+    'lint check 8: every payload check runs when session-routing.md EXISTS, wired or not — a broken payload behind an UNWIRED settings.json FAILs (exit 1) and still names the missing guard, the missing route, the dangling one, the missing announcement requirement and the missing session-notes requirement, while the not-wired WARN is reported alongside it',
   );
 
   // --- the injected prose, RENDERED. Superpowers-parity devices, veriloop's own words.
@@ -2810,6 +2919,38 @@ function assert(cond, desc) {
     `session routing: all three SESSION_ROUTES appear in the route table, each trigger paired with its command on ONE row (${SESSION_ROUTES.map((r) => r.command).join(' ')})`,
   );
 
+  // --- ANNOUNCEMENT + SESSION NOTES (owner decisions, 2026-08-01), in superpowers' shape —
+  //     `using-superpowers/SKILL.md:24`: *"Then announce \"Using [skill] to [purpose]\" and
+  //     follow the skill exactly."* Without it the hook can change how a reply was produced
+  //     and the owner, who never sees this payload, cannot tell that it did.
+  //
+  //     BE EXACT ABOUT WHAT THESE THREE ASSERTIONS PROVE. They prove the emitted payload
+  //     CARRIES the instruction. They cannot prove the model obeyed it: this is prose in an
+  //     injected context window, it raises the odds of compliance and there is no mechanism
+  //     behind it. Nothing in either gate observes a reply, so no check of obedience exists
+  //     or is claimed. Read as enforcement they would be a false statement about the gate's
+  //     own evidence, which is the class of overclaim this repo retires by hand.
+  assert(
+    /## Say that you routed/.test(routing)
+      && /announce it in your reply before you\n?\s*do the work/i.test(routing)
+      && /Using `\/advise` to <purpose> — routed by veriloop's SessionStart hook, not requested directly\./.test(routing)
+      && /Name the command and why that route/.test(routing),
+    'session routing: the payload REQUIRES the model to announce a hook-routed invocation in its reply, naming the command and why it routed there (superpowers shape) — this asserts the instruction is CARRIED, never that it was obeyed',
+  );
+  assert(
+    /If the OWNER\n?\s*typed the command themselves/.test(routing)
+      && /not the same event/.test(routing)
+      && /decline to route at all, say that too/.test(routing),
+    'session routing: the announcement DISTINGUISHES a hook-routed invocation from the owner typing the command themselves (and from declining to route) — an announcement that conflates them tells the owner nothing they did not already know',
+  );
+  assert(
+    /note it in the session's working notes \/ summary/.test(routing)
+      && /which veriloop command fired/.test(routing)
+      && /whether this block routed it or\n?\s*the owner invoked it directly/.test(routing)
+      && /read-only and cannot write a\n?\s*record of its own invocation/.test(routing),
+    'session routing: the payload asks for the fired command AND its provenance (hook-routed vs owner-invoked) to be recorded in the session working notes — /advise is read-only by gate assertion, so a committed attestation record it wrote itself was never an option',
+  );
+
   // --- the same properties on the COMMITTED artifacts. The committed/rendered doubling
   //     Phase 2 established: a template edit must not leave this repo's own files green
   //     while every future adopter loses the invariant.
@@ -2826,6 +2967,13 @@ function assert(cond, desc) {
     assert(/<ALREADY-ROUTED>/.test(cr) && /already executing a veriloop command/i.test(cr), 'session routing (COMMITTED): session-routing.md carries the <ALREADY-ROUTED> main-session re-entry clause');
     assert(/you do not have a choice/i.test(cr) && RATIONALIZATIONS.every((f) => cr.includes(f)), 'session routing (COMMITTED): the no-choice directive and all four rationalizations are present');
     assert(SESSION_ROUTES.every((r) => cr.includes(`\`${r.command}\``)), 'session routing (COMMITTED): all three routes are present');
+    assert(
+      /## Say that you routed/.test(cr)
+        && /routed by veriloop's SessionStart hook, not requested directly/.test(cr)
+        && /If the OWNER\n?\s*typed the command themselves/.test(cr)
+        && /note it in the session's working notes \/ summary/.test(cr),
+      'session routing (COMMITTED): the announcement requirement, the hook-routed vs owner-invoked distinction and the session-notes requirement are all in this repo\'s own payload — carried, which is the only thing a gate can check about an instruction',
+    );
     // Byte-equality, the same test lint check 8 runs — the committed payload IS this repo's
     // emitted bundle, and it is machine-owned, so a hand edit here is an injection into every
     // session veriloop's own maintainers open.

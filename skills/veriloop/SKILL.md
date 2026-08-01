@@ -257,7 +257,11 @@ rule 2). That is why this phase runs after Phase 6/7 and before Phase 8.
    that does not exist, or a line past EOF, fails the build. Cite the narrowest real thing:
    a bare directory is accepted but is practically unfalsifiable, and a Tier 1 / Tier 3
    claim should cite `.claude/veriloop/veriloop-manifest.json` (the `domain_facts` block)
-   rather than re-derive what the block already says.
+   rather than re-derive what the block already says. This evidence, the architecture
+   summary and the `domain_facts` block are ALSO rendered into `domain/expert.md`'s
+   script-owned repo-evidence section — the persona four `/advise` stance seats adopt
+   verbatim — so a weak citation here is a weak citation in every consult, not only in
+   the audit.
 2. **On low classification confidence, HALT and ask the owner** with `AskUserQuestion`
    rather than guessing. A `confidence: "low"` classification without
    `owner_confirmed: true` **fails the build** — never bake a guessed field into a bundle.
@@ -297,7 +301,9 @@ Schema (`domain.json`):
   "vocabulary": [ { "term": string, "meaning": string, "source": string } ],
   "concepts":   [ { "name": string, "detail": string, "source": string } ],
   "architecture": { "summary": string, "data_flow": string[], "sources": string[] },
-  "persona": { "body": string },          // stances + citation protocol are script-owned
+  "persona": { "body": string },          // stances, citation protocol AND the repo-evidence
+                                          // section are script-owned — appended after this
+                                          // body, so a body cannot omit or reword them
   "references": {
     // attempted_at: the instant you ACTUALLY attempted the fetches. Format-checked
     // against ISO-8601; a placeholder fails the build. REQUIRED once any entry exists

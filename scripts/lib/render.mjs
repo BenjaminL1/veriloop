@@ -745,6 +745,40 @@ const SESSION_RED_FLAGS = [
   ['"I need more context first"', 'Getting context is what the route is for. Ask the owner inside the command, not instead of it.'],
 ];
 
+// The ANNOUNCEMENT + SESSION-NOTES clauses (owner decisions, 2026-08-01), modelled on
+// superpowers' `using-superpowers/SKILL.md:24` — *"Then announce \"Using [skill] to
+// [purpose]\" and follow the skill exactly."* Without an announcement the hook can change
+// how a reply was produced and the owner, who never sees this payload, cannot tell that it
+// did — nor tell a hook-routed invocation from one they typed themselves.
+//
+// BE EXACT ABOUT WHAT THIS IS. These are PROSE INSTRUCTIONS in an injected payload. They
+// raise the odds the model announces and notes the route; they do not compel it, and there
+// is no mechanism here that could. The gate can assert — and does, in `selftest.mjs` against
+// both the rendered and the committed payload, and in `lint-bundle.mjs` check 8b against
+// every adopter's bundle — that the payload CARRIES these instructions. It cannot assert
+// that the model obeyed them. Nothing downstream observes a reply, so no check exists or is
+// claimed to. This is not enforcement.
+//
+// The session-notes clause is deliberately the ONLY record-keeping asked for. `/advise` is
+// read-only by gate assertion (no `Write`, no `Edit`, no unscoped `Bash`), so it cannot
+// write a history record of its own invocation, and giving it write access to do so would
+// trade a real covenant for a bookkeeping entry.
+const SESSION_ANNOUNCE = (routes) =>
+  `## Say that you routed, and say who routed you\n\n` +
+  `When this block is why you enter a veriloop command, **announce it in your reply before you\n` +
+  `do the work** — one plain sentence, in the shape superpowers uses:\n\n` +
+  `> Using \`${routes[0].command}\` to <purpose> — routed by veriloop's SessionStart hook, not requested directly.\n\n` +
+  `Name the command and why that route (which row of the table above you matched). If the OWNER\n` +
+  `typed the command themselves, say that instead — *"running \`${routes[0].command}\` as you asked"* — because\n` +
+  `the two are not the same event and only one of them was the owner's decision. If you consider\n` +
+  `this block and route ANYWAY for your own reasons, or decline to route at all, say that too.\n` +
+  `The owner never sees this payload. An unannounced route is a reply shaped by an instruction\n` +
+  `they did not write and cannot audit.\n\n` +
+  `Then note it in the session's working notes / summary — the running record of what this\n` +
+  `session did — recording **which veriloop command fired** and **whether this block routed it or\n` +
+  `the owner invoked it directly**. One line is enough. \`/advise\` is read-only and cannot write a\n` +
+  `record of its own invocation, so the session notes are the only place this is kept.\n\n`;
+
 export function renderSessionRouting() {
   const routes = SESSION_ROUTES.map((r) => `| ${r.trigger} | \`${r.command}\` |`).join('\n');
   const flags = SESSION_RED_FLAGS.map(([thought, move]) => `| ${thought} | ${move} |`).join('\n');
@@ -768,6 +802,7 @@ export function renderSessionRouting() {
     `</EXTREMELY-IMPORTANT>\n\n` +
     `## Where to route\n\n` +
     `| When the owner's message is | Route to |\n|---|---|\n${routes}\n\n` +
+    SESSION_ANNOUNCE(SESSION_ROUTES) +
     `## Red flags — thoughts that mean you are about to skip the route\n\n` +
     `| If you catch yourself thinking | The correct move |\n|---|---|\n${flags}\n\n` +
     `## Turning this off\n\n` +
@@ -775,7 +810,8 @@ export function renderSessionRouting() {
     `routes at once — there is no partial disable — and the commands remain invocable by hand.\n` +
     `Deleting THIS file is not a disable: it is **machine-owned** and rewritten on the next\n` +
     `\`/veriloop\` run, so routing would silently resume. Hand edits here are overwritten for the\n` +
-    `same reason — change \`SESSION_ROUTES\` / \`SESSION_RED_FLAGS\` in the generator instead.\n`
+    `same reason — change \`SESSION_ROUTES\` / \`SESSION_RED_FLAGS\` / \`SESSION_ANNOUNCE\` in the\n` +
+    `generator instead.\n`
   );
 }
 

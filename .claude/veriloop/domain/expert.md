@@ -25,6 +25,62 @@ Primary: **AI developer tooling — agentic code review and gating** (confidence
 Secondary: **software supply-chain and artifact trust**, **static analysis and CI gating**.
 The evidence behind this classification is in `.claude/veriloop/domain/audit.md`.
 
+## This repo, in evidence (script-owned — regenerated on every run)
+
+You are THIS repo's expert, not the field's in general. Everything below is rendered by
+the generator from the audit's own CITED evidence and from the script-owned `domain_facts`
+block in `.claude/veriloop/veriloop-manifest.json`. It is appended AFTER the persona text
+above, so no persona body can drop, soften or reword it. Lead with these facts, cite them
+the way they are written here, and if one no longer resolves say so — a stale fact is a
+finding, not a detail. The full audit is `.claude/veriloop/domain/audit.md`.
+
+### What this repo is
+
+`veriloop` — primary field **AI developer tooling — agentic code review and gating** (confidence high).
+Stack: **node** · package manager: **npm**.
+
+File census (4 of 4 top-level directories; hidden and vendor directories excluded, walk depth <= 4): `docs/` 13 · `fixtures/` 12 · `scripts/` 14 · `skills/` 1
+
+### Declared dependencies (0)
+
+- _no dependency was parsed from `package.json`, `pyproject.toml` or `Cargo.toml`. That is the absence of a PARSED declaration, not evidence the repo declares none — no other manifest format is read._
+
+### Architecture and data flow
+
+A four-stage deterministic pipeline with LLM judgment interleaved between stages. Detection parses the target repo's declared command surface; verification runs the safe subset for real and records exit codes; generation slot-fills a portable workflow template plus the personas, commands and manifest; linting re-reads the emitted bundle and runs none of it, with one narrow exception taken only when a bundle has committed artifacts that need it (the workflow's marker-bounded secret-pattern region). Nothing downstream may re-derive a fact an upstream stage already established, and nothing may claim a check ran that did not.
+
+1. detect.mjs parses package.json / Makefile / pyproject.toml / CI run blocks into commands.json, each command carrying a source citation and a safety tier
+2. verify.mjs executes only the safe tier, writing verified / verify_exit / verify_skipped back into the same file
+3. generate.mjs reads commands.json plus the hand-owned interview.json and domain.json, and emits the bundle through one writer that records ownership per file
+4. lint-bundle.mjs re-reads the emitted bundle scoped to the manifest's emitted_files and fails on portability, placeholder, frontmatter, gate-parity and missing-artifact defects
+5. the emitted workflow then runs the same commands at review time and reports from their exit codes
+
+Sources: `scripts/detect.mjs` · `scripts/verify.mjs` · `scripts/generate.mjs` · `scripts/lint-bundle.mjs` · `skills/veriloop/SKILL.md`
+
+### Why this field — the evidence, by tier
+
+#### Tier 1 — dependency manifests
+
+- `AI developer tooling — agentic code review and gating` **+4** — the script-owned domain_facts.deps block is EMPTY — the collector parsed no dependency from any manifest it reads, so the tree carries no runtime, framework or test-runner signature (that is the absence of a parsed declaration, not evidence the repo declares none). A tree with no framework signature fits a self-contained CLI compiler and fits no framework-bearing application field _(`.claude/veriloop/veriloop-manifest.json`)_
+- `AI developer tooling — agentic code review and gating` **+2** — domain_facts.package_manager is npm and the manifest's commands_summary records the ENTIRE declared command surface as a bundle linter plus a self-test — the only build steps this project declares check its own output, which is a tool's shape rather than an application's _(`.claude/veriloop/veriloop-manifest.json`)_
+
+#### Tier 2 — framework-mandated topology
+
+- `AI developer tooling — agentic code review and gating` **+3** — the repo carries the Claude Code plugin/marketplace contract and a skill manifest, so its topology is mandated by an agent harness rather than chosen _(`.claude-plugin/marketplace.json:12`)_
+- `software supply-chain and artifact trust` **+2** — a published threat model with safety tiers, declared network paths and a reporting path is a supply-chain artifact, not application documentation _(`SECURITY.md:47`)_
+
+#### Tier 3 — file census
+
+- `AI developer tooling — agentic code review and gating` **+2** — the census records exactly four top-level directories — docs/, fixtures/, scripts/, skills/ — with scripts/ the sole source directory at .mjs:13 plus a single .js (the workflow template the generator emits), and no framework, app or package directory anywhere _(`.claude/veriloop/veriloop-manifest.json`)_
+- `static analysis and CI gating` **+2** — the census records fixtures/ as .toml:6, .json:3, .yaml:2 and .rs:1 with no application sources at all — manifests and CI files, i.e. synthetic INPUTS to a parser rather than test data for a product _(`.claude/veriloop/veriloop-manifest.json`)_
+
+#### Tier 4 — prose
+
+- `AI developer tooling — agentic code review and gating` **+1** — the skill states the mental model outright: veriloop is a compiler and the dev-loop it emits is the compiled output _(`skills/veriloop/SKILL.md:38`)_
+
+Tiers are ranked lexicographically on the tier vector, so a lower tier never overrides a
+higher one; scores accumulate within a tier.
+
 ## Stances (script-owned — regenerated on every run)
 
 A consult assigns each seat ONE stance. Every seat reads this file; the stance decides

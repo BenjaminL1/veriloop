@@ -212,8 +212,11 @@ Emitted artifacts are **portable** — they resolve the repo root at run time vi
 absolute path is ever baked in.
 
 **On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
-session to **bias** routing toward `/advise`, `/dev-plan` and `/dev-loop`. It is prose in a
-context window: it raises the odds the model routes, it cannot compel it, and all three
+session to **bias** routing toward `/advise`, `/dev-plan` and `/dev-loop`, and to ask the
+model to say plainly when this block — rather than you — is why it entered a veriloop
+command. It is prose in a
+context window: it raises the odds the model routes and announces, it cannot compel either,
+and all three
 commands stay invocable by hand either way. Two things worth knowing before you keep it.
 **It does not arbitrate with anyone else's hook** — if you also run a skill pack that
 injects its own `SessionStart` block (superpowers does), you get both at full strength and
@@ -352,13 +355,20 @@ entry's verification status is recomputed by a script — the status the entry *
 discarded, and only a four-host allowlist plus a 200 can yield `VERIFIED`. That recomputation
 is narrower than it sounds and the docs say so: the HTTP result and the `attempted_at` stamp
 are reported by the verification subagent, nothing in `scripts/` fetches, so no deterministic
-component re-checks them. **Advisory only:** it is not
+component re-checks them. **The persona is a REPO expert, not a field expert, and that is
+mechanical rather than promised:** the renderer appends a **script-owned repo-evidence
+section** after whatever persona text the model authored — what the repo is, its stack and
+declared dependencies with citations, its architecture and data flow, and the tier evidence
+behind the classification — re-rendered from the audit's own already-cited evidence plus the
+generator's `domain_facts` block. The model never authors it, so it cannot drop, soften or
+reword it, and every citation in it is resolved against the tree at generate time and
+re-resolved at gate time. **Advisory only:** it is not
 a reviewing lens, not in the roster, and has no gate authority. Setup now reaches the
 network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 423 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 436 and `CHANGELOG.md` names every
 removal individually. The one cap the owner later wanted back came back as a **prompt**: a
 re-render of `domain/expert.md` more than 20% longer than the size recorded in
 `veriloop-manifest.json` makes `generate` ask you to re-read the file. It has no ceiling and
@@ -382,7 +392,11 @@ too:** a `SessionStart` hook that **biases** the session toward `/advise`, `/dev
 `/dev-loop` — three plain files, a `<SUBAGENT-STOP>` guard so no council seat or review lens
 inherits the routing, and preserve-or-write on `.claude/settings.json` (an existing one is
 never merged; a complete hook-only settings.json is printed for you to merge the
-`SessionStart` entry out of). It cannot compel invocation, nothing
+`SessionStart` entry out of). The payload also **asks** the session to announce a hook-routed
+invocation in its reply — naming the command, and distinguishing it from you typing that
+command yourself — and to note the fired command and its provenance in the session's working
+notes; the gate asserts the payload carries those instructions, and nothing asserts the model
+obeyed them, because nothing observes a reply. It cannot compel invocation, nothing
 arbitrates it against another pack's `SessionStart` block, and deleting the entry disables
 all three routes at once. Locked decision #3 was rewritten rather than deleted (T5), and the
 unmeasured five-minute quickstart claim was retired for the measured 14s spine plus an
