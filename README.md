@@ -7,7 +7,8 @@ Point veriloop at a repository and it generates a bespoke engineering setup for
 
 1. **AI "expert" personas** — a baseline reviewer plus specialists nominated by the
    repo's actual danger surfaces (security, drift/parity, UX, …); they review in the
-   gate, advise/brainstorm via `/advise`, and form an expert council in `/dev-plan`.
+   gate, form an expert council in `/dev-plan`, and run the lenses in `/review`.
+   (Brainstorming in `/advise` is the **domain expert's** job as of v0.5.0, not theirs.)
 2. **A constitution** — the repo's invariants, each one code-cited.
 3. **A per-feature dev-loop workflow** whose gate passes/fails on **REAL command
    exit codes** (your `typecheck` / `lint` / `test`), never the AI's self-assessment.
@@ -177,7 +178,7 @@ blaming your change.
 .claude/workflows/<repo>-dev-loop.js          the dev-loop workflow (exit-code gate)
 .claude/commands/dev-plan.md                  the /dev-plan command (spec interview + council)
 .claude/commands/dev-loop.md                  the /dev-loop slash command
-.claude/commands/advise.md                    the /advise command (experts in ADVISE mode)
+.claude/commands/advise.md                    the /advise command (domain expert, N stances)
 .claude/commands/review.md                    the /review command (lens review, no loop)
 .claude/commands/posture.md                   the /posture command (set the repo's default budget posture)
 .claude/veriloop/commands.json                detected + verified command surface
@@ -308,7 +309,7 @@ Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
 
-**v0.5.0 — the domain subsystem (Phase 1 of three).** A new advisory path,
+**v0.5.0 — the domain subsystem (Phases 1–2 of three).** A new advisory path,
 `.claude/veriloop/domain/`, ships an audit that classifies the repo's field on tiered,
 cited evidence; a domain-expert persona; and a three-category reference library whose every
 entry's verification status is recomputed by a script — the status the entry *claims* is
@@ -321,10 +322,24 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 324 and `CHANGELOG.md` names every
-removal individually. **Phases 2
-(`/advise` redesign) and 3 (a `SessionStart` hook) are NOT shipped** — `/advise` is
-unchanged in this release.
+`lint-bundle` WARN checks removed; the gate went 253 → 346 and `CHANGELOG.md` names every
+removal individually. **Phase 2 also ships:** `/advise` now consults that domain expert as
+its **sole lens**, seated four times under different stances (`RESEARCH`, `PRACTICE`,
+`FIELD`, `SKEPTIC`) plus the dedicated PREMISE reviewer — and every
+seat's prompt names `domain/expert.md` **and** `domain/expert.overrides.md`, the owner's only
+lever on that persona. **The stance seats need that persona installed.** With no
+`.claude/veriloop/domain/expert.md` — the state of every bundle generated before this release,
+because a missing `domain.json` makes the domain writer a no-op — `/advise` has **zero lens
+seats** and degrades to the PREMISE reviewer alone. The command says so, `lint-bundle` WARNs
+(exit 0), and the emitted description names both paths. `code-review`, `security` and `drift` no longer advise and are
+review-only, so their persona header now names `/dev-plan`'s council as the ADVISE-mode
+loader instead of `/advise` — a **deviation from a ratified Non-goal**, made by the
+implementing orchestrator rather than the owner and recorded for confirm-or-revert in
+`.claude/veriloop/specs/domain-expert-persona.md`. `/advise` also stopped loading the constitution — **that surface
+only**; `/dev-plan`, `/review` and the gate all still read it, and assertions pin both the
+committed files and the templates they are rendered from. (`/posture` never loaded it — its
+only mention is a write prohibition, and it is guarded as exactly that.) **Phase 3 (a
+`SessionStart` hook) is NOT shipped.**
 
 **v0.4.0 — launch machinery (partial).** veriloop's own gate is now enforced rather than
 remembered: `.github/workflows/ci.yml` runs `npm run lint` + `npm run test` on push and PR
@@ -388,10 +403,12 @@ guarantees worth stating up front:
   never drop a check, a lens, or the baseline probe — the cost dial is not allowed to
   weaken the ground truth. `/posture <level>` changes the repo's **default** posture
   (a per-run override is still `args.posture` on `/dev-loop`).
-- **The experts advise as well as review.** The same personas that gate a change also power
-  `/advise` (brainstorm/sanity-check/pressure-test an idea before building, in ADVISE mode)
-  and `/review` (the lenses on a diff without the full loop). Both are read-only and carry
-  **no verdict authority** — advice and findings never stand in for the dev-loop gate.
+- **Two read-only surfaces beside the gate.** The personas that gate a change also power
+  `/review` (the same lenses on a diff, without the full loop). `/advise`
+  (brainstorm/sanity-check/pressure-test an idea before building, in ADVISE mode) runs the
+  **domain expert** instead — one persona seated once per stance, plus a PREMISE reviewer.
+  Both surfaces are read-only and carry **no verdict authority** — advice and findings never
+  stand in for the dev-loop gate.
 
 ## License
 

@@ -1,5 +1,34 @@
 # Spec: sharpen the `/advise` premise-council (pre-mortem + dialectic + steelman)
 
+> **SUPERSEDED IN PART — 2026-07-31 (v0.5.0, Phase 2 of
+> `.claude/veriloop/specs/domain-expert-persona.md`, retirement T9).** Two things in this
+> spec are retired by owner decision, and one thing is explicitly NOT:
+>
+> - **RETIRED — the edit discipline** at *"What ships"*: *"INSERTING (never wholesale-replacing
+>   the block that holds the contract strings)"*. `renderAdviseCommand` was rewritten wholesale
+>   in v0.5.0 to seat the domain expert under N stances.
+> - **RETIRED — the PRESERVE-verbatim list** under *"Non-goals"*. It was a rule about how to
+>   edit, and there is no longer an edit shape to constrain.
+> - **NOT RETIRED — the assertions.** Retiring the discipline did not retire the guards, and
+>   the strings they pin still had to survive the rewrite. Every literal named in that list —
+>   `overrule the owner's framing AND your recommendation`, `PREMISE reviewer`,
+>   `parallel, read-only subagents`, `Convene the premise-council — ALWAYS`,
+>   `Anti-sycophancy mandate` — plus `Pre-mortem (REQUIRED)`, `Argue the other side`, the
+>   steelman framing, the step-4 push-back and the better-route rule are present in the
+>   rewritten command and still pass unchanged. **Exactly one assertion was deliberately
+>   re-pointed:** the self-host council guard (`selftest.mjs`, acceptance criterion 2 of the
+>   domain-expert spec) matched `Spawn each roster expert (…)` against `code-review` /
+>   `security` / `drift`; it now matches `Spawn each stance seat (…)` against the stance names
+>   imported from `domain.mjs`. The guarded property — *the committed `advise.md` names the
+>   seats it will actually spawn* — is unchanged, and its comment still records the incident it
+>   was written for (the execution-reviewer gap, 2026-07-24).
+> - **STALE — the `node -e` re-render recipe** under *"Non-goals"*. It omits `gate`, and
+>   `renderAdviseCommand` derives the `Bash(<gate cmd>:*)` entries of `allowed-tools` from it —
+>   rendering without `gate` drops them and fails the self-host `allowed-tools` assertion. It
+>   also still passes `roster`, which the function no longer reads. The current form passes
+>   `{ repoName, gate }`, with `gate` read from `veriloop-manifest.json` → `gate_commands`
+>   (never hardcoded — constitution rule 9).
+
 **Feature (one line):** Add the genuinely-new red-team moves to the `/advise` premise-council —
 a mandatory, surfaced **pre-mortem** and an **argue-the-other-side** lens, a **steelman-first**
 framing that does NOT collide with the anti-sycophancy rule, and a light **step-4 dialogue
@@ -19,12 +48,12 @@ read-only, grounded) then **overturned most of it** — and building it as asked
 sycophancy the owner is trying to eliminate. What the council found, plainly:
 
 1. **Three of the five "Fool modes" already exist** in `renderAdviseCommand` step 5
-   (`render.mjs:251-255`): exposing the unexamined assumption (Socratic), "what would FALSIFY it"
+   (`render.mjs:391-395` as of v0.5.0; `:251-255` when this spec was written): exposing the unexamined assumption (Socratic), "what would FALSIFY it"
    (falsify), and "attack the FRAME / overrule the owner's framing" (red-team). Re-labeling them as
    "new" is ceremony, not sharpening. Only **pre-mortem** and **argue-the-other-side (dialectic)**
    are genuinely new.
 2. **Steelman-first collides with the anti-sycophancy mandate** two lines below it
-   (`render.mjs:256-258`: "attack rather than concede… a brief that just agrees is a FAILED brief").
+   (`render.mjs:405-407` as of v0.5.0; `:256-258` when written: "attack rather than concede… a brief that just agrees is a FAILED brief").
    A mandatory concession-first is a contradiction that yields theater — UNLESS it is framed as
    "attack the STRONGEST version," which is MORE adversarial, not less. Ship it only in that framing.
 3. **The spec's original "landmine" was empirically FALSE.** A reviewer ran `generate` from the
@@ -42,7 +71,7 @@ sycophancy the owner is trying to eliminate. What the council found, plainly:
 
 ## What ships (the defensible subset — RATIFIED on owner pre-authorization + council correction)
 
-Edit ONLY `renderAdviseCommand` (`render.mjs:214-267`), INSERTING (never wholesale-replacing the
+Edit ONLY `renderAdviseCommand` (`render.mjs:269-429` as of v0.5.0; `:214-267` when written), INSERTING (never wholesale-replacing the
 block that holds the contract strings):
 
 - **Pre-mortem (REQUIRED, surfaced).** The premise reviewer must run a pre-mortem ("assume a year
@@ -63,16 +92,25 @@ block that holds the contract strings):
 
 - Do NOT re-label the 3 existing modes as new prose blocks (ceremony — finding 1).
 - Do NOT add cross-model to `/advise` (finding 4 — deferred to the owner).
-- Do NOT touch `/dev-plan` (`renderDevPlanCommand`, `render.mjs:275-380`), `PERSONA_HEAD`
-  (`render.mjs:29`), `interview.json`, or the personas. Stay inside `renderAdviseCommand`.
-- Do NOT run `generate.mjs`. Re-render `advise.md` SURGICALLY, from the repo root:
+- Do NOT touch `/dev-plan` (`renderDevPlanCommand`, `render.mjs:437-580` as of v0.5.0;
+  `:275-380` when written), `PERSONA_HEAD` (`render.mjs:30` as of v0.5.0; `:29` when
+  written), `interview.json`, or the personas. Stay inside `renderAdviseCommand`.
+- Do NOT run `generate.mjs`. Re-render `advise.md` SURGICALLY, from the repo root.
+  **UPDATED 2026-07-31 (v0.5.0).** The block below IS the current recipe — the pre-Phase-2 form
+  (which passed `roster` and omitted `gate`) is retired; see the supersession note at the top of
+  this file:
   ```
-  node -e "import('./scripts/lib/render.mjs').then(m=>require('fs').writeFileSync('.claude/commands/advise.md', m.renderAdviseCommand({repoName:'veriloop', roster:{experts:[{key:'code-review'},{key:'security'},{key:'drift'}]}})))"
+  node -e "const fs=require('fs');const gate=JSON.parse(fs.readFileSync('.claude/veriloop/veriloop-manifest.json','utf8')).gate_commands;import('./scripts/lib/render.mjs').then(m=>fs.writeFileSync('.claude/commands/advise.md', m.renderAdviseCommand({repoName:'veriloop', gate})))"
   ```
-  (Proven byte-identical to committed modulo the additions. Reason: minimal diff, not roster safety.)
+  `gate` is READ from `veriloop-manifest.json` → `gate_commands`, never hardcoded (constitution
+  rule 9): `renderAdviseCommand` derives the `Bash(<gate cmd>:*)` entries of `allowed-tools` from
+  it, so rendering without it drops them and fails the self-host `allowed-tools` assertion.
+  (Reason for a surgical re-render: minimal diff, not roster safety.)
 - PRESERVE verbatim/contiguous (existing selftest matches them): `overrule the owner's framing AND
-  your recommendation` (`render.mjs:254`, SOLE occurrence → `selftest.mjs:240`), `PREMISE reviewer`,
-  `parallel, read-only subagents` (`render.mjs:246-247` → `selftest.mjs:241`),
+  your recommendation` (`render.mjs:394-395` as of v0.5.0, `:254` when written; SOLE occurrence →
+  `selftest.mjs:418`, `:240` when written), `PREMISE reviewer`,
+  `parallel, read-only subagents` (`render.mjs:368-369` as of v0.5.0, `:246-247` when written →
+  `selftest.mjs:419`, `:241` when written),
   `Convene the premise-council — ALWAYS`, `Anti-sycophancy mandate`.
 
 ## Acceptance criteria (gate = `npm run test`)

@@ -86,7 +86,21 @@ Subprocess use in the scripts is limited to three things:
 
 1. **`/advise` is granted `WebSearch` and `WebFetch`** (`.claude/commands/advise.md`
    frontmatter). This is intentional — it lets the command verify a claim against a primary
-   source instead of guessing. It is read-only and cannot edit files.
+   source instead of guessing. It is read-only and cannot edit files. **As of 0.5.0 this
+   path is wider than it was, in two ways you should know about:**
+   - Before it chooses what to fetch, `/advise` now reads the reference library
+     (`.claude/veriloop/domain/references.json`), whose `url`, `title` and `rationale` are
+     **third-party data**. That is the same untrusted-prose-steers-a-URL-choice chain
+     path 3 documents for SETUP time, now also firing at CONSULT time — and with **no host
+     allowlist**, because `hostAllowed` (`scripts/lib/domain.mjs:485`) is a generate-time
+     check that never runs inside `/advise`. The mitigations that do apply are narrower and
+     stated as such: the command labels those three fields as data and never as
+     instructions, and it holds no `Write`, no `Edit` and no unscoped `Bash`, so a fetched
+     response cannot reach disk or run.
+   - It can **emit** a paste-ready library entry for a source found mid-consult. It cannot
+     write one — staging is by emission, and the owner is the one who pastes it into
+     `domain.json`. That is deliberate (a human is in the loop), but it does mean a consult
+     can propose content that later becomes stored library data.
 2. **The cross-model second opinion sends your diff to another CLI.** When
    `cross_model` is enabled (default) **and** a change is triaged `high` tier, the loop
    invokes the OpenAI Codex CLI as an independent reviewer and passes it the worktree diff
@@ -131,8 +145,10 @@ Subprocess use in the scripts is limited to three things:
    - Each stored source carries a free-text `rationale`. It is capped at 200 characters,
      stripped of newlines, scanned for secret-shaped content, and labelled third-party data
      in the emitted persona — and that is **not** a sanitizer. A hostile string that
-     survives the cap is stored and read by every later consult. Treat the field as
-     untrusted input, because it is.
+     survives the cap is stored and read by every later consult — and as of 0.5.0 that
+     later consult holds `WebSearch` and `WebFetch` with no host allowlist of its own
+     (path 1 above), so the read is one link in a chain rather than the end of it. Treat
+     the field as untrusted input, because it is.
    - Verification is **existence-level, not claim-level**: a `VERIFIED` entry resolved over
      the network; it is not evidence that the source says what the rationale says.
    - The status recomputation is narrower than "the entry's claim is never trusted" sounds.

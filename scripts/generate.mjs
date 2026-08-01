@@ -400,9 +400,11 @@ function main() {
   // machine-owned artifacts
   w.machine(P('.claude/workflows', `${repoName}-dev-loop.js`), workflow);
   w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget }));
-  // the experts' second mandate: /advise (consult in ADVISE mode) and /review
-  // (lens review without the loop). Both are read-only and carry NO gate authority.
-  w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, roster, gate: config.gate }));
+  // /advise seats the DOMAIN EXPERT, never the roster (Phase 2 of the domain-expert
+  // spec) — hence NO `roster` argument here. The experts' second mandate is now
+  // /review (lens review without the loop) and /dev-plan's council in ADVISE mode.
+  // Both are read-only and carry NO gate authority.
+  w.machine(P('.claude/commands/advise.md'), renderAdviseCommand({ repoName, gate: config.gate }));
   w.machine(P('.claude/commands/review.md'), renderReviewCommand({ repoName, roster, gate: config.gate }));
   // /dev-plan — recon + interleaved spec interview + expert council → a spec the
   // owner ratifies as BINDING before /dev-loop builds it. The plan-phase model is

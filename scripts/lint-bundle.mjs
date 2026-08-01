@@ -338,8 +338,9 @@ function main() {
   //    takes an artifact nobody listed, on a green gate. Two directions, both FAIL:
   //    (a) an `emitted_files` entry under `domain/` that is gone; (b) a bundle that has
   //    the domain INPUT but is missing one of the three machine-owned outputs (a generate
-  //    run that skipped the domain writer). No domain input → one explicit `ok`, so the
-  //    skip is visible in the report rather than being an absence of output.
+  //    run that skipped the domain writer). No domain input → one explicit line, so the
+  //    outcome is visible in the report rather than being an absence of output: a WARN when
+  //    the bundle ships `/advise` (the degraded path — see below), otherwise a plain `ok`.
   const DOMAIN_REQUIRED = ['audit.md', 'expert.md', 'references.json'];
   const domainInputPath = join(args.bundle, '.claude/veriloop/domain.json');
   let domainEmitted = [];
@@ -370,6 +371,17 @@ function main() {
       }
     }
     if (!absent) ok('domain subsystem: the domain input has all three machine-owned artifacts');
+  } else if (existsSync(join(args.bundle, '.claude/commands/advise.md'))) {
+    // The DEGRADED PATH, named rather than reported as a clean skip. Since the Phase 2
+    // `/advise` redesign the domain expert is that command's SOLE lens, so a bundle with
+    // `/advise` and no `domain/expert.md` has ZERO lens seats: the consult degrades to the
+    // PREMISE reviewer alone (the command says so and discloses it, `advise.md` step 1).
+    // That is the state of every bundle generated before the domain subsystem existed, and
+    // `generate.mjs` treats a missing `domain.json` as a no-op — so it is reached by doing
+    // nothing. A plain `ok` here would report "check skipped" for a command running at a
+    // fraction of its documented council. WARN, not fail: the degradation is disclosed and
+    // supported, so it must not break a pre-existing adopter's gate (exit stays 0).
+    warn('domain subsystem not installed — /advise has NO lens seats and degrades to the PREMISE reviewer alone (run generate with --domain to seat the domain expert)');
   } else {
     ok('domain subsystem not installed — check skipped');
   }

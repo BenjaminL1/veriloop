@@ -43,7 +43,7 @@ dev-loop). It emits **plain files** into the target repo:
 .claude/workflows/<repo>-dev-loop.js     the dev-loop workflow (exit-code gate)
 .claude/commands/dev-plan.md             the /dev-plan command (spec interview + council)
 .claude/commands/dev-loop.md             the /dev-loop slash command
-.claude/commands/advise.md               the /advise command (experts in ADVISE mode)
+.claude/commands/advise.md               the /advise command (domain expert, N stances)
 .claude/commands/review.md               the /review command (lens review, no loop)
 .claude/commands/posture.md              the /posture command (set the repo's default budget posture)
 .claude/veriloop/commands.json           detected + verified command surface
@@ -211,8 +211,9 @@ DB-touching changes:
    This slot-fills the portable template with the verified commands, the roster →
    lens map, risk tiers, and stack-specific worktree-deps setup; writes the
    workflow, the five commands — `/dev-plan` (spec interview + expert council),
-   `/dev-loop`, `/advise` and `/review` (the experts' second mandate —
-   advise + lens-review, read-only, no gate authority), plus `/posture`
+   `/dev-loop`, `/review` (the experts' second mandate — lens review without the
+   loop) and `/advise` (the DOMAIN expert under N stances); both read-only, no
+   gate authority — plus `/posture`
    (change the repo's default budget posture) —
    STARTER personas + `.overrides` siblings, the STARTER constitution (only if
    absent), and the manifest. Machine files

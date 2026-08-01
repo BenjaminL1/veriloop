@@ -363,6 +363,33 @@ checked by nothing:
 - Do **NOT** touch `detectRoster`, `PERSONA_BODY`, or the existing `experts/*` personas. The deep
   scan continues to serve the existing personas only.
 
+### Deviation — PERSONA_HEAD attribution (orchestrator ruling, 2026-07-31, OWNER TO CONFIRM)
+
+Phase 2 changed one line the Non-goal above arguably covers. This is a **deviation from the
+ratified spec**, recorded here so it is visible at the Non-goal it touches rather than buried in
+an implementer's appendix. It was ruled by the **orchestrator**, not the owner; the owner has not
+seen or approved it.
+
+- **What changed.** `PERSONA_HEAD` (`scripts/lib/render.mjs:30`) — the one-line header emitted at
+  the top of every roster persona. Old text: *"loaded by the dev-loop gate in **REVIEW mode** and
+  by `/advise` in **ADVISE mode**"*. New text: *"loaded by the dev-loop gate and `/review` in
+  **REVIEW mode** and by `/dev-plan`'s council in **ADVISE mode**"*. The template plus the three
+  files that regenerate from it — `experts/baseline-reviewer.md`, `experts/security.md`,
+  `experts/drift.md` — carry the new line.
+- **Why it is a deviation.** The Non-goal says *"Do NOT touch `detectRoster`, `PERSONA_BODY`, or
+  the existing `experts/*` personas."* It names `PERSONA_BODY`, not `PERSONA_HEAD`, and the
+  three touched files are MACHINE-owned (regenerated on every run; the hand-owned
+  `*.overrides.md` siblings were NOT touched — `drift.overrides.md` has zero changes). On that
+  reading the edit is outside the Non-goal. That reading is the orchestrator's, and it may be
+  wrong.
+- **The alternative was shipping a false claim.** After T13, `/advise` provably does not load
+  `experts/*.md` — it is forbidden to. Keeping the old sentence would publish, in every adopter's
+  bundle, a statement the same release makes untrue — the exact claims-discipline failure this
+  milestone exists to close.
+- **Owner action: CONFIRM or REVERT.** Confirm by amending the Non-goal to say `PERSONA_HEAD`
+  attribution is in scope, or revert by restoring the old `PERSONA_HEAD` line and regenerating —
+  in which case the false attribution ships and should be tracked as a known-untrue emitted claim.
+
 ---
 
 ## Open RISKS (this spec's own premise-rider, per the discipline it ships)
@@ -543,5 +570,154 @@ is idempotent for every pre-existing artifact. `--force` was never run.
 authority note above).** 1, 4, 6, 8, 9, 10 met for Phase 1's scope; criterion 6 by the
 re-scoping in note 1, which the owner may still overrule in either direction. 7 met for
 T1/T2/T3/T4/T6/T7/T8/T11; T5, T9, T10 and T13 belong to Phases 2–3 and are open by design.
-2, 3 and 5 concern `/advise` and are untouched — `/advise` is byte-identical in 0.5.0, so
-every pinned literal in criteria 3 and 5 still holds, and criterion 2's assertion is intact.
+2, 3 and 5 concern `/advise` and are untouched — `/advise` was byte-identical at the end of
+Phase 1, so every pinned literal in criteria 3 and 5 still held, and criterion 2's assertion
+was intact. (Phase 2, below, changes `/advise` and re-states 2, 3 and 5 for its own scope.)
+
+---
+
+## Implementation notes — Phase 2, 2026-07-31 (v0.5.0)
+
+Phase 2 (the `/advise` redesign, T9, T13) shipped as specified. Phase 3 is untouched.
+**The authority note above governs this section too:** it is the *implementer's*
+self-report inside a RATIFIED — BINDING owner artifact. It records what shipped and where
+the spec left a choice open; it amends nothing, and its acceptance-criteria statement is a
+claim to be checked, not a ratification.
+
+**1. Domain-absent fallback — the spec did not say what happens with no `domain/`.** The
+persona is the sole lens, and `domain.json` is optional (Phase 1 note 2: no `domain.json`
+means the domain writer is a no-op), so a bundle can legitimately exist with no
+`domain/expert.md` — every pre-existing bundle is exactly that, including the selftest's own
+tmp fixture. The command now says so plainly and is told **not** to substitute a persona from
+`experts/`: silently swapping a review lens in would re-create the roster-advises design
+Phase 2 exists to remove, and would do it invisibly. It also **degrades the council to the
+PREMISE reviewer alone** rather than seating the stances. This command assigns the stance
+NAMES but the persona DEFINES them, so on the persona-absent path four seats would be handed
+bare labels and would improvise four definitions — nominally differentiated, actually
+identical, which is precisely the council-degeneracy this spec's Open RISKS section warns
+about ("four confident, near-identical restatements of one persona's prior at 4x cost").
+Step 2's library protocol is inert on that path too (no `references.json`), and the
+degradation is disclosed to the owner rather than run silently.
+
+That path is not exotic — it is the DEFAULT for every bundle built before this release, so
+three surfaces that described only the installed path were corrected with it. (a)
+`lint-bundle` check 7 printed `ok — domain subsystem not installed, check skipped`; with
+`.claude/commands/advise.md` present and no `domain/expert.md` it now **WARNs**, naming the
+consequence (`/advise` has no lens seats), and still exits **0** — the degradation is
+supported, so it must not break a pre-existing adopter's gate. (b) The emitted `/advise`
+**description** asserted "always a full council" unconditionally while step 1 of the same
+file documented the degradation; it now states both paths. (c) The council mandated "One
+cross-examination round", which is unreachable with one seat and therefore an invitation to
+simulate it; the same bullet now carries the DEGRADED contract — the round cannot run, must
+not be faked, and the owner is instead owed a main-session cross-examination of the PREMISE
+brief plus a plain statement that the stance seats were not consulted. `README.md` repeated
+"always a full council" with no caveat and is corrected. All three are pinned by assertions.
+
+**2. `STANCES` and `REFERENCE_CATEGORIES` are exported from `domain.mjs`; `render.mjs`
+imports the NAMES.** Constitution rule 9 — the command must derive the seat names it assigns
+and the category names it tells the council to reconcile, never re-type either beside the
+module that defines them. Only names cross the boundary; the stance definitions stay in the
+persona (R2's stated preference) and the category semantics stay in `domain.mjs`.
+`domain.mjs` imports nothing from `render.mjs`, so there is no cycle. **Citation consequence —
+avoided, not repaired.** Placed above the splice markers the import pushed `AUTO_START` from
+`render.mjs:11` to `:15`, and six committed citations name `scripts/lib/render.mjs:11` for that
+symbol — two of them in files a regenerate can NEVER repair (`constitution.md` is `handOnce()`,
+`drift.overrides.md` is hand-owned, rule 8), so any re-point there is a permanent hand-edit
+invisible to every future generate. `import` declarations HOIST, so the statement was moved
+BELOW `AUTO_END` instead: `AUTO_START` keeps its historical line and **all six citations are
+untouched** — `constitution.md`, `drift.overrides.md`, `interview.json`, `scan-notes.md`,
+`drift.md` and the manifest (×2) carry zero citation edits from this change.
+
+**3. Criterion 5 resolved as staging-by-EMISSION — and the instruction states the REAL
+promotion path.** `/advise` holds no `Write` and no `Edit` (the `allowed-tools` line is
+unchanged, `WebSearch` + `WebFetch` retained), so it cannot append a mid-consult source to
+the library. It prints a paste-ready entry — `url`, `title`, one-line
+`rationale` — for the owner to add to `domain.json` under `references.staged[]`. Staging
+therefore happens **outside** `/advise`, as criterion 5 requires. What the emitted text must
+NOT imply — and no longer does — is that re-running the generator verifies it:
+`normalizeEntry` (`domain.mjs`) begins its status ternary with `!staged &&`, forcing every
+staged entry to `UNVERIFIED` unconditionally; `buildReferences` never merges `staged` into
+the three categories; and nothing under `scripts/` makes a network call, so `/veriloop
+--refresh` re-fetches nothing. The command therefore names the only path that can ever make
+the source citable: the owner **moving** the entry out of `staged` into `research`,
+`products_tools` or `current_discussions`. Until then it is a candidate and is never citable
+as checked.
+
+**And the promotion itself is honest about provenance.** An earlier cut had the consult print
+an `http_status`. That routed the owner into producing a `VERIFIED` entry whose envelope
+misdescribed it twice over: the status was self-attested by a session that has already
+ingested untrusted repo prose and third-party `url` / `title` / `rationale`, and
+`buildReferences` computes `verifiable` from the library's ORIGINAL top-level `attempted_at`
+— a stamp recorded for a different fetch. The field is now omitted. That is a *behavioral*
+guarantee, not a disclaimer: `normalizeEntry` requires `http_status === 200`, so a promoted
+entry without one lands **UNVERIFIED**, which is the true state until someone fetches it. The
+command says so in those words, enumerates all six `VERIFIED` preconditions (envelope
+`reachable` not `false`; valid ISO-8601 `references.attempted_at`; entry `reachable` not
+`false`; `url` unrewritten by sanitizing; allowlisted host; `http_status === 200`) instead of
+naming two of them, and states the real re-verification the owner must run.
+
+**4. R2 was exercised as written — and both persona files reach the seats.** The stance
+*definitions* and the citation protocol stay in `domain/expert.md`; the command assigns and
+points. The one place the command restates protocol text is the citation rules in step 2 —
+deliberate, because those bind the MAIN session, which never adopts the persona and would
+otherwise be unbound by it. The spawn block names **both** `domain/expert.md` and
+`domain/expert.overrides.md` (override wins on conflict) in the seats' own prompt, not only
+in step 1: step 1 binds the main session, while a `Task` subagent starts cold and reads only
+what its prompt names. That matters specifically here — `expert.overrides.md` is the sole
+hand-owned, never-overwritten lever on the domain persona (constitution rule 8), and its
+`## Sources to trust or distrust` section is the only place the owner can approve an
+`UNVERIFIED` entry or veto a `VERIFIED` one, so the seats that do the citing are exactly the
+ones that must read it. Every other veriloop surface that spawns a persona-adopting subagent
+already spells out both files (`review.md`, `dev-plan.md`, the workflow); `/advise` now
+matches.
+
+**5. `PERSONA_HEAD` attribution — this shipped as a DEVIATION, recorded at the Non-goal.**
+The header line every roster persona opens with was corrected because Phase 2 made the old one
+false. That is a departure from a ratified Non-goal, so it is NOT disclosed here: the record
+lives in **"Deviation — PERSONA_HEAD attribution (orchestrator ruling, 2026-07-31, OWNER TO
+CONFIRM)"**, directly under the Non-goals section, and the owner has not yet ruled on it.
+ADVISE mode itself is not dead — `/dev-plan` still loads the roster in `MODE: ADVISE`. The
+template and this repo's three committed (machine-owned) personas were both updated, the same
+handOnce-style both-halves hazard T2 records; no `*.overrides.md` was touched.
+
+**6. One assertion re-pointed (criterion 2), the rest preserved (criterion 3).** The
+self-host council guard now matches `Spawn each stance seat (…)` against the stance names
+imported from `domain.mjs`, plus `PREMISE reviewer` and BOTH the `domain/expert.md` and
+`domain/expert.overrides.md` paths, matched **inside the spawn block** rather than anywhere
+in the file — a file-wide match would pass on the step-1 mention alone and could never detect
+the gap it claims to cover. Its comment and the incident it records (the execution-reviewer
+gap, 2026-07-24) are kept. Every literal named in criterion 3 survived the wholesale rewrite
+verbatim.
+
+**A sole-lens conjunct that could not fire was replaced (and mutation-tested).** The first
+cut guarded the load step with `!/adopt[^.]{0,120}veriloop\/experts\//i`, which can never
+match: `[^.]` cannot cross the leading dot in `.claude/veriloop/experts/`. Inserting *"Also
+read `.claude/veriloop/experts/*.md` … and adopt them alongside it"* into step 1 left every
+assertion green — the roster lenses re-seated in `/advise`, which is the precise property
+Phase 2 exists to create, passing the gate while the assertion message published a false
+statement. It is now an occurrence **count** (`veriloop/experts/` may appear in the load step
+exactly once, the do-NOT-substitute clause) plus a roster-key ban on the load step, and the
+same guard was added against the **COMMITTED** `advise.md`, which had no sole-lens check at
+all — the tmp-fixture guards only ever proved the template clean. Both mutants (template and
+committed file) were re-run and both go RED. The council-block region was also extended past
+the cross-examination and synthesis bullets that its old terminator excluded while its
+message claimed to cover them.
+
+T13 is pinned by a PAIRED assertion — absent in `/advise`, still present in `dev-plan.md`,
+`review.md` and the emitted workflow. Two refinements against the weak-check hazard this
+spec's own Open RISKS section names: (a) each presence entry matches the **read itself**
+(dev-plan's recon line, review's persona-load line, the workflow's `"constitution"` config
+key), not the bare string `constitution.md`, so a genuine deletion cannot keep passing on an
+unrelated sentence; and (b) `/posture` is **not** in the pair. Its only occurrence of
+`constitution.md` is the write prohibition in its HARD LIMITS ("never edit
+`constitution.md`") — `/posture` has never loaded the constitution, so listing it would have
+published a false statement in the gate's own output. That prohibition is asserted
+separately, as what it is. The pair is also doubled across surfaces: the presences are
+checked on the **committed** files *and* on a freshly **rendered** bundle, because the
+committed artifacts are only rewritten when someone runs generate — a template edit that
+dropped the read would otherwise leave this guard green while every future adopter lost the
+invariant check (the same half-done-retirement shape T2 names).
+
+**Acceptance criteria status — implementer's self-report, not a ratification.** For Phase
+2's scope: 1, 2, 3, 5 and 10 met; 7 now also covers T9 and T13. T5 and T10 remain open by
+design — they belong to Phase 3.

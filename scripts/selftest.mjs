@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE } from './lib/render.mjs';
-import { REFERENCE_HOST_ALLOWLIST, collectDomainFacts, scrubSecrets } from './lib/domain.mjs';
+import { REFERENCE_HOST_ALLOWLIST, REFERENCE_CATEGORIES, STANCES, collectDomainFacts, scrubSecrets } from './lib/domain.mjs';
 // probe: a persona rendered with NO evidence must omit the beat section entirely
 const renderExpertProbe = () => renderExpert('security', { repoName: 'r', stack: ['node'], gate: [], constitutionPath: 'c.md', title: 't', evidence: [] });
 
@@ -191,7 +191,11 @@ function assert(cond, desc) {
 }
 
 // --- v0.3.0: the experts' second mandate — /advise + /review emitted surfaces,
-//     the dual-mandate persona header, and the linter guarding the new commands ---
+//     the dual-mandate persona header, and the linter guarding the new commands.
+//     (Phase 2, 2026-07-31: the header's two mandates are now REVIEW mode — the gate and
+//     `/review` — and ADVISE mode — `/dev-plan`'s council. `/advise` is NOT one of them
+//     any more; it seats the domain expert instead. The /advise assertions below guard
+//     that command's own contract, not the roster's second mandate.) ---
 {
   const tmp = mkdtempSync(join(tmpdir(), 'veriloop-advise-'));
   // a prettier repo so the .prettierignore exemption block is emitted (and must
@@ -218,6 +222,191 @@ function assert(cond, desc) {
 
   // /advise contract: ADVISE mode, read-only, no verdicts (grep-able strings)
   assert(/MODE: ADVISE/.test(advise), '/advise: adopts MODE: ADVISE');
+
+  // --- Phase 2 (spec `domain-expert-persona.md`): the DOMAIN EXPERT is the SOLE lens in
+  //     /advise, seated once per stance. These read the TMP-generated bundle, so the
+  //     evidence comes from the template under test rather than a pre-seeded fixture. ---
+  const stanceNames = STANCES.map(([n]) => n);
+  const adviseFlat0 = advise.replace(/\s+/g, ' ');
+  // The two regions that decide BEHAVIOR: the step that adopts a persona, and the block
+  // that spawns the council. Everything below is scoped to one of them on purpose — the
+  // retired property is "the roster lenses are no longer LOADED or SPAWNED here", which is
+  // not a claim about vocabulary. A file-wide substring ban would fire on `SECURITY.md`,
+  // `security-sensitive`, or any legitimate advisory sentence using the word "drift", and
+  // would report a retirement violation that did not happen.
+  const loadStep = ((advise.match(/1\. \*\*Load the lens\.\*\*[\s\S]*?\n2\. \*\*/) || [''])[0]);
+  // Terminated at step 6, not at `One cross-examination round`: the earlier terminator stopped
+  // short of the cross-examination and Synthesize bullets, so "no roster lens is spawned"
+  // was asserted over only part of the council it named.
+  const councilBlock = ((advise.match(/- \*\*Spawn each stance seat[\s\S]*?\n6\. \*\*/) || [''])[0]);
+  const loadFlat = loadStep.replace(/\s+/g, ' ');
+  const councilFlat = councilBlock.replace(/\s+/g, ' ');
+  const rosterKeys = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).roster.map((e) => e.key);
+  assert(
+    loadStep.length > 0 && councilBlock.length > 0,
+    '/advise: the persona-load step and the council block (spawn through synthesis) are both locatable (the guards below are scoped to them)',
+  );
+  // The load step may name `veriloop/experts/` EXACTLY ONCE, and that occurrence is the
+  // do-NOT-substitute clause pinned by the next assertion — so a SECOND mention is a
+  // re-seating of the roster lenses, whatever wording it hides behind.
+  //
+  // This replaces a conjunct that COULD NOT FIRE: `!/adopt[^.]{0,120}veriloop\/experts\//i`
+  // never matches, because `[^.]` cannot cross the leading dot in `.claude/veriloop/experts/`.
+  // Mutation-tested (2026-07-31): inserting "Also read `.claude/veriloop/experts/*.md` … and
+  // adopt them alongside it" into step 1 left EVERY assertion green under the old shape — the
+  // exact regression Phase 2 exists to prevent passed the gate, and this message then published
+  // a false statement. Counting occurrences (plus banning the roster KEYS from the load step,
+  // matching the council block's own ban) makes the same mutant RED.
+  const expertsMentions = (loadFlat.match(/veriloop\/experts\//g) || []).length;
+  assert(
+    rosterKeys.length > 0 &&
+      !rosterKeys.some((k) => councilFlat.includes(k)) &&
+      !rosterKeys.some((k) => loadFlat.includes(k)) &&
+      expertsMentions === 1,
+    `/advise: no roster lens (${rosterKeys.join(', ')}) is loaded or spawned — they review in /dev-plan, /review and the gate; the load step names veriloop/experts/ exactly once (found ${expertsMentions}), the do-NOT-substitute clause asserted next`,
+  );
+  assert(
+    /do NOT substitute a persona from `\.claude\/veriloop\/experts\/`/.test(loadFlat),
+    '/advise: names the roster path ONLY to forbid substituting it when the domain persona is absent',
+  );
+  // BOTH persona files must be named INSIDE the spawn block. A `Task` subagent starts cold
+  // and reads only what its prompt names, so the step-1 mention (which binds the MAIN
+  // session) cannot stand in for it — a file-wide /expert\.overrides\.md/ would pass on the
+  // strength of step 1 and could never detect the gap it claims to cover.
+  assert(
+    stanceNames.every((n) => councilFlat.includes(n)) &&
+      /\.claude\/veriloop\/domain\/expert\.md/.test(councilFlat) &&
+      /\.claude\/veriloop\/domain\/expert\.overrides\.md/.test(councilFlat) &&
+      /wins on\s*conflict/i.test(councilFlat),
+    `/advise: the SPAWN block seats all ${stanceNames.length} stances (${stanceNames.join(', ')}) and names BOTH domain/expert.md AND domain/expert.overrides.md (override wins on conflict) in the seats' own prompt`,
+  );
+  assert(
+    /domain\/expert\.md/.test(loadFlat) && /expert\.overrides\.md/.test(loadFlat) && /wins on\s*conflict/i.test(loadFlat),
+    '/advise: step 1 loads domain/expert.md + its overrides sibling (override wins) for the MAIN session too',
+  );
+  assert(
+    /the persona DEFINES them/.test(adviseFlat0) && !STANCES.some(([, def]) => advise.includes(def)),
+    '/advise: the command ASSIGNS stances and does not restate their definitions (one source of truth — the persona)',
+  );
+  // Domain-absent fallback. The stance NAMES live in this command but their DEFINITIONS live
+  // only in the missing persona, so the fallback must NOT seat them: four seats improvising
+  // four definitions is one prior restated N times at Nx cost, not a council.
+  assert(
+    /domain subsystem is not\s+installed/.test(advise) && /do NOT substitute a persona/.test(advise) &&
+      /\*\*DEGRADED COUNCIL:\*\* run step 5 with the \*\*PREMISE reviewer ALONE\*\*/.test(adviseFlat0) &&
+      /Do NOT seat the stances/.test(adviseFlat0) && /SAY that the council ran degraded/.test(adviseFlat0),
+    '/advise: with domain/expert.md absent it says so, never swaps in a review persona, and degrades to the PREMISE reviewer ALONE (the stances are DEFINED by the missing persona) — disclosed as degraded',
+  );
+  assert(
+    /persona absent → the PREMISE reviewer ALONE, per step 1/.test(councilFlat),
+    '/advise: the spawn block itself carries the persona-absent degradation (the seats are where it would otherwise be missed)',
+  );
+  // The DESCRIPTION is the one line most readers see, and it used to assert "always a full
+  // council" unconditionally while step 1 of the SAME file documented the degradation. The
+  // domain-absent path is not exotic — it is every bundle built before the subsystem existed
+  // — so the description must be true on BOTH paths.
+  assert(
+    /WHEN the domain persona is installed/.test(aDesc) &&
+      /DEGRADES to the PREMISE reviewer alone/.test(aDesc) &&
+      !/always a full council/.test(aDesc),
+    '/advise: the emitted description is TRUE on BOTH paths — the stance seats are conditional on the persona being installed and the degraded council is named (it used to claim "always a full council" while the same file documented the degradation)',
+  );
+  // A cross-examination round is UNREACHABLE with one seat, so mandating it unconditionally
+  // told the degraded consult to do something impossible — which invites simulating it. The
+  // bullet must state what a PREMISE-only consult owes the owner instead.
+  assert(
+    /\*\*DEGRADED CONTRACT \(one seat\):\*\* with the persona absent there is nobody to cross-examine, so this round CANNOT run/.test(councilFlat) &&
+      /do not simulate it/.test(councilFlat) &&
+      /cross-examined by YOU, the main session/.test(councilFlat) &&
+      new RegExp(`${STANCES.length} stance seats were NOT consulted`).test(councilFlat),
+    `/advise: the cross-examination round carries its DEGRADED contract in the SAME bullet — with one seat the round cannot run and is not simulated; the owner is owed a main-session cross-examination of the PREMISE brief plus a plain statement that the ${STANCES.length} stance seats were not consulted`,
+  );
+  // citation protocol: VERIFIED-only, explicit refusal, and an honest offline statement
+  assert(
+    /is `VERIFIED`, and \*\*REFUSE\*\*/.test(adviseFlat0) && /never cited as checked/i.test(adviseFlat0) && /existence-level, not claim-level/.test(adviseFlat0),
+    '/advise: cites the library only from VERIFIED entries, REFUSES the rest, and states verification is existence-level',
+  );
+  assert(
+    /`reachable: false`, \*\*state that the library could not be verified\*\*/.test(adviseFlat0),
+    '/advise: an unverifiable library is DISCLOSED (reachable: false → say it could not be verified), never cited as though checked',
+  );
+  // The category names are DERIVED from domain.mjs (rule 9), so adding or renaming a
+  // category and forgetting to re-render the command fails here, not in production.
+  assert(
+    /Cross-category conflict is a DELIVERABLE/.test(adviseFlat0) &&
+      /ALWAYS surfaced\*\* — never resolved silently in favour of one category/.test(adviseFlat0) &&
+      REFERENCE_CATEGORIES.every((c) => councilFlat.includes(`\`${c}\``)),
+    `/advise: a ${REFERENCE_CATEGORIES.join(' / ')} conflict is ALWAYS surfaced, never silently resolved (categories derived from domain.mjs)`,
+  );
+  // Staging is EMISSION-only: /advise holds no Write/Edit (asserted on the committed file
+  // below), so a command that claimed to append would be prose contradicting its own fence.
+  const stagingBullet = ((advise.match(/- \*\*A source found mid-consult[\s\S]*?\n4\. \*\*/) || [''])[0]).replace(/\s+/g, ' ');
+  assert(
+    /staged by EMISSION, not by writing/.test(stagingBullet) && /references\.staged\[\]/.test(stagingBullet) && /domain\.json/.test(stagingBullet) && /CANNOT append to the library/.test(stagingBullet),
+    '/advise: an on-demand source is STAGED BY EMISSION — printed for the owner to paste into domain.json references.staged[], never written',
+  );
+  // ...and the instruction must tell the TRUTH about what happens next. `normalizeEntry`
+  // forces every staged entry to UNVERIFIED unconditionally and `buildReferences` never
+  // merges `staged` into the categories, so re-running the generator can never promote it:
+  // an instruction implying "the generator re-verifies it" would send the owner to a
+  // permanently uncitable holding pen. The only real promotion path must be named.
+  assert(
+    /HOLDING PEN/.test(stagingBullet) && /can NEVER promote it/.test(stagingBullet) &&
+      /MOVING the entry out of `staged` into/.test(stagingBullet) &&
+      REFERENCE_CATEGORIES.every((c) => stagingBullet.includes(`\`${c}\``)),
+    `/advise: the staging instruction states the REAL promotion path — staged[] is a holding pen (always UNVERIFIED, never merged), and only MOVING the entry into ${REFERENCE_CATEGORIES.join(' / ')} can ever make it citable`,
+  );
+  // ...and that promotion must not LAUNDER PROVENANCE. The instruction used to have the
+  // consult print an `http_status`: a number self-reported by a session that has already read
+  // untrusted repo prose and third-party url/title/rationale, while `buildReferences` derives
+  // `verifiable` from the library's ORIGINAL top-level `attempted_at` — a stamp recorded for a
+  // different fetch. Following it produced a VERIFIED entry whose envelope described a
+  // verification that never happened for that url. The field is now OMITTED, which is what
+  // makes the outcome honest rather than merely disclaimed: `normalizeEntry` requires
+  // `http_status === 200`, so the promoted entry lands UNVERIFIED until someone really fetches
+  // it. The VERIFIED preconditions are enumerated too — "the host allowlist plus the reported
+  // http_status" named two of six and read as the whole rule.
+  assert(
+    /\*\*Do NOT print an `http_status` field\.\*\*/.test(stagingBullet) &&
+      /lands \*\*UNVERIFIED\*\*/.test(stagingBullet) &&
+      /Moving it does NOT make it `VERIFIED`/.test(stagingBullet) &&
+      /the envelope's `reachable` is not `false`/.test(stagingBullet) &&
+      /`references\.attempted_at` is a valid ISO-8601 instant/.test(stagingBullet) &&
+      /the entry's own `reachable` is not `false`/.test(stagingBullet) &&
+      /survived sanitizing unrewritten/.test(stagingBullet) &&
+      /its host is on the allowlist, and its `http_status` is exactly `200`/.test(stagingBullet) &&
+      /refresh `references\.attempted_at`/.test(stagingBullet),
+    '/advise: promotion is HONEST — the consult prints NO self-reported http_status (so a promoted entry lands UNVERIFIED), and the command enumerates all six conditions generate.mjs actually requires for VERIFIED plus the real re-verification the owner must run',
+  );
+  // T13: the constitution read is gone from THIS surface only. Both halves of the pair are
+  // asserted twice over, and deliberately so: here against the TEMPLATES (this bundle was
+  // just rendered from them, so a template edit that dropped the read from an adopter's
+  // /dev-plan fails HERE), and in the self-host block near the end of this file against the
+  // COMMITTED files (which a template edit alone never touches). Either half alone is a
+  // half-done retirement — the exact hazard the spec names for T2.
+  assert(!/constitution\.md/.test(advise), '/advise: does NOT load constitution.md (T13 — the invariants are checked at /dev-plan, where a direction becomes real)');
+  {
+    // Matched on the READ, not on the mere string: `/posture` mentions `constitution.md`
+    // only in a WRITE PROHIBITION and has never loaded it, so it is not part of this pair.
+    // the workflow filename is derived from the repo DIRECTORY name, so read it back — by
+    // SUFFIX, not by directory position: `readdirSync` order is unspecified and the dir can
+    // legitimately hold more than one entry, so `[0]` could silently hand the check a file
+    // that has no `"constitution"` key and report a T13 violation that did not happen.
+    const workflowName = (readdirSync(join(tmp, '.claude/workflows')) || []).find((f) => f.endsWith('-dev-loop.js'));
+    assert(!!workflowName, 'generate: a *-dev-loop.js workflow is emitted (the T13 presence check below reads it by suffix, never by directory order)');
+    const workflowFile = join('.claude/workflows', workflowName || '');
+    const templateReads = [
+      ['.claude/commands/dev-plan.md', /`\.claude\/veriloop\/constitution\.md`\.\s*Most of what you need is derivable/],
+      ['.claude/commands/review.md', /\+ `\.claude\/veriloop\/constitution\.md`, reviews the diff/],
+      [workflowFile, /"constitution":\s*"\.claude\/veriloop\/constitution\.md"/],
+    ];
+    const lostIt = templateReads.filter(([f, re]) => !re.test(readFileSync(join(tmp, f), 'utf8').replace(/\s+/g, ' '))).map(([f]) => f);
+    assert(
+      lostIt.length === 0,
+      `T13 TEMPLATES: only /advise stops loading constitution.md — the freshly RENDERED ${templateReads.map(([f]) => f).join(', ')} all still read it${lostIt.length ? ` [lost it: ${lostIt.join(', ')}]` : ''}`,
+    );
+  }
+
   assert(/READ-ONLY/.test(advise), '/advise: states the read-only limit');
   assert(/never PASS\/FAIL\/approval/.test(advise) && /NEVER\s+substitutes/i.test(advise.replace(/\n/g, ' ')), '/advise: no-verdicts — advice never substitutes for the gate');
 
@@ -1074,21 +1263,51 @@ function assert(cond, desc) {
   );
 }
 
-// --- self-host roster guard: the COMMITTED .claude/commands/advise.md must name all three
-//     roster experts in its council spawn line — ESPECIALLY `security`. The gate runs only
-//     `npm run test`; lint-bundle never checks roster SIZE, and the /advise assertions above run
-//     against a tmp FIXTURE — so without this, an accidental cold `generate` that dropped
-//     `security` and overwrote the committed command file would keep the whole gate GREEN
-//     (the execution-reviewer gap, 2026-07-24). ---
+// --- self-host council guard: the COMMITTED .claude/commands/advise.md must name the seats it
+//     will actually spawn. The gate runs only `npm run test`; lint-bundle never checks the
+//     council, and the /advise assertions above run against a tmp FIXTURE — so without this, an
+//     accidental cold `generate` that dropped a seat and overwrote the committed command file
+//     would keep the whole gate GREEN (the execution-reviewer gap, 2026-07-24).
+//
+//     RE-POINTED, not deleted (spec `domain-expert-persona.md` acceptance criterion 2; T9
+//     retired the edit discipline, never the assertions). Phase 2 made the domain expert the
+//     sole lens, so the seats are now STANCES of one persona rather than three roster experts.
+//     The guarded property is unchanged — the committed file names the personas/seats it will
+//     actually spawn — and the seat names are IMPORTED from `domain.mjs`, so renaming a stance
+//     without re-rendering the command fails here rather than in production. ---
 {
   const committedAdvise = readFileSync(join(here, '..', '.claude/commands/advise.md'), 'utf8');
-  const spawnLine = (committedAdvise.match(/Spawn each roster expert \(([^)]*)\)/) || [])[1] || '';
+  const selfManifest = JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  const spawnLine = (committedAdvise.match(/Spawn each stance seat \(([^)]*)\)/) || [])[1] || '';
+  const missingSeats = STANCES.map(([n]) => n).filter((n) => !spawnLine.includes(n));
+  // Scoped to the SPAWN block, not the whole file: the seats are subagents that read only
+  // what their prompt names, so both persona files must appear where the seats are briefed.
+  const committedCouncil = ((committedAdvise.match(/- \*\*Spawn each stance seat[\s\S]*?One cross-examination round/) || [''])[0]).replace(/\s+/g, ' ');
   assert(
-    /code-review/.test(spawnLine) && /security/.test(spawnLine) && /drift/.test(spawnLine),
-    `self-host /advise: committed advise.md council names all 3 roster experts incl. security (spawn line experts: "${spawnLine}")`,
+    missingSeats.length === 0 && /PREMISE reviewer/.test(committedAdvise) &&
+      /\.claude\/veriloop\/domain\/expert\.md/.test(committedCouncil) &&
+      /\.claude\/veriloop\/domain\/expert\.overrides\.md/.test(committedCouncil),
+    `self-host /advise: committed advise.md council names every stance seat (${STANCES.map(([n]) => n).join(', ')}) + the PREMISE reviewer, and its SPAWN block points the seats at BOTH domain/expert.md and domain/expert.overrides.md${missingSeats.length ? ` [missing: ${missingSeats.join(', ')}]` : ` (spawn line: "${spawnLine}")`}`,
+  );
+  // SOLE-LENS guard, on the COMMITTED file. The tmp-fixture guards above prove the TEMPLATE
+  // is clean; nothing proved the committed command was, and the two agree only until someone
+  // hand-edits one. Mutation-tested (2026-07-31): inserting "Also read
+  // `.claude/veriloop/experts/*.md` … and adopt them alongside it" into step 1 of the
+  // COMMITTED advise.md left every assertion in this file green — the exact regression Phase 2
+  // exists to prevent (the roster lenses re-seated in /advise) shipped on a green gate.
+  const committedRoster = selfManifest.roster.map((e) => e.key);
+  const committedLoad = ((committedAdvise.match(/1\. \*\*Load the lens\.\*\*[\s\S]*?\n2\. \*\*/) || [''])[0]).replace(/\s+/g, ' ');
+  const committedExpertsMentions = (committedLoad.match(/veriloop\/experts\//g) || []).length;
+  assert(
+    committedLoad.length > 0 &&
+      committedExpertsMentions === 1 &&
+      /do NOT substitute a persona from `\.claude\/veriloop\/experts\/`/.test(committedLoad) &&
+      !committedRoster.some((k) => committedLoad.includes(k)) &&
+      !committedRoster.some((k) => committedCouncil.includes(k)),
+    `self-host /advise: the COMMITTED load step names veriloop/experts/ exactly once — the do-NOT-substitute clause (found ${committedExpertsMentions}) — and no roster lens (${committedRoster.join(', ')}) is loaded there or spawned into the council`,
   );
   // (T12, 2026-07-31: the 900-word /advise command-body cap was RETIRED by owner
-  // decision — see CHANGELOG 0.5.0. The roster-naming assertion above is the part
+  // decision — see CHANGELOG 0.5.0. The council-naming assertion above is the part
   // of this block that guards a real property and stays.)
   // --- allowed-tools fence (v0.3.19). /advise's "HARD LIMITS — READ-ONLY" block is PROSE, so
   //     until now nothing stopped an edit, a worktree, or a mutating git command; `/dev-plan`
@@ -1098,7 +1317,7 @@ function assert(cond, desc) {
   //     a hardcoded `npm test` would not equal veriloop's actual `npm run test` and fails here,
   //     which is what keeps the line correct for a cargo/pytest target repo too. ---
   const adviseAllow = (committedAdvise.match(/^allowed-tools:.*$/m) || [''])[0];
-  const gateCmd = JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/veriloop-manifest.json'), 'utf8')).gate_commands[0].cmd;
+  const gateCmd = selfManifest.gate_commands[0].cmd;
   assert(
     adviseAllow.startsWith('allowed-tools:') && !/\bWrite\b/.test(adviseAllow) && !/\bEdit\b/.test(adviseAllow) && !/Bash(?!\()/.test(adviseAllow),
     `self-host /advise: allowed-tools ENFORCES the read-only covenant — no Write, no Edit, no unscoped Bash ("${adviseAllow}")`,
@@ -1106,6 +1325,40 @@ function assert(cond, desc) {
   assert(
     /WebSearch/.test(adviseAllow) && /WebFetch/.test(adviseAllow) && adviseAllow.includes(`Bash(${gateCmd}:*)`),
     `self-host /advise: allowed-tools keeps online source verification (WebSearch/WebFetch) and DERIVES its gate entry from gate_commands (expected Bash(${gateCmd}:*))`,
+  );
+  // --- T13 SCOPE guard (spec `domain-expert-persona.md`). The constitution read was dropped
+  //     from `/advise` ONLY — the pre-build ADVISORY surface, which writes nothing and is
+  //     structurally forbidden from emitting a verdict. Every surface where a decision becomes
+  //     REAL keeps it. Asserting the absence alone would pass just as well if someone deleted
+  //     the constitution everywhere, which is the failure this pairs against.
+  //
+  //     Each entry matches the READ ITSELF, not the bare string `constitution.md`. An
+  //     existence-only check would keep passing on an unrelated sentence after a genuine read
+  //     was deleted — the weak-check pattern this repo has already been bitten by. It is also
+  //     why `/posture` is NOT in this list: its only mention of `constitution.md` is the WRITE
+  //     PROHIBITION at posture.md's HARD LIMITS ("never edit `constitution.md`"). `/posture`
+  //     has never loaded the constitution, so listing it here would publish a false statement
+  //     in the gate's own output. Its prohibition is asserted separately, as what it is.
+  //
+  //     This is the COMMITTED half; the TEMPLATE half is asserted against a freshly rendered
+  //     bundle in the /advise block near the top of this file. A template edit never touches
+  //     these committed files, and an edit to these files never touches the templates. ---
+  const stillReadsConstitution = [
+    ['.claude/commands/dev-plan.md', /`\.claude\/veriloop\/constitution\.md`\.\s*Most of what you need is derivable/],
+    ['.claude/commands/review.md', /\+ `\.claude\/veriloop\/constitution\.md`, reviews the diff/],
+    ['.claude/workflows/veriloop-dev-loop.js', /"constitution":\s*"\.claude\/veriloop\/constitution\.md"/],
+  ];
+  const lostIt = stillReadsConstitution.filter(([f, re]) => !re.test(readFileSync(join(here, '..', f), 'utf8').replace(/\s+/g, ' '))).map(([f]) => f);
+  assert(
+    !/constitution\.md/.test(committedAdvise) && lostIt.length === 0,
+    `self-host T13: only /advise stops loading constitution.md — ${stillReadsConstitution.map(([f]) => f).join(', ')} all still READ it${lostIt.length ? ` [lost it: ${lostIt.join(', ')}]` : ''}`,
+  );
+  // /posture's relationship to the constitution is a PROHIBITION, never a read — asserted as
+  // such so the pair above is not tempted to count it as evidence of a read.
+  const committedPosture = readFileSync(join(here, '..', '.claude/commands/posture.md'), 'utf8').replace(/\s+/g, ' ');
+  assert(
+    /never edit `constitution\.md`/.test(committedPosture),
+    'self-host /posture: keeps its WRITE PROHIBITION on constitution.md (it never loaded the constitution — this is not part of the T13 read-pair)',
   );
 }
 
@@ -1595,11 +1848,24 @@ function assert(cond, desc) {
   const dLintGone = spawnSync(process.execPath, [lintPath, '--bundle', dTmp], { encoding: 'utf8' });
   assert(dLintGone.status !== 0 && /domain\/expert\.md/.test(dLintGone.stdout || ''), 'lint-bundle: FAILS and NAMES the file when domain/expert.md is deleted after generation (bundleFiles silently drops missing paths — nothing else would see it)');
 
-  // no domain input → no domain/ at all, and the skip is VISIBLE in the report
+  // no domain input → no domain/ at all, and the DEGRADATION is VISIBLE in the report.
+  // Since Phase 2 the domain expert is `/advise`'s SOLE lens, so this bundle — which still
+  // ships `/advise` — has ZERO lens seats and its consult degrades to the PREMISE reviewer
+  // alone. That is the state of EVERY bundle generated before the domain subsystem existed,
+  // and `generate.mjs` treats a missing `domain.json` as a no-op, so it is reached by doing
+  // nothing at all. Reporting it as a clean "check skipped" would have told the owner a
+  // command running at a fraction of its documented council was fine. WARN, and exit 0 —
+  // the degradation is disclosed and supported, so it must not break an adopter's gate.
   const { tmp: nTmp, r: nRun, cjPath: nCj } = genDomain(null, 'nodom');
   assert(nRun.status === 0 && !existsSync(join(nTmp, '.claude/veriloop/domain')), 'generate: no domain.json → no .claude/veriloop/domain/ is written (the writer is a no-op)');
   const nLint = spawnSync(process.execPath, [lintPath, '--bundle', nTmp], { encoding: 'utf8' });
-  assert(nLint.status === 0 && /domain subsystem not installed — check skipped/.test(nLint.stdout || ''), 'lint-bundle: a bundle without the domain subsystem passes and says the check was SKIPPED (not silently absent)');
+  assert(
+    nLint.status === 0 && existsSync(join(nTmp, '.claude/commands/advise.md')) &&
+      /⚠ domain subsystem not installed — \/advise has NO lens seats/.test(nLint.stdout || '') &&
+      /degrades to the PREMISE reviewer alone/.test(nLint.stdout || '') &&
+      /0 fail/.test(nLint.stdout || ''),
+    'lint-bundle: a bundle that ships /advise with no domain/expert.md WARNS that /advise has NO lens seats and degrades to the PREMISE reviewer alone — named, not reported as a clean skip, and still exit 0',
+  );
 
   // ...but "not installed" must mean EXACTLY that. An explicitly-passed --domain that
   // cannot be read used to be indistinguishable from it: exit 0, no warning, no domain/,

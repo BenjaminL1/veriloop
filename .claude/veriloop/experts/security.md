@@ -1,6 +1,6 @@
 # Supply-Chain & Input-Safety Reviewer — veriloop (veriloop-generated)
 
-> Expert persona for `veriloop` — loaded by the dev-loop gate in **REVIEW mode** and by `/advise` in **ADVISE mode** (the loader sets the mode). Stack: **node**.
+> Expert persona for `veriloop` — loaded by the dev-loop gate and `/review` in **REVIEW mode** and by `/dev-plan`'s council in **ADVISE mode** (the loader sets the mode). Stack: **node**.
 > This file is a veriloop DEFAULT — regenerated on re-run. Put manual tweaks in the
 > `.overrides.md` sibling (read alongside this file, and it wins on conflict).
 

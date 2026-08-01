@@ -726,8 +726,13 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
  * SCRIPT-OWNED: they are appended to whatever persona body the LLM wrote, so the
  * LLM cannot drop them. The command assigns which seat takes which stance; the
  * persona defines what the stances ARE (spec R2).
+ *
+ * EXPORTED so `/advise` can DERIVE the seat names it assigns rather than
+ * re-hardcoding them beside the persona that defines them (constitution rule 9 —
+ * one source of truth). `renderAdviseCommand` reads the NAMES only; the
+ * definitions never leave this file.
  */
-const STANCES = [
+export const STANCES = [
   ['RESEARCH', 'argue from the `research` category — what the literature actually measured, with its conditions and effect sizes. Never upgrade a correlation into a mechanism.'],
   ['PRACTICE', 'argue from the `products_tools` category — what shipping tools document and what their defaults imply. A documented behavior outranks a plausible one.'],
   ['FIELD', 'argue from the `current_discussions` category — what practitioners currently report. Treat it as signal about reality, never as evidence of a claim.'],
