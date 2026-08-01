@@ -20,7 +20,7 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
-import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
+import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, wiresSessionHook, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, CLAUDE_SETTINGS } from './lib/render.mjs';
 import { collectDomainFacts, buildReferences, renderDomainAudit, renderDomainExpert, renderDomainOverrides, readDomainInput } from './lib/domain.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -448,6 +448,35 @@ function main() {
     w.handOnce(P('.claude/veriloop/domain/expert.overrides.md'), renderDomainOverrides(repoName), 'hand');
   }
 
+  // SessionStart routing hook (v0.5.0, Phase 3). Three plain files: the markdown
+  // payload, a dependency-free node script that prints the documented SessionStart
+  // envelope, and the settings entry that registers it. It BIASES the model toward
+  // /advise, /dev-plan and /dev-loop; it cannot compel one.
+  //
+  // `.claude/settings.json` is handOnce/'starter' — PRESERVE-OR-WRITE. Absent → written.
+  // Present → veriloop does NOT merge and does NOT edit (absent `--force`, which replaces
+  // it wholesale after a backup, like every other hand-owned file); the entry is printed
+  // for the owner to merge in themselves (see the report section). There is no JSON-aware merge primitive on
+  // purpose: `spliceBlock` is line-based with HASH comments and JSON has no comments, so
+  // no marker-bounded machine block is possible inside it — and corrupting an adopter's
+  // settings.json breaks their whole Claude Code config, not just veriloop.
+  //
+  // The report below is keyed on the file's CONTENT — does it already wire veriloop's hook?
+  // — never on mere existence. From the second run on, veriloop's OWN settings.json exists,
+  // so an existence-keyed report printed "veriloop did NOT modify your settings.json —
+  // routing is NOT wired" about a file veriloop wrote and lint-bundle simultaneously reported
+  // as wired. An owner who believed it and pasted the block ended up with a DUPLICATED
+  // SessionStart array — the corruption preserve-or-write exists to prevent.
+  const settingsPath = P(CLAUDE_SETTINGS);
+  const settingsExisted = existsSync(settingsPath);
+  let settingsWired = false;
+  if (settingsExisted) {
+    try { settingsWired = wiresSessionHook(readFileSync(settingsPath, 'utf8')); } catch { /* unparseable → theirs, not wired; lint check 8 warns */ }
+  }
+  w.machine(P(SESSION_ROUTING_DOC), renderSessionRouting());
+  w.machine(P(SESSION_HOOK_SCRIPT), renderSessionStartHook());
+  w.handOnce(settingsPath, renderClaudeSettings(), 'starter');
+
   // shared owner files: veriloop keeps one marked block in each.
   // .gitignore — the rolling backups of clobbered machine files are local state, and so
   // are dry-run attestation records (owner decision: dry runs emit locally but never commit).
@@ -503,6 +532,46 @@ function main() {
   console.error('  emitted:');
   for (const f of w.emitted) console.error(`    [${f.ownership}/${f.status}] ${f.path}`);
   console.error(`  backups (if any): .claude/veriloop/.backups/`);
+  // Preserve-or-write, reported. veriloop never merges an existing settings.json, so the
+  // routing hook is NOT wired for this adopter until they merge the entry themselves.
+  // Printed AFTER the emitted list so it is the last thing on stderr and cannot scroll off.
+  //
+  // Gated on `!settingsWired` — CONTENT, not existence. `handOnce` preserves any file that
+  // already exists, so from run 2 on veriloop's OWN settings.json is "existing" too: an
+  // existence-keyed gate printed "routing is NOT wired" about a file veriloop wrote and
+  // lint-bundle check 8 reported as wired IN THE SAME TREE, on this repo, on every
+  // regenerate. Two veriloop surfaces publishing contradictory facts is the failure; the
+  // owner-visible cost is worse — believe the paste instruction, paste, and you have a
+  // DUPLICATED SessionStart array injecting the payload twice.
+  //
+  // Gated on `!args.force` as well: `handOnce` honors `force`, so a --force run REPLACES the
+  // adopter's settings.json — printing "veriloop did NOT modify your settings.json" there
+  // would be veriloop's own output lying about veriloop's own write, contradicted three lines
+  // above by `[starter/written] .claude/settings.json`.
+  //
+  // What is printed is a COMPLETE settings.json, not a fragment, and it says so: an adopter
+  // whose file already has a top-level `hooks` key and who pastes this verbatim ends up with
+  // two `hooks` keys — last-wins in most parsers, silently discarding their existing hooks.
+  // That is exactly the corruption preserve-or-write exists to prevent, so the instruction
+  // must not re-introduce it.
+  if (settingsExisted && !settingsWired && !args.force) {
+    console.error('');
+    console.error('  veriloop did NOT modify your settings.json — routing is NOT wired until you merge');
+    console.error('  the SessionStart entry below into your own file. This is a COMPLETE settings.json:');
+    console.error('  if yours already has a top-level "hooks" key, copy the SessionStart array INTO it');
+    console.error('  rather than pasting a second "hooks" key.');
+    console.error('  --- 8< --- settings.json ---');
+    console.error(renderClaudeSettings().trimEnd());
+    console.error('  --- >8 --- settings.json ---');
+  } else if (settingsExisted && args.force) {
+    console.error('');
+    console.error('  veriloop REPLACED your existing .claude/settings.json (--force) — the previous');
+    console.error('  file is in .claude/veriloop/.backups/. Anything it held (permissions, env,');
+    console.error('  statusLine, model) is NOT carried over; the new file is the hook entry alone.');
+  }
+  // The remaining case — the file exists AND already wires veriloop's hook — prints nothing:
+  // `[starter/preserved] .claude/settings.json` in the list above is the whole truth, and a
+  // paste instruction here would be an instruction to duplicate the entry.
 }
 
 main();

@@ -140,7 +140,7 @@ Then, in the repo you want to set up:
 /veriloop            # runs the pipeline against the current repo
 ```
 
-## Five minutes to first gate
+## First gate — what is measured, and what is not
 
 ```bash
 cd your-repo
@@ -148,6 +148,16 @@ claude                      # any Claude Code session
 /veriloop                   # detect → verify → scan → interview (≤5 questions) → generate
 /dev-loop fix the typo in the settings page header
 ```
+
+**How long that takes is only partly known, and this section says which part.** The
+deterministic spine — `detect → verify → generate → lint-bundle` — completed in **14s** on a
+clean clone against a real third-party repo (`docs/demo/quickstart-check.sh`, m5 exit
+criterion 4). The LLM phases you actually run first are **unmeasured end to end**: the deep
+scan, constitution mining, the ≤5-question interview, and since 0.5.0 the domain audit with
+its network source verification. Nothing here times them, so no total is published. (Through
+0.4.x this heading promised a first gate in five minutes. No measurement ever supported that
+number, m5 logged the criterion as NOT MET, and the domain audit widened the gap — so it was
+retired rather than re-estimated.)
 
 That last command runs the full loop on a real (tiny) change: plan → isolated
 worktree → implement → the gate actually runs your `typecheck`/`lint`/`test` and
@@ -191,12 +201,25 @@ blaming your change.
 .claude/veriloop/domain/expert.md             the advisory domain persona (machine-owned)
 .claude/veriloop/domain/expert.overrides.md   manual tweaks (hand-owned; never clobbered)
 .claude/veriloop/domain/references.json       the verified three-category reference library (machine-owned)
+.claude/veriloop/session-routing.md           the SessionStart routing payload (machine-owned)
+.claude/veriloop/session-start.mjs            the SessionStart hook script (machine-owned)
+.claude/settings.json                         registers the hook (starter; PRESERVED if you already have one)
 .claude/veriloop/veriloop-manifest.json       version, repo SHA, roster, verification
 ```
 
 Emitted artifacts are **portable** — they resolve the repo root at run time via
 `$CLAUDE_PROJECT_DIR` (falling back to `git rev-parse --show-toplevel`); no
 absolute path is ever baked in.
+
+**On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
+session to **bias** routing toward `/advise`, `/dev-plan` and `/dev-loop`. It is prose in a
+context window: it raises the odds the model routes, it cannot compel it, and all three
+commands stay invocable by hand either way. Two things worth knowing before you keep it.
+**It does not arbitrate with anyone else's hook** — if you also run a skill pack that
+injects its own `SessionStart` block (superpowers does), you get both at full strength and
+nothing resolves a disagreement between them. And **the disable path is all-or-nothing**:
+deleting the `SessionStart` entry from `.claude/settings.json` removes the routing for all
+three commands at once.
 
 ## The emitted loop's shape
 
@@ -225,8 +248,21 @@ loop had — they must be declared through the interview.
    hand-tuned personas / constitution are preserved, and drift is flagged.
 2. **Bespoke + override.** Each expert is `<name>.md` (regenerable) **+**
    `<name>.overrides.md` (yours, never overwritten).
-3. **Plain files only.** No plugin/hook magic in the emitted bundle — portable and
-   inspectable.
+3. **Portable, plain, inspectable files — and, since 0.5.0, one hook.** The bundle may ship
+   a `SessionStart` routing hook, so *"no hook"* no longer holds and is not claimed. The
+   retired text claimed the emitted files were **portable and inspectable**; *"no hook"* is
+   the only part being retired — **both of those still hold, and neither is being dropped
+   quietly.** Every emitted file is a plain file you can read, diff and delete, and none of
+   them bakes in an absolute path: the portability scan now covers the emitted `.mjs` too,
+   so the new file class is held to the same rule as the rest of the bundle. The hook is a
+   markdown payload (`.claude/veriloop/session-routing.md`) plus a ~20-line dependency-free
+   node script that resolves the repo root from `${CLAUDE_PROJECT_DIR}` —
+   nothing minified, nothing compiled, no runtime installed. The boundary is
+   **preserve-or-write**: `.claude/settings.json` is written only if you do not have one,
+   and if you do, veriloop **never merges or edits it** (absent `--force`, which overwrites
+   every hand-owned file after a backup) — it prints a complete hook-only settings.json for
+   you to merge the `SessionStart` entry out of. Disable by deleting that entry, or the whole
+   file (it takes all three routes with it; there is no partial disable).
 4. **Auto-run safe-list.** Verify auto-runs typecheck + lint; asks before test /
    build; never auto-runs e2e / deploy / integration (real side effects). Verify
    runs commands with `CI=1` (deterministic, non-watch), which can make a
@@ -309,7 +345,7 @@ Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
 
-**v0.5.0 — the domain subsystem (Phases 1–2 of three).** A new advisory path,
+**v0.5.0 — the domain subsystem (all three phases).** A new advisory path,
 `.claude/veriloop/domain/`, ships an audit that classifies the repo's field on tiered,
 cited evidence; a domain-expert persona; and a three-category reference library whose every
 entry's verification status is recomputed by a script — the status the entry *claims* is
@@ -322,7 +358,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 346 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 395 and `CHANGELOG.md` names every
 removal individually. **Phase 2 also ships:** `/advise` now consults that domain expert as
 its **sole lens**, seated four times under different stances (`RESEARCH`, `PRACTICE`,
 `FIELD`, `SKEPTIC`) plus the dedicated PREMISE reviewer — and every
@@ -338,8 +374,16 @@ implementing orchestrator rather than the owner and recorded for confirm-or-reve
 `.claude/veriloop/specs/domain-expert-persona.md`. `/advise` also stopped loading the constitution — **that surface
 only**; `/dev-plan`, `/review` and the gate all still read it, and assertions pin both the
 committed files and the templates they are rendered from. (`/posture` never loaded it — its
-only mention is a write prohibition, and it is guarded as exactly that.) **Phase 3 (a
-`SessionStart` hook) is NOT shipped.**
+only mention is a write prohibition, and it is guarded as exactly that.) **Phase 3 ships
+too:** a `SessionStart` hook that **biases** the session toward `/advise`, `/dev-plan` and
+`/dev-loop` — three plain files, a `<SUBAGENT-STOP>` guard so no council seat or review lens
+inherits the routing, and preserve-or-write on `.claude/settings.json` (an existing one is
+never merged; a complete hook-only settings.json is printed for you to merge the
+`SessionStart` entry out of). It cannot compel invocation, nothing
+arbitrates it against another pack's `SessionStart` block, and deleting the entry disables
+all three routes at once. Locked decision #3 was rewritten rather than deleted (T5), and the
+unmeasured five-minute quickstart claim was retired for the measured 14s spine plus an
+explicit statement that the LLM phases are unmeasured (T10).
 
 **v0.4.0 — launch machinery (partial).** veriloop's own gate is now enforced rather than
 remembered: `.github/workflows/ci.yml` runs `npm run lint` + `npm run test` on push and PR

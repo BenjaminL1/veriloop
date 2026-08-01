@@ -56,6 +56,9 @@ dev-loop). It emits **plain files** into the target repo:
 .claude/veriloop/domain/expert.md        the domain-expert persona (machine-owned)
 .claude/veriloop/domain/expert.overrides.md    manual tweaks (hand-owned, never clobbered)
 .claude/veriloop/domain/references.json  the three-category reference library (machine-owned)
+.claude/veriloop/session-routing.md      the SessionStart routing payload (machine-owned)
+.claude/veriloop/session-start.mjs       the SessionStart hook script (machine-owned)
+.claude/settings.json                    registers the hook (starter; PRESERVED if one exists)
 .claude/veriloop/veriloop-manifest.json  version, repo SHA, roster, verification results
 ```
 
@@ -219,6 +222,16 @@ DB-touching changes:
    absent), and the manifest. Machine files
    regenerate; hand files are preserved (use `--force` only to intentionally
    replace them).
+   It also emits the **`SessionStart` routing payload + hook script** and registers them in
+   `.claude/settings.json` — which is PRESERVE-OR-WRITE. If the repo already has a
+   `settings.json`, veriloop leaves it byte-for-byte alone and **prints a complete hook-only
+   settings.json to stderr between `--- 8< ---` markers**. When that happens, surface the
+   block to the owner and tell them the routing is **not wired** until they **merge** the
+   `SessionStart` entry into their own file — it is a whole document, so pasting it verbatim
+   into a settings.json that already has a `hooks` key would give them two `hooks` keys and
+   silently drop their existing hooks. Do not edit their `settings.json` for them. The hook *biases* the session
+   toward `/advise` / `/dev-plan` / `/dev-loop` — it cannot force an invocation, so do not
+   describe it that way.
 3. **(Full pipeline) Enrich** the machine persona `.md` files with the bespoke,
    code-cited content from your scan (phase 3) so each reviewer knows this repo's
    real footguns — the generated persona is a functional default. Keep manual

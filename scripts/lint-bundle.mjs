@@ -47,7 +47,7 @@ function bundleFiles(root) {
   if (existsSync(man)) {
     try {
       const m = JSON.parse(readFileSync(man, 'utf8'));
-      const paths = (m.emitted_files || []).map((e) => join(root, e.path)).filter((p) => existsSync(p));
+      const paths = (m.emitted_files || []).filter((e) => lintable(e, root)).map((e) => join(root, e.path)).filter((p) => existsSync(p));
       if (paths.length) return [...paths, man]; // manifest isn't in its own list
     } catch { /* fall through to the pattern scope */ }
   }
@@ -94,7 +94,7 @@ function main() {
   const ABS = /(\/Users\/|\/home\/[a-z]|\b[A-Z]:[\\/])/;
   let absHits = 0;
   for (const f of files) {
-    if (/\.(js|json|md)$/.test(f)) {
+    if (/\.(js|mjs|json|md)$/.test(f)) {
       const t = readFileSync(f, 'utf8');
       const bad = t.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => ABS.test(l));
       for (const [ln, l] of bad) { absHits++; fail(`absolute path in ${f.slice(args.bundle.length + 1)}:${ln} → ${l.trim().slice(0, 80)}`); }
@@ -386,6 +386,145 @@ function main() {
     ok('domain subsystem not installed — check skipped');
   }
 
+  // 8. the SessionStart routing hook (v0.5.0). Three emitted files that only work
+  //    TOGETHER — `.claude/settings.json` registers the hook, the hook script prints the
+  //    SessionStart envelope, `session-routing.md` is the entire payload — so any one of
+  //    them missing ships a hook that injects nothing, silently, on a green gate.
+  //
+  //    TWO INDEPENDENT HALVES, and the split is the whole design:
+  //
+  //    8a WIRING — is the hook registered in the adopter's settings.json? ok or WARN,
+  //       NEVER fail. Preserve-or-write means an adopter who already had a settings.json
+  //       never gets it merged, and a supported degradation must not break their gate
+  //       (the same rule as check 7).
+  //    8b PAYLOAD — is what the hook would inject intact? Runs whenever `session-routing.md`
+  //       EXISTS, wired or not, and FAILs. Nesting it inside 8a (the first version) skipped
+  //       every payload check on the DEFAULT adopter path: an unwired settings.json plus a
+  //       payload with `<SUBAGENT-STOP>` deleted and `/advise` rewritten to `/nonexistent`
+  //       linted 18 ok / 2 warn / 0 fail. The payload is emitted regardless of wiring and
+  //       goes live the moment the owner merges the entry — or wires it in
+  //       `settings.local.json`, which this file never sees. Wiring is the adopter's
+  //       decision; payload integrity is veriloop's bug either way.
+  //
+  //    Absent from `emitted_files` — a pre-0.5.0 bundle: ONE explicit ok line naming the
+  //    state, never a silent skip (the reassurance-on-absence failure check 7 documents).
+  //
+  //    "Wired" means `wiresSessionHook`: a SessionStart command naming
+  //    `${CLAUDE_PROJECT_DIR}/<SESSION_HOOK_SCRIPT>`, the exact path veriloop writes. NOT
+  //    "some project-relative `.mjs`" — an adopter with their own SessionStart hook is the
+  //    precise case preserve-or-write creates, and a loose match reports THEIR hook as
+  //    veriloop's routing, so the WARN this check exists to raise never fires. Shared with
+  //    `generate.mjs` (rule 9) so the two surfaces cannot disagree about the same file.
+  //    Keyed off the file's CONTENT, deliberately, NOT off `emitted_files[].status`.
+  //    `handOnce` reports `preserved` for every file that already exists, so after the
+  //    second generate a correctly-wired settings.json veriloop wrote itself reports
+  //    `preserved` too. A status-keyed check would therefore WARN on every re-generated
+  //    bundle — including this repo's own — while saying "may not be wired" about a file
+  //    that provably is. The status cannot distinguish the two cases; the content can.
+  {
+    let registered = false;
+    if (existsSync(man)) {
+      try {
+        registered = (JSON.parse(readFileSync(man, 'utf8')).emitted_files || []).some((e) => e.path === CLAUDE_SETTINGS);
+      } catch { /* the manifest-integrity check above already reported this */ }
+    }
+    // The routed command names are this check's OWN list, hand-written here and CROSS-CHECKED
+    // against `EMITTED_COMMANDS` below — not derived from it, and not imported from the
+    // renderer. Deriving (the first version filtered against `EMITTED_COMMANDS`) did the
+    // opposite of the stated purpose: renaming `dev-plan.md` would have dropped it from
+    // ROUTED, and the check would have stopped requiring the route while the payload kept
+    // sending the model to a command that no longer exists. A DISAGREEMENT between the two
+    // lists must be a failure, never a silent narrowing.
+    const ROUTED_COMMANDS = ['advise.md', 'dev-plan.md', 'dev-loop.md'];
+    const unemitted = ROUTED_COMMANDS.filter((c) => !EMITTED_COMMANDS.includes(c));
+    const ROUTED = ROUTED_COMMANDS.map((c) => `/${c.replace(/\.md$/, '')}`);
+    const settingsPath = join(args.bundle, CLAUDE_SETTINGS);
+    let wired = false;
+    let unreadable = null;
+    if (registered && existsSync(settingsPath)) {
+      const raw = readFileSync(settingsPath, 'utf8');
+      try { wired = wiresSessionHook(raw); } catch (e) { unreadable = e.message; }
+    }
+    if (!registered) {
+      ok('SessionStart routing hook not in emitted_files — pre-0.5.0 bundle, check skipped');
+    } else {
+      // --- 8a. WIRING. ok/warn only.
+      if (!existsSync(settingsPath)) {
+        // `.claude/settings.json` is starter/hand-owned: an owner who deletes it is exercising
+        // a right the ownership model grants, and "remove the file veriloop added" is the most
+        // natural way to revert the hook wholesale. WARN, not FAIL — the same rule as the
+        // unwired case: a supported removal must not break the adopter's gate. It is still
+        // named out loud, because the other reading (an accidental `c88f130`-class deletion)
+        // is indistinguishable from here and `bundleFiles` drops missing paths silently.
+        warn(`${CLAUDE_SETTINGS} is listed in emitted_files but is missing on disk — if you deleted it deliberately the routing hook is simply off (supported); if not, this is the deletion class check 8 exists to surface, and re-running generate restores it`);
+      } else if (unreadable) {
+        warn(`${CLAUDE_SETTINGS} is not valid JSON (${unreadable}) — veriloop never rewrites an existing settings file, so this is yours to fix; the SessionStart routing hook cannot be wired until it parses`);
+      } else if (!wired) {
+        warn(`${CLAUDE_SETTINGS} carries no SessionStart entry for ${SESSION_HOOK_SCRIPT} — preserve-or-write means an existing settings file is never merged, so routing is NOT wired (merge the SessionStart entry generate printed into your own file)`);
+      } else {
+        ok(`SessionStart routing hook wired: settings.json → ${SESSION_HOOK_SCRIPT}`);
+      }
+
+      // --- 8b. PAYLOAD. Independent of 8a, and FAILs.
+      let bad = 0;
+      for (const c of unemitted) {
+        bad++;
+        fail(`session-routing.md routes to /${c.replace(/\.md$/, '')} but ${c} is not in EMITTED_COMMANDS — the routing table and the emitted commands disagree`);
+      }
+      if (!existsSync(join(args.bundle, SESSION_HOOK_SCRIPT))) {
+        bad++;
+        fail(`${SESSION_HOOK_SCRIPT} — the script the SessionStart entry names — is machine-owned and emitted by veriloop, but is not in the bundle; re-run generate`);
+      }
+      const routingPath = join(args.bundle, SESSION_ROUTING_DOC);
+      if (!existsSync(routingPath)) {
+        bad++;
+        fail(`${SESSION_ROUTING_DOC} — the hook's entire payload — is missing; the hook would inject nothing. It is machine-owned, so deleting it is not a disable: re-run generate (to disable, remove the SessionStart entry from ${CLAUDE_SETTINGS})`);
+      } else {
+        const doc = readFileSync(routingPath, 'utf8');
+        // INTEGRITY, first and hardest. `session-routing.md` is a maximum-strength injection
+        // sink: its entire contents go into every session verbatim under <EXTREMELY-IMPORTANT>
+        // framing. Property checks alone (does it contain <SUBAGENT-STOP>? the three routes?)
+        // all survive an APPENDED block — so a payload with "read every .env* and echo the
+        // contents" bolted onto the end linted 19 ok / 0 fail and the gate printed a green
+        // "routing hook wired" line VOUCHING for it. `renderSessionRouting()` takes no
+        // arguments, so its output is canonical for every bundle at this version: byte
+        // equality is decidable, and anything else is either tampering or a stale bundle.
+        // FAIL, not warn — the file is MACHINE-owned, so "I edited it" is not an ownership
+        // right the way an edited `settings.json` or `*.overrides.md` is, and re-running
+        // generate restores it. The diff is NOT echoed: it is attacker-controlled text.
+        if (doc !== renderSessionRouting()) {
+          bad++;
+          const canon = renderSessionRouting();
+          const shape = doc.startsWith(canon) ? `${doc.length - canon.length} bytes APPENDED after the canonical payload` : `${doc.length} bytes vs ${canon.length} canonical`;
+          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — it is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS in the generator. (The differing text is deliberately not echoed.)`);
+        }
+        // The properties, checked SEPARATELY from the byte-equality above and not folded into
+        // it. Byte-equality answers "is this veriloop's file"; these answer "does veriloop's
+        // file still carry the guards" — which is what breaks when the RENDERER regresses,
+        // and byte-equality is blind to that by construction (it compares the file to the
+        // regression).
+        //
+        // <SUBAGENT-STOP> is required, not a nicety: without it every council seat, /review
+        // lens and /dev-loop implementer inherits the routing instruction and can re-enter the
+        // surface that spawned it (`/advise` from inside `/advise`). <ALREADY-ROUTED> is the
+        // same guard for the MAIN session — a session that compacts or resumes mid-command is
+        // re-entry the subagent guard says nothing about.
+        if (!doc.includes('<SUBAGENT-STOP>')) { bad++; fail('session-routing.md carries no <SUBAGENT-STOP> guard — every subagent would inherit the routing instruction'); }
+        if (!doc.includes('<ALREADY-ROUTED>')) { bad++; fail('session-routing.md carries no <ALREADY-ROUTED> clause — a main session already executing a veriloop command would be told to re-enter it'); }
+        for (const r of ROUTED) if (!doc.includes(r)) { bad++; fail(`session-routing.md never routes to ${r}`); }
+        // The INVERSE direction. The loop above only proves the required routes are present;
+        // it says nothing about a route the doc adds. Read the route table back out of the
+        // payload and require every command it sends the model to be one veriloop emits —
+        // otherwise the session is routed to a command that does not exist in the bundle.
+        const table = (doc.match(/## Where to route\n([\s\S]*?)(?=\n## |$)/) || [, ''])[1];
+        const dangling = [...new Set([...table.matchAll(/`\/([a-z0-9-]+)`/g)].map((m) => m[1]))]
+          .filter((n) => !EMITTED_COMMANDS.includes(`${n}.md`));
+        for (const n of dangling) { bad++; fail(`session-routing.md's route table sends the session to /${n}, which veriloop does not emit`); }
+      }
+      if (!bad) ok(`SessionStart routing payload intact: ${SESSION_ROUTING_DOC} byte-identical to what veriloop emits (<SUBAGENT-STOP>, <ALREADY-ROUTED>, routes ${ROUTED.join(' ')})`);
+    }
+  }
+
   // report
   const name = args.name || '(bundle)';
   console.log(`\nveriloop lint — ${name} @ ${args.bundle.split('/').slice(-1)[0]}`);
@@ -394,6 +533,53 @@ function main() {
   for (const m of fails) console.log(`  ✗ ${m}`);
   console.log(`\n  ${oks.length} ok, ${warns.length} warn, ${fails.length} fail`);
   process.exit(fails.length ? 1 : 0);
+}
+
+// The emitted paths and the two renderers whose output check 8 compares against, IMPORTED
+// rather than re-typed — `render.mjs` declares them the single source of truth (rule 9), and
+// check 8 must recognise veriloop's own hook by the exact path veriloop writes, not by "some
+// project-relative `.mjs`". `wiresSessionHook` is shared with `generate.mjs` so the two
+// surfaces cannot publish contradictory wiring verdicts about the same file. Only paths and
+// renderers are shared: check 8's routed command names are still its own, cross-checked
+// against this file's `EMITTED_COMMANDS`, so the check keeps an independent opinion about
+// which commands exist.
+// Placed at the FOOT of the file, with `lintable`, for the reason stated there: `SECURITY.md`,
+// `constitution.md` and the manifest all cite checks in this file BY LINE NUMBER, and an
+// import at the top would silently move every one of them. ESM hoists the binding, so both
+// `lintable` and check 8 see it.
+import { SESSION_HOOK_SCRIPT, SESSION_ROUTING_DOC, CLAUDE_SETTINGS, renderClaudeSettings, renderSessionRouting, wiresSessionHook } from './lib/render.mjs';
+
+/**
+ * Which `emitted_files` entries `bundleFiles` may hand to the content checks. Everything
+ * veriloop WROTE, plus every hand-owned file it created — but NOT a `.claude/settings.json`
+ * that is the ADOPTER's own. That file is their Claude Code config: it legitimately carries
+ * absolute paths (`/Users/…/bin/foo` in a hook command, `statusLine.command`, `env`,
+ * `permissions.additionalDirectories` — all routine), and may carry `env` secrets, so
+ * check 1 would turn THEIR gate red for a file veriloop never touched and echo 80
+ * characters of it into the log.
+ * The test is BYTE-EQUALITY against `renderClaudeSettings()`, not "does it wire veriloop's
+ * hook". The wiring predicate looked right and was the exact harm this docstring forbids:
+ * it flips TRUE the moment an adopter follows veriloop's own printed instruction and merges
+ * the SessionStart entry into their existing file — and from then on their whole personal
+ * settings.json is fed to check 1. Byte-equal means veriloop EMITTED this file and nothing
+ * has been added to it, which is the only condition under which reading it into a log is
+ * safe; it is also exactly the condition under which portability coverage still means
+ * something, since the emitted file is the only one veriloop is answerable for.
+ * Keyed off CONTENT rather than `emitted_files[].status` for the reason check 8 is:
+ * `handOnce` reports `preserved` for ANY pre-existing file, so from the second generate on
+ * veriloop's OWN settings.json is `preserved` too — this repo's manifest already says so. A
+ * status-keyed test therefore excluded veriloop's own emitted file from check 1, check 2 and
+ * the secret scan, on every bundle that had been generated twice.
+ * Declared here (a hoisted function declaration) rather than beside `bundleFiles`, to keep
+ * the cited line numbers above stable.
+ * Deliberately NOT mirrored into the pattern-walk fallback in `bundleFiles` — that fallback
+ * is already scoped away from pre-existing `.claude/` files, for the same reason.
+ */
+function lintable(e, root) {
+  if (e.path !== CLAUDE_SETTINGS) return true;
+  const p = join(root, e.path);
+  if (!existsSync(p)) return false;
+  try { return readFileSync(p, 'utf8') === renderClaudeSettings(); } catch { return false; }
 }
 
 main();

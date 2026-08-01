@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-01T02:21:34.787Z",
+  "generated_at": "2026-08-01T04:26:40.022Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "fe1db209b91e2f1b7cabdc29f54e29ebb3d11c74",
+  "repo_sha": "e6b76884ea9b0f90bb3b0785497880d324d509d8",
   "stack": [
     "node"
   ],
@@ -347,6 +347,21 @@
     {
       "path": ".claude/veriloop/domain/expert.overrides.md",
       "ownership": "hand",
+      "status": "preserved"
+    },
+    {
+      "path": ".claude/veriloop/session-routing.md",
+      "ownership": "machine",
+      "status": "unchanged"
+    },
+    {
+      "path": ".claude/veriloop/session-start.mjs",
+      "ownership": "machine",
+      "status": "unchanged"
+    },
+    {
+      "path": ".claude/settings.json",
+      "ownership": "starter",
       "status": "preserved"
     },
     {

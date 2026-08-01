@@ -14,9 +14,9 @@ const AUTO_END = '<<< veriloop:auto:end >>>';
 
 // NAMES only (rule 9 — domain.mjs owns the definitions); no cycle: it imports nothing here.
 // DELIBERATELY BELOW the splice markers: ESM `import` declarations hoist, so this binds
-// first regardless, and keeping it here leaves `AUTO_START` on its historical line — the
+// first regardless, and keeping it here holds `AUTO_START` at `:12` — one line off the
 // `scripts/lib/render.mjs:11 AUTO_START` citations in the hand-owned constitution and
-// `drift.overrides.md` (rule 8 — never regenerated) stay live without a hand re-point.
+// `drift.overrides.md` (rule 8 — never regenerated), inside the +/-6-line liveness window.
 import { STANCES, REFERENCE_CATEGORIES } from './domain.mjs';
 
 function gateList(gate) {
@@ -702,4 +702,165 @@ export function spliceAuto(template, autoBlock) {
   if (start === -1 || end === -1) throw new Error('template is missing the veriloop:auto markers');
   const endLineEnd = template.indexOf('\n', end);
   return template.slice(0, start) + autoBlock + template.slice(endLineEnd);
+}
+
+// ---------------------------------------------------------------------------
+// SessionStart routing hook (v0.5.0, Phase 3)
+//
+// Three emitted artifacts, one mechanism. The hook BIASES the model toward
+// veriloop's three entry points at the top of a session; it cannot compel one —
+// it is prose injected into context, and the commands stay model-invocable
+// either way. Say "biases"/"routes" about it, never "forces" (the compulsion
+// language inside SESSION_ROUTING is the prompting DEVICE, not a claim about it).
+//
+// Split into plain files deliberately: the payload is markdown you can read,
+// diff and grep, and the script that carries it is ~20 dependency-free lines.
+// That is what survives of README locked decision #3 after T5 — "no hook" no
+// longer holds, "portable, plain and inspectable" still does.
+// ---------------------------------------------------------------------------
+
+// ONE source of truth for all three paths (rule 9): `generate.mjs` writes here, the
+// settings entry below points here, and `lint-bundle.mjs` / `selftest.mjs` read from
+// here. `CLAUDE_SETTINGS` was re-typed as a bare literal in four places before it was
+// hoisted up here beside its two siblings.
+export const SESSION_ROUTING_DOC = '.claude/veriloop/session-routing.md';
+export const SESSION_HOOK_SCRIPT = '.claude/veriloop/session-start.mjs';
+export const CLAUDE_SETTINGS = '.claude/settings.json';
+
+// The routing table. `lint-bundle.mjs` re-derives the same three commands from its
+// own `EMITTED_COMMANDS` instead of importing this, and FAILS when the two disagree in
+// either direction — a bundle may only be routed to a command veriloop actually emits.
+export const SESSION_ROUTES = [
+  { trigger: 'an open-ended question — anything that is not a direct implementation request', command: '/advise' },
+  { trigger: 'a feature request', command: '/dev-plan' },
+  { trigger: 'an implementation request', command: '/dev-loop' },
+];
+
+// The four rationalizations a model reaches for when it is about to skip the route.
+// Named verbatim, because a red flag that is not named is not pre-empted.
+const SESSION_RED_FLAGS = [
+  ['"this is just a simple question"', 'A question IS the `/advise` case. Route.'],
+  ['"let me explore the codebase first"', '`/advise` does its own recon, with the repo\'s domain expert seated. Exploring first is doing the command\'s first step badly.'],
+  ['"the skill is overkill"', 'You are not the one who decides that. Route, and say in one line why it may be overkill.'],
+  ['"I need more context first"', 'Getting context is what the route is for. Ask the owner inside the command, not instead of it.'],
+];
+
+export function renderSessionRouting() {
+  const routes = SESSION_ROUTES.map((r) => `| ${r.trigger} | \`${r.command}\` |`).join('\n');
+  const flags = SESSION_RED_FLAGS.map(([thought, move]) => `| ${thought} | ${move} |`).join('\n');
+  return (
+    `# veriloop session routing\n\n` +
+    `<SUBAGENT-STOP>\n` +
+    `If you were dispatched as a subagent to execute a specific task, ignore this block. It is for\n` +
+    `the MAIN session only. A council seat, a review lens or a dev-loop implementer that re-routes\n` +
+    `recurses into the surface that spawned it — \`/advise\` from inside \`/advise\`. Do your task.\n` +
+    `</SUBAGENT-STOP>\n\n` +
+    `<ALREADY-ROUTED>\n` +
+    `If this MAIN session is already executing a veriloop command — you are inside \`/advise\`,\n` +
+    `\`/dev-plan\` or \`/dev-loop\`, or you are resuming one after a compaction or a \`--continue\` —\n` +
+    `you have already routed. Continue the task in flight; do not re-enter the command you are\n` +
+    `running. Routing is a decision taken once, at the top of a session, never a loop.\n` +
+    `</ALREADY-ROUTED>\n\n` +
+    `<EXTREMELY-IMPORTANT>\n` +
+    `This repo has veriloop installed. Its commands are the entry points for real work here, and\n` +
+    `**you do not have a choice** about routing through them. Route FIRST, then work. Name the\n` +
+    `route you took in your first sentence, so the owner can redirect you before you spend tokens.\n` +
+    `</EXTREMELY-IMPORTANT>\n\n` +
+    `## Where to route\n\n` +
+    `| When the owner's message is | Route to |\n|---|---|\n${routes}\n\n` +
+    `## Red flags — thoughts that mean you are about to skip the route\n\n` +
+    `| If you catch yourself thinking | The correct move |\n|---|---|\n${flags}\n\n` +
+    `## Turning this off\n\n` +
+    `Delete the \`SessionStart\` entry from \`.claude/settings.json\`. That removes **all three**\n` +
+    `routes at once — there is no partial disable — and the commands remain invocable by hand.\n` +
+    `Deleting THIS file is not a disable: it is **machine-owned** and rewritten on the next\n` +
+    `\`/veriloop\` run, so routing would silently resume. Hand edits here are overwritten for the\n` +
+    `same reason — change \`SESSION_ROUTES\` / \`SESSION_RED_FLAGS\` in the generator instead.\n`
+  );
+}
+
+export function renderSessionStartHook() {
+  return (
+    `#!/usr/bin/env node\n` +
+    `// veriloop SessionStart hook — prints the documented SessionStart envelope so Claude Code\n` +
+    `// injects the routing payload as additional context. The payload itself is plain markdown\n` +
+    `// at ${SESSION_ROUTING_DOC} — read it and diff it; this script only carries it. That file is\n` +
+    `// MACHINE-OWNED: it is rewritten on every re-run, so hand edits to it do not survive.\n` +
+    `//\n` +
+    `// FAIL-OPEN by design: no routing doc → print nothing and exit 0. A hook that errors on\n` +
+    `// every session start is worse than an inert one.\n` +
+    `//\n` +
+    `// Disable by deleting the SessionStart entry from .claude/settings.json (that takes ALL\n` +
+    `// THREE routes with it — there is no partial disable).\n` +
+    `import { readFileSync, existsSync } from 'node:fs';\n` +
+    `import { join, dirname, resolve } from 'node:path';\n` +
+    `import { fileURLToPath } from 'node:url';\n\n` +
+    `const root = process.env.CLAUDE_PROJECT_DIR || resolve(dirname(fileURLToPath(import.meta.url)), '../..');\n` +
+    `const doc = join(root, '${SESSION_ROUTING_DOC}');\n` +
+    `if (!existsSync(doc)) process.exit(0);\n` +
+    `const additionalContext = readFileSync(doc, 'utf8');\n` +
+    `process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }));\n`
+  );
+}
+
+// The SessionStart sources veriloop wires — the two that begin a session with NO task in
+// flight. Claude Code documents four; `resume` and `compact` are DELIBERATELY excluded.
+// Both fire in the middle of live work: `compact` on an auto-compaction and `resume` on
+// `claude --continue` / `--resume`. A `/dev-loop` that auto-compacts mid-run would be handed
+// "you do not have a choice about routing through them. Route FIRST, then work" — an
+// instruction to re-enter the command it is currently executing, and a contradiction of the
+// post-compaction rule that a resumed session continues the task in flight. `<SUBAGENT-STOP>`
+// does not cover it: the re-entrant session is the MAIN one. The payload's `<ALREADY-ROUTED>`
+// clause covers the residue (a `clear` mid-command, or any harness path this list does not
+// control); this list keeps the full-strength block off the two paths that are re-entry by
+// construction. The EXACT list is asserted in `selftest.mjs`, in both directions — narrowing
+// it un-wires a session type silently, widening it re-opens the re-injection.
+export const SESSION_START_SOURCES = ['startup', 'clear'];
+
+// The settings entry, and NOTHING else — `type`/`command` only, the two keys the command
+// hook item documents. veriloop wires its own hook; it does not impose the owner's personal
+// `permissions` / `attribution` / `env` config on an adopter, and it does not write
+// undocumented keys into the one file whose corruption breaks their whole Claude Code
+// config. `${CLAUDE_PROJECT_DIR}` rather than a baked path — constitution rule 7.
+export function renderClaudeSettings() {
+  return JSON.stringify(
+    {
+      hooks: {
+        SessionStart: [
+          {
+            matcher: SESSION_START_SOURCES.join('|'),
+            hooks: [
+              {
+                type: 'command',
+                command: `node "\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}"`,
+              },
+            ],
+          },
+        ],
+      },
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+/**
+ * Does this `settings.json` text wire VERILOOP's SessionStart hook — a command naming
+ * `${CLAUDE_PROJECT_DIR}/<SESSION_HOOK_SCRIPT>`, the exact path veriloop writes? ONE
+ * source of truth (rule 9): `generate.mjs` keys its preserve-or-write report on it and
+ * `lint-bundle.mjs` check 8 keys its wired/not-wired verdict on it, so the two surfaces
+ * cannot publish contradictory facts about the same file — which they did, generate
+ * having keyed on mere EXISTENCE and printed "routing is NOT wired" about a file it
+ * wrote itself, while lint printed "wired" in the same tree.
+ * NOT "some project-relative `.mjs`": an adopter with their OWN SessionStart hook is the
+ * precise case preserve-or-write creates, and a loose match reports THEIR hook as
+ * veriloop's routing — suppressing the not-wired WARN and failing their gate for a script
+ * veriloop never wrote. Asserted with exactly that shape in `selftest.mjs`.
+ * Throws the JSON error for an unparseable file; the callers decide what that means.
+ */
+export function wiresSessionHook(text) {
+  const s = JSON.parse(text);
+  return ((s.hooks || {}).SessionStart || [])
+    .flatMap((g) => g.hooks || [])
+    .some((h) => (h.command || '').includes(`\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}`));
 }

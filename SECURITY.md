@@ -63,6 +63,71 @@ Commands run with `CI=1` for determinism. This is constitution rule 6.
 **veriloop never suggests `--dangerously-skip-permissions`**, and no emitted artifact
 contains it.
 
+**New in 0.5.0: the bundle registers a `SessionStart` hook, which is an execution surface.**
+Through 0.4.x nothing veriloop emitted ran on its own. Now `.claude/settings.json` wires one
+command that Claude Code runs at session start, so it is stated here rather than left to be
+discovered:
+
+- **What runs.** `node "${CLAUDE_PROJECT_DIR}/.claude/veriloop/session-start.mjs"` — one
+  repo-local, dependency-free script of about twenty lines. Read it; that is the whole
+  program. It reads exactly one file (`.claude/veriloop/session-routing.md`) and writes its
+  contents to stdout inside the documented `SessionStart` envelope. It makes **no network
+  call**, spawns no subprocess, writes no file, and reads no environment variable other than
+  `CLAUDE_PROJECT_DIR`. With the payload absent it prints nothing and exits 0.
+- **When it runs.** On `startup` and `clear` only — the two `SessionStart` sources that begin
+  a session with no task in flight. `resume` and `compact` are deliberately **not** wired:
+  both fire in the middle of live work (`claude --continue`/`--resume`, and an
+  auto-compaction), and re-injecting "route FIRST, then work" into a session that is already
+  executing `/dev-loop` is an instruction to re-enter the command it is running.
+- **What it does to the session.** It injects prose that **biases** the model toward
+  `/advise`, `/dev-plan` and `/dev-loop`. It is a prompt, not a control: it cannot compel a
+  route, and the commands are invocable by hand with or without it. The payload opens with a
+  `<SUBAGENT-STOP>` guard so subagents — council seats, review lenses, `/dev-loop`
+  implementers — do not inherit the routing, and an `<ALREADY-ROUTED>` clause so a main
+  session already inside a veriloop command continues the task in flight instead of
+  re-entering it.
+- **veriloop never rewrites your `settings.json` — except under `--force`.** Preserve-or-write:
+  absent → written; present → left byte-for-byte alone, and a complete settings.json carrying
+  nothing but the hook entry is printed to stderr for you to **merge** the `SessionStart` entry
+  out of (it is a whole document, not a fragment: if your file already has a top-level `hooks`
+  key, copy the array into it rather than pasting a second `hooks` key). There is no JSON-aware
+  merge and none is planned; a corrupted `settings.json` breaks your whole Claude Code config,
+  not just veriloop. **The residual, stated rather than papered over:** `settings.json` is
+  hand-owned, and `--force` overwrites every hand-owned file (`scripts/generate.mjs:351
+  handOnce`) — so `generate --force` replaces yours wholesale with the 15-line hooks-only file,
+  backing the original up to `.claude/veriloop/.backups/` first. Nothing narrows `--force` to
+  spare it. A settings.json that is **not byte-identical to the file veriloop emits** is
+  excluded from `lint-bundle`'s content scans — including the merged one you get by following
+  the instruction above, which is the point: from the moment you merge, the file is yours, and
+  it may legitimately contain absolute paths (`statusLine.command`, `env`,
+  `permissions.additionalDirectories`) or secrets that the linter would otherwise fail your
+  gate over and print 80 characters of into the log. The scan tests bytes, not "does it wire
+  veriloop's hook" — that test flips true the moment you merge, which is exactly backwards.
+- **Turning it off.** Delete the `SessionStart` entry from `.claude/settings.json`. That
+  removes routing for all three commands at once — there is no partial disable. Deleting
+  `.claude/settings.json` outright works too and is supported (`lint` warns, it does not
+  fail). Deleting `session-routing.md` is **not** a disable: it is machine-owned, so the next
+  `/veriloop` run rewrites it and routing resumes.
+- **The boundary this creates for people who clone YOUR repo.** veriloop bundles are
+  committed, `.claude/settings.json` included. From 0.5.0 on, cloning a repo that ships a
+  veriloop bundle and opening Claude Code executes that repo's `.claude/veriloop/session-start.mjs`
+  and injects that repo's `.claude/veriloop/session-routing.md` into the top of the session
+  under `<EXTREMELY-IMPORTANT>` framing. Both are plain repo text that any PR author can edit,
+  and the script reads whatever is at that path **at run time** — the renderer is fully static,
+  so nothing untrusted reaches it when the bundle is generated. **`lint-bundle` check 8 does
+  re-check the payload afterwards:** `session-routing.md` is machine-owned and
+  `renderSessionRouting()` takes no arguments, so its text is canonical, and any difference —
+  an appended block included — FAILs the gate at exit 1 rather than being vouched for by a
+  green "routing hook wired" line. That is a byte comparison against the version of veriloop
+  doing the linting, so it catches tampering and stale bundles alike; it is **not** a
+  signature, and it only helps someone who actually runs the gate. This is the same warning
+  §1 already carries for `commands.json`, pointed at a higher-privilege sink: **read both
+  files before trusting a bundle from a repo whose contributors you do not control.** They are
+  two short plain-text files, and they are in the diff of the PR that changed them.
+- **Known limit, stated as one:** if another skill pack injects its own `SessionStart`
+  block, both are injected at full strength and nothing arbitrates a disagreement between
+  them.
+
 ### 3. Network, exfiltration, telemetry
 
 There is **no telemetry, no analytics, and no phone-home** anywhere in the repo. veriloop
@@ -178,6 +243,18 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   credentials in the wild; they are scrubbed at the source in `scripts/lib/domain.mjs`
   and this is the backstop
 - a gate that disagrees with the manifest (`scripts/lint-bundle.mjs:177`)
+- a `session-routing.md` that is not byte-identical to what `renderSessionRouting()` emits —
+  it is machine-owned and its entire text is injected into every session verbatim, so a hand
+  edit there is an injection into every session; a routing payload missing its
+  `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, or one of the three routes; a
+  payload routing the session to a command veriloop does not emit; or a missing hook script.
+  **These payload checks run whether or not the hook is wired**, because the payload is
+  emitted either way and goes live the moment you merge the entry (or wire it in
+  `settings.local.json`, which `lint-bundle` never sees). Whether the hook is *wired* is a
+  separate, softer verdict: everything an adopter is entitled to do — keeping their own
+  unmerged settings.json, wiring their own `SessionStart` hook instead, or deleting the file
+  veriloop added — WARNs, exit 0. "veriloop's own" hook is decided by the exact script path
+  veriloop writes, so a settings.json wiring *your* hook is never mistaken for it. See §2.
 
 `.env*` is never staged and never read into an artifact. This is constitution rule 7.
 
@@ -185,8 +262,9 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 
 Machine-owned files regenerate on every run. **Hand-owned files are preserved untouched** —
 `scripts/generate.mjs:351 handOnce` — which covers `constitution.md`, every
-`*.overrides.md`, and `specs/*`. With `--force` they are backed up first
-(`scripts/generate.mjs:303 backup`). Inside shared files like `.gitignore`, only the marked block
+`*.overrides.md`, `specs/*`, and (new in 0.5.0) `.claude/settings.json`. With `--force` they are
+overwritten, backed up first (`scripts/generate.mjs:303 backup`) — including `settings.json`,
+which is why §2's preserve-or-write guarantee is stated as holding absent `--force`. Inside shared files like `.gitignore`, only the marked block
 is rewritten; your lines outside it are preserved byte for byte.
 
 Note the consequence: because hand-owned files are *preserved* rather than merged, a
@@ -240,6 +318,6 @@ an emitted artifact or an attestation record; a path that makes the gate report 
 not earn.
 
 **Out of scope:** the documented `npx` look-alike limitation above (it is disclosed, and
-reading `commands.json` is the mitigation); the two documented network paths in §3; and the
+reading `commands.json` is the mitigation); the three documented network paths in §3; and the
 fact that a red gate can be overridden by a human waiver, which is by design and is
 human-only.

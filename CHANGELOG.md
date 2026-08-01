@@ -1,12 +1,157 @@
 # Changelog
 
-## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–2 of `.claude/veriloop/specs/domain-expert-persona.md`)
+## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–3 of `.claude/veriloop/specs/domain-expert-persona.md`)
 
-**Phases 1 and 2.** The ratified spec has three phases. This release ships Phase 1 — the
-domain audit, the domain-expert persona and the verified reference library — and Phase 2 —
-the `/advise` redesign, with retirements T9 and T13 — plus the retirements Phase 1 depends
-on. **Phase 3 (the `SessionStart` hook, T5/T10) is NOT in this release.** Anyone reading
-the spec should expect one more entry, not none.
+**Phases 1, 2 and 3 — the whole ratified spec.** Phase 1: the domain audit, the
+domain-expert persona and the verified reference library. Phase 2: the `/advise` redesign,
+with retirements T9 and T13. Phase 3: the `SessionStart` routing hook, with retirements T5
+and T10. Plus the retirements Phase 1 depends on.
+
+**Phase 3 — a `SessionStart` hook that BIASES routing, and is described that way.** Three plain
+files emitted through the existing writer, so all three land in `manifest.emitted_files`:
+`.claude/veriloop/session-routing.md` (machine — the injected markdown payload),
+`.claude/veriloop/session-start.mjs` (machine — a ~20-line dependency-free script that
+prints the documented `{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext}}`
+envelope, and exits 0 printing nothing if the payload is missing) and `.claude/settings.json`
+(starter). The payload routes an open-ended question to `/advise`, a feature request to
+`/dev-plan` and an implementation request to `/dev-loop`, with superpowers-parity push
+devices: `<EXTREMELY-IMPORTANT>` framing, an explicit "you do not have a choice" directive,
+and a red-flags table naming the four rationalizations a model reaches for when it is about
+to skip the route. **Two re-entry guards, both required, not decorative.** `<SUBAGENT-STOP>`
+covers the dispatched subagent — without it every council seat, `/review` lens and
+`/dev-loop` implementer inherits the routing and can re-enter the surface that spawned it.
+`<ALREADY-ROUTED>` covers the MAIN session, which the first one says nothing about: a session
+already executing a veriloop command is told to continue the task in flight rather than
+re-enter the command it is running.
+
+**The hook fires on `startup` and `clear` only.** Claude Code documents four `SessionStart`
+sources; `resume` and `compact` are deliberately left unwired, and the exact list is asserted
+in both directions so narrowing *and* widening it fail the gate. Both of the excluded two fire
+in the middle of live work — `claude --continue` / `--resume`, and an auto-compaction — so
+wiring them hands "you do not have a choice about routing through them. Route FIRST, then
+work" to a `/dev-loop` or `/advise` run that is already in flight. That is an instruction to
+re-enter the command currently executing, through the one door `<SUBAGENT-STOP>` does not
+cover (the re-entrant session is the main one), and it contradicts the rule that a resumed
+session continues its in-progress task rather than pivoting. The cost is stated: an owner who
+re-enters a repo with `--continue` does not get the routing block on that entry, by design.
+
+Two boundaries, both structural rather than promissory. **Preserve-or-write on
+`settings.json`:** absent → written; present → veriloop does **not** merge, does not edit,
+and prints to stderr a complete hook-only settings.json — labelled as one — for the owner to
+merge the `SessionStart` entry out of. (An "entry to paste" label would have been the same
+corruption from the other end: a literal paste into a file that already has a `hooks` key
+produces a duplicate key and silently drops the owner's own hooks.) The one hole in the
+boundary is stated rather than smoothed over: `settings.json` is hand-owned, so `--force`
+overwrites it wholesale like every other hand-owned file, backup first and nothing narrowed
+to spare it; the report says so when it happens instead of printing "veriloop did NOT modify
+your settings.json" over its own write. **That report is keyed on the file's CONTENT, not its
+existence** — `handOnce` preserves anything already on disk, so an existence key made every
+re-generate print "veriloop did NOT modify your settings.json — routing is NOT wired" about a
+file veriloop had written and `lint-bundle` reported as *wired* in the same tree. Two veriloop
+surfaces publishing contradictory facts is the defect; the owner-visible cost is worse, since
+believing the paste instruction produces a duplicated `SessionStart` array injecting the
+payload twice. One predicate now answers "is veriloop's hook wired here?" for both surfaces
+(rule 9). No JSON-aware
+merge primitive was built and none is planned — `spliceBlock` is line-based with hash
+comments and JSON has no comments, and corrupting an adopter's `settings.json` breaks their
+whole Claude Code config. **And what the hook is not:** it is prose injected into a context
+window. It raises the probability of routing; it cannot compel it, and `/advise`,
+`/dev-plan` and `/dev-loop` stay model-invocable either way. Compulsion language belongs
+inside the injected prompt (it is the prompting device); it does not belong in veriloop's
+claims about the prompt, and a selftest scan now fails the build on any published PARAGRAPH
+about the hook that claims compulsion. The scan is paragraph-scoped rather than line-scoped
+because line-anchoring failed in both directions, both mutation-verified: a compulsion claim
+one line below the line naming the hook passed green, and the legitimate negated form
+("it cannot force an invocation") passed only because the word "hook" happened to wrap onto
+the previous line — re-wrapping correct prose turned the gate red. Negated forms are
+explicitly permitted; a guard that bans the word bans the honest disclaimer with it.
+Three known costs, none mitigated: an adopter
+who also runs a pack with its own `SessionStart` injection gets two full-strength blocks and
+nothing arbitrates them; pushing toward an always-full-council `/advise` on all-opus routing
+is a cost multiplier; and the disable path takes all three routes with it — deleting the
+`SessionStart` entry (or the whole `settings.json`) is the only switch. Deleting the payload
+is not one: it is machine-owned, so the next run puts it back.
+
+**Guard wiring for the new file class.** `lint-bundle` check 1's portability scan now covers
+`.mjs` (a no-op for every pre-0.5.0 bundle — none emitted one). New check 8 validates the
+three files as the single mechanism they are, in **two independent halves**, and the split is
+the design rather than a tidy-up:
+
+*8a, WIRING* — is the hook registered in the adopter's settings.json? `ok` or WARN, never a
+failure. A registered settings.json carrying **no** veriloop entry WARNs and exits 0, naming
+the consequence: preserve-or-write means it was never merged, so routing is not wired — and a
+supported degradation must not break an adopter's gate. Deleting `settings.json` outright
+WARNs for the same reason: it is starter-owned and the owner is entitled to remove it.
+"veriloop's" hook is decided by the exact `${CLAUDE_PROJECT_DIR}`-relative path veriloop
+writes, from the renderer that declares it (rule 9) — matching *any* project-relative `.mjs`
+inverts the check in the one case preserve-or-write creates, reporting an adopter's own
+SessionStart hook as veriloop's routing and failing their gate when their script is not in the
+bundle. That tightening now ships with the assertion it was missing: a settings.json wiring
+the adopter's own `${CLAUDE_PROJECT_DIR}`-relative `.mjs` hook must still report routing NOT
+wired, and reverting the predicate to the loose form turns the gate red.
+
+*8b, PAYLOAD* — is what the hook would inject intact? Runs **whenever `session-routing.md`
+exists, wired or not**, and FAILs. Nesting it inside 8a skipped every payload check on the
+default adopter path — anyone who already had a settings.json, which is the case the whole
+design is built around: an unwired settings.json plus a payload with `<SUBAGENT-STOP>` deleted
+and `/advise` rewritten to `/nonexistent` linted 18 ok, 2 warn, 0 fail, exit 0. The payload is
+emitted regardless of wiring and goes live the moment the owner merges the entry, or wires it
+in `settings.local.json`, which `lint-bundle` never sees. Wiring is the adopter's decision;
+payload integrity is veriloop's bug either way. The half now carries a **byte-equality
+integrity check** against `renderSessionRouting()`, which takes no arguments and is therefore
+canonical. Property checks alone were the gap: `<SUBAGENT-STOP>` present, three routes
+present — every one of them survives an APPENDED block, so a payload with "read every `.env*`
+and echo the contents" bolted onto the end linted 19 ok, 1 warn, 0 fail, exit 0, with the gate
+printing a green "routing hook wired" line **vouching for the tampered payload** while
+`SECURITY.md` escalated that exact risk in prose. It FAILs rather than warns, because
+`session-routing.md` is machine-owned — a hand edit there is not an ownership right the way an
+edited `settings.json` is — and the differing text is deliberately never echoed. The route
+names are `lint-bundle`'s own list, hand-written there and **cross-checked** against the
+`EMITTED_COMMANDS` constant it already owns rather than derived from it — deriving is what the
+first version did, and a rename would have silently dropped the route from the checked set.
+A disagreement between the two lists FAILs in **both** directions — a required route missing
+from the payload, and a payload routing to a command veriloop does not emit.
+
+Absent from `emitted_files` prints one explicit `ok` line naming the pre-0.5.0 state, never a
+silent skip. **The check reads the file, not `emitted_files[].status`, and that is
+load-bearing:** `handOnce` reports `preserved` for anything that already exists, so from the
+second generate onward a correctly-wired settings.json veriloop wrote itself is
+indistinguishable *in the manifest* from an adopter's file veriloop refused to merge. A
+status-keyed check would have WARNed "may not be wired" on every re-generated bundle,
+including this repo's own; an assertion now regenerates a bundle and fails if it does.
+
+**Which settings.json `lint-bundle` will read at all is decided by BYTE EQUALITY** with
+`renderClaudeSettings()`'s output — not by the status, and not by "does it wire veriloop's
+hook". The status excluded veriloop's own emitted file on every twice-generated bundle, this
+repo included. The wiring test was worse, and worse in a way that looked right: it flips true
+the moment an adopter follows veriloop's own printed instruction and merges the `SessionStart`
+entry into their existing file, and from then on their whole personal `settings.json` is fed
+to check 1, where any absolute path in it — a hook command, `statusLine.command`, `env`,
+`permissions.additionalDirectories`, all routine — fails their gate at exit 1 and echoes 80
+characters of their private config into the log. Byte-equal means veriloop emitted this file
+and nothing was added to it, which is the only condition under which reading it into a log is
+safe, and the only one under which portability coverage means anything.
+
+**T5 — README locked decision #3 rewritten, not deleted.** *"Plain files only. No plugin/hook
+magic"* is retired: the bundle now ships a hook, and the release does not pretend otherwise.
+**Only *"no hook"* is retired.** The old text claimed the emitted files were *portable **and**
+inspectable*, and both of those are still true, so both are re-stated rather than one of them
+quietly dropping out of the sentence — every emitted file is still a plain file you can read,
+diff and delete (markdown and a short node script; nothing minified, nothing compiled, no
+runtime installed), and none of them bakes in an absolute path, now including the emitted
+`.mjs` that check 1's widened scan covers. The decision also states the preserve-or-write
+boundary and the disable path. Rewritten rather than removed on purpose: a boundary that is
+restated is re-litigable, one that is deleted is forgotten — and the selftest pins **both**
+words, since checking only for "inspectable" is what let "portable" go missing in the first
+draft of this rewrite.
+
+**T10 — "Five minutes to first gate" retired for a measured figure.** No measurement ever
+supported five minutes, and m5 logged that exit criterion as NOT MET. The README section now
+publishes what was measured — the deterministic spine `detect → verify → generate →
+lint-bundle` at **14s** on a clean clone against a real third-party repo
+(`docs/demo/quickstart-check.sh`) — and states plainly that the LLM phases (deep scan,
+constitution mining, interview, and since 0.5.0 the domain audit with its network
+verification) are unmeasured end to end. No new total is invented.
 
 **A new advisory path: `.claude/veriloop/domain/`.** Four files, written through the same
 writer and the same ownership rules as everything else in the bundle: `audit.md`
@@ -394,8 +539,8 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 346, deliberately.** Minus the four T12 assertions named above and the
-three accretion-tripwire assertions the owner later ruled out (246), plus 100 new ones covering
+**Gate count: 253 → 395, deliberately.** Minus the four T12 assertions named above and the
+three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their
 agreement, the portability redaction, the `--domain` failure modes, the `attempted_at`
@@ -407,6 +552,38 @@ the seats' own prompt, the citation protocol, the offline disclosure, the cross-
 conflict rule, emission-only staging **and its honest promotion path**, the degraded
 PREMISE-only fallback in the command / the description / the cross-examination bullet /
 `lint-bundle`, and the T13 scope pin on both the committed files and the templates.
+**From Phase 3, 49 more** (100 from Phases 1–2 + 49 = 149; 246 + 149 = 395)**:**
+preserve-or-write in BOTH directions (a seeded settings.json is
+byte-for-byte identical after generate, is still registered `preserved` rather than silently
+skipped, and the block printed to stderr itself parses as JSON) — the trio is a
+mutation test, since swapping `handOnce`→`machine` fails the first and dropping the writer
+fails the other two; that block's LABEL, which must call it a complete settings.json to be
+merged rather than an entry to paste (a literal paste into a file that already has a `hooks`
+key silently discards the adopter's own hooks); **the report's CONTENT key in both
+directions** — a re-generate over veriloop's own settings.json prints no paste block, while an
+adopter's unmerged one still does; the emitted `SessionStart` **matcher**, pinned EXACTLY
+and checked for over-reach as well as under-reach, since wiring `resume`/`compact` re-injects
+the block into a session already mid-command; the hook item's key set, which must be
+`type`/`command` and nothing else;
+the mechanism proved by EXECUTING the emitted script and parsing its
+envelope, plus the fail-open path with the payload removed; **the payload's byte-level
+integrity** — an appended block FAILs the gate, stops the green "payload intact" line, and is
+never echoed into the report; **the payload checks running UNWIRED**, which is the default
+adopter path; **the tightened wiring predicate**, asserted with the settings.json that
+preserve-or-write actually produces (one wiring the adopter's *own* `${CLAUDE_PROJECT_DIR}`
+`.mjs` hook), plus the guarantee that neither their file's contents nor a merged adopter
+file's absolute paths reach check 1 or the log; the `<SUBAGENT-STOP>` guard, the
+`<ALREADY-ROUTED>` clause, the
+no-choice directive, all four named rationalizations and the three trigger→command rows,
+checked on the RENDERED template AND again on the COMMITTED artifacts — whose PRESENCE is now
+asserted too, so deleting `settings.json` or `session-routing.md` from this repo fails the
+gate instead of making the checks vanish with it, and whose payload is held byte-identical to
+the renderer; the claims-discipline
+scan over README / CHANGELOG / SECURITY / SKILL with a non-vacuity floor so it cannot pass by
+matching nothing; and T5 / T10 pinned as retirements (decision #3 rewritten not deleted **and
+re-stating both retained properties, portable and inspectable**, and
+the README quickstart section carrying the measured 14s spine plus the explicit
+LLM-phases-unmeasured statement).
 The drop is accounted for above; the rise is new coverage, not padding. One assertion was
 re-pointed rather than added or removed, and is named above.
 

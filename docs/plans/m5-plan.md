@@ -269,9 +269,11 @@ README.md` → exit 0.
 
 Methodology-first narrative + comparison table + proven 5-minute quickstart. The current
 README ([README.md:1-220](../../README.md)) already leads methodology-first
-("Why it's different", [README.md:20-35](../../README.md)) and has a "Five minutes to first
-gate" ([README.md:56-69](../../README.md)) — **the two real gaps are the comparison table
-and a clean-clone proof.**
+("Why it's different", [README.md:20-35](../../README.md)) and, **at the time this was
+written**, had a "Five minutes to first gate" section — retired in v0.5.0 (retirement T10,
+see the implementation note under the DA/T exit criteria below) for the measured 14s spine
+figure, since no measurement ever supported five minutes — **the two real gaps are the
+comparison table and a clean-clone proof.**
 
 - **Comparison table** vs `/init` · Spec Kit · aider · CodeRabbit (from the landscape,
   [roadmap-v1.md:271-273](./roadmap-v1.md)). Rows = the positioning axes at
@@ -693,6 +695,12 @@ constitution mining, interview) were **not executed**. The five-minute claim is 
 the scripted half and unmeasured end to end. **The word "proven" is not used for this
 criterion anywhere.** The existing "Five minutes to first gate" heading was deliberately not
 upgraded: a target is not a proof.
+
+**2026-07-31 (v0.5.0, Phase 3 / retirement T10).** The "Five minutes to first gate" heading
+this criterion discusses was **retired** rather than left standing. README now publishes the
+14s spine figure recorded above and states explicitly that the LLM phases are unmeasured end
+to end; no new total was invented. Appended rather than rewritten, so the record of what was
+measured, and when, stays intact.
 
 The same script surfaced a real behavior. Run against `obra/superpowers`, which declares no
 npm scripts at all, veriloop emits a bundle with an **empty gate** and `lint-bundle` exits 1
