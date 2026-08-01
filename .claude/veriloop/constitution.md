@@ -42,8 +42,8 @@ violates one is a **BLOCKER**. Keep this list short and true.
 
 8. **The ownership asymmetry is sacred.** Machine-owned files regenerate; hand-owned
    files (`*.overrides.md`, this constitution) are never clobbered; anything
-   overwritten is backed up first (`scripts/generate.mjs:304 machine`,
-   `scripts/generate.mjs:342 handOnce`, `scripts/generate.mjs:294 backup`). Splice
+   overwritten is backed up first (`scripts/generate.mjs:313 machine`,
+   `scripts/generate.mjs:351 handOnce`, `scripts/generate.mjs:303 backup`). Splice
    markers (`scripts/lib/render.mjs:11 AUTO_START`) bound every machine-owned block — owner
    lines outside them are preserved byte-for-byte. _(owner: `drift`)_
 9. **Emitted config has one source of truth.** The workflow's wired gate must equal
@@ -65,4 +65,8 @@ violates one is a **BLOCKER**. Keep this list short and true.
 - **Supply-Chain & Input-Safety Reviewer** (`security`) — rules 4, 5, 6, 7.
 - **Drift Sentinel** (`drift`) — rules 3, 8, 9.
 
-No orphan rules, no jobless experts.
+No orphan rules, no jobless experts — scoped to the ROSTER (the review lenses the
+gate spawns). ADVISORY personas outside the roster, under `.claude/veriloop/domain/`,
+are generated unconditionally and are governed instead by: a cited audit behind every
+claim, a reference library whose entries carry a verification status, and NO gate
+authority whatsoever.

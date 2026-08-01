@@ -6,7 +6,7 @@ this document states exactly what it does, what it refuses to do, and where the 
 exposure is. Claims here cite the enforcing line; if a citation does not resolve, that is a
 bug — please report it.
 
-Every claim below was checked against the tree at v0.4.0.
+Every claim below was checked against the tree at v0.5.0.
 
 ## Threat model
 
@@ -65,10 +65,16 @@ contains it.
 
 ### 3. Network, exfiltration, telemetry
 
-**The deterministic scripts make no network calls at all.** Verified across `scripts/`:
-zero occurrences of `fetch(`, `http://`, `https://`, `http.request`, `net.` or `dns.`.
 There is **no telemetry, no analytics, and no phone-home** anywhere in the repo. veriloop
-does not know you installed it.
+does not know you installed it. That statement is still exactly true — but as of **0.5.0
+it is no longer the whole picture, and the part it leaves out is yours, not ours: your
+machine now makes outbound requests during setup.** Read the third path below.
+
+_(Through 0.4.x this section opened by claiming the deterministic scripts make no network
+calls at all, proved by a `fetch(`-count across `scripts/`. That count is still zero. The
+sentence is deleted anyway, because veriloop's **setup** now performs network I/O through a
+subagent it spawns, and a claim that survives only on where the bytes live is the kind of
+technically-true framing this project's claims discipline exists to prevent.)_
 
 Subprocess use in the scripts is limited to three things:
 
@@ -76,7 +82,7 @@ Subprocess use in the scripts is limited to three things:
 - `git rev-parse HEAD`, to stamp the manifest (`scripts/generate.mjs:52`)
 - your own detected commands, under the safety tiers above (`scripts/verify.mjs:64`)
 
-**Two deliberate network paths exist in the emitted bundle, and you should know about both:**
+**Three deliberate network paths exist, and you should know about all three:**
 
 1. **`/advise` is granted `WebSearch` and `WebFetch`** (`.claude/commands/advise.md`
    frontmatter). This is intentional — it lets the command verify a claim against a primary
@@ -88,9 +94,58 @@ Subprocess use in the scripts is limited to three things:
    step reports `skipped` and does not fail the gate. **If you do not want your diffs
    leaving the machine, set `cross_model: false` in `.claude/veriloop/interview.json` and
    regenerate.**
+3. **The domain reference library fetches sources at SETUP time, and its queries are
+   derived from your private repo.** This one is materially different from the other two,
+   so read it carefully. It fires during installation (`SKILL.md` Phase 7.5), not during a
+   consult, and it is not opt-in per use — building the bundle is what triggers it. The
+   sources it checks are chosen by a model that has just read your repo's code, README and
+   docs, so **what leaves your machine is influenced by the contents of a private
+   codebase.** Constraints, all structural rather than promissory:
+   - **Host allowlist.** Only `arxiv.org`, `api.semanticscholar.org`, `api.github.com` and
+     `doi.org` can yield a verified entry. The list is a literal in
+     `scripts/lib/domain.mjs`, and a URL on any other host is stored `UNVERIFIED` no matter
+     what the audit claims about it.
+   - **Fetch and write are in different contexts.** Only a spawned subagent holds
+     `WebFetch`; it returns `{url, status, title}`. The parent that holds `Write` never
+     fetches. This is the mitigation for the injection chain in §5 — untrusted repo prose
+     steering a URL choice whose response then reaches disk.
+   - **Offline is not a failure.** With no network, a valid `references.json` is still
+     written with `reachable: false` and every entry `UNVERIFIED`, the install does not
+     block, and the emitted persona says the library could not be verified instead of
+     citing anything as checked.
+   - **To avoid it: tell the installing agent to skip Phase 7.5.** Be precise here, because
+     the obvious guess is backwards. `generate.mjs` never fetches — there is no `fetch()`
+     anywhere in `scripts/`. The fetch is **Phase 7.5 of the skill**, and `SKILL.md` gates
+     it on the *absence* of `.claude/veriloop/domain.json`: it runs on a first install
+     (when that file cannot exist yet) and when you ask for `/veriloop --refresh`, and it
+     is skipped on any re-run where the file is already present. **Deleting `domain.json`
+     therefore re-arms the fetch rather than disabling it.** There is no switch today —
+     `parseArgs` has no suppress flag and the interview has no domain toggle — so the
+     opt-out is an instruction to the agent, which is prose and can be ignored; this
+     document does not claim otherwise. What *is* structural: once `domain.json` exists, a
+     bare `node generate.mjs` re-emits `domain/` from it byte-identically and reaches no
+     network.
 
-Neither path is on by accident, but neither is a "no network" guarantee, so this document
-does not make one.
+   **Known weaknesses, stated as weaknesses.** Three, and none of them is a defense:
+
+   - Each stored source carries a free-text `rationale`. It is capped at 200 characters,
+     stripped of newlines, scanned for secret-shaped content, and labelled third-party data
+     in the emitted persona — and that is **not** a sanitizer. A hostile string that
+     survives the cap is stored and read by every later consult. Treat the field as
+     untrusted input, because it is.
+   - Verification is **existence-level, not claim-level**: a `VERIFIED` entry resolved over
+     the network; it is not evidence that the source says what the rationale says.
+   - The status recomputation is narrower than "the entry's claim is never trusted" sounds.
+     The claimed `status` is discarded and recomputed as `host_allowed && http_status ===
+     200` — but `http_status` and `attempted_at` are **reported by the verification
+     subagent**, and since nothing in `scripts/` fetches, no deterministic component can
+     re-check them. An entry on an allowlisted host reporting 200 is verified on that
+     report. `references.json` carries an `attempted_at_note` saying exactly this, so the
+     stamp cannot be mistaken for a script-recorded instant.
+
+None of the three is on by accident, but none of them is a "no network" guarantee, so this
+document does not make one. veriloop still learns nothing about you — but **your** egress
+posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 
 ### 4. Emitted artifacts
 
@@ -101,7 +156,11 @@ does not make one.
   `git rev-parse --show-toplevel` fallback
 - harness-forbidden APIs in an emitted workflow (`FORBIDDEN`,
   `scripts/lint-bundle.mjs:124`)
-- secret-shaped lines in a committed attestation record (`SECRET_PATTERNS`)
+- secret-shaped lines in a committed attestation record, or in an emitted
+  `.claude/veriloop/domain/` artifact (`SECRET_PATTERNS`) — the domain bundle quotes
+  dependency version strings and third-party source metadata, both of which carry
+  credentials in the wild; they are scrubbed at the source in `scripts/lib/domain.mjs`
+  and this is the backstop
 - a gate that disagrees with the manifest (`scripts/lint-bundle.mjs:177`)
 
 `.env*` is never staged and never read into an artifact. This is constitution rule 7.
@@ -128,7 +187,7 @@ are kept in lockstep and their agreement is machine-enforced by the self-test.
 For a reproducible install, pin by tag or by commit SHA rather than tracking a branch:
 
 ```bash
-npx skills add BenjaminL1/veriloop#veriloop-v0.4.0
+npx skills add BenjaminL1/veriloop#veriloop-v0.5.0
 ```
 
 Tagging currently lags the version stamps — see the CHANGELOG for the authoritative version.

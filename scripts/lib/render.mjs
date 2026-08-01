@@ -6,7 +6,7 @@
 // from detected repo facts. veriloop phases 3 (deep scan) and 4 (constitution
 // mining) enrich them with bespoke, code-cited content on a full run. Manual
 // tweaks belong in each expert's `.overrides.md` (never overwritten) and in the
-// constitution (preserved untouched on re-run — see handOnce, generate.mjs:342)
+// constitution (preserved untouched on re-run — see handOnce, generate.mjs:351)
 // — not in the auto block.
 
 const AUTO_START = '<<< veriloop:auto:start >>>';
@@ -120,6 +120,26 @@ export function renderOverrides(key, title, repoName) {
 // Constitution (starter — phase 4 mining enriches with code-cited invariants)
 // ---------------------------------------------------------------------------
 
+/**
+ * T2 (owner retirement, 2026-07-31). "No orphan rules, no jobless experts" used to
+ * be unqualified, which forbade the advisory domain persona this version ships.
+ * It is NARROWED to the roster rather than deleted: a boundary that is restated is
+ * re-litigable, a boundary that is deleted is forgotten. The second half is the
+ * point — it says what DOES govern a persona outside the roster, so the
+ * constitution does not go silent on the exact thing that was just allowed.
+ *
+ * This literal is emitted into every adopter's constitution AND hand-written into
+ * this repo's own committed `.claude/veriloop/constitution.md`, which `handOnce`
+ * ('starter') will never rewrite. A selftest asserts the two agree — the template
+ * edit alone leaves them disagreeing.
+ */
+export const ROSTER_SCOPE_NOTE =
+  'No orphan rules, no jobless experts — scoped to the ROSTER (the review lenses the\n' +
+  'gate spawns). ADVISORY personas outside the roster, under `.claude/veriloop/domain/`,\n' +
+  'are generated unconditionally and are governed instead by: a cited audit behind every\n' +
+  'claim, a reference library whose entries carry a verification status, and NO gate\n' +
+  'authority whatsoever.';
+
 export function renderConstitution({ repoName, stack, roster, gate }) {
   const owners = roster.experts.map((e) => `- **${e.title}** (\`${e.key}\`) — ${e.evidence[0]}`).join('\n');
   // the real exit-code gate, straight from the generated config (single source of
@@ -148,9 +168,9 @@ export function renderConstitution({ repoName, stack, roster, gate }) {
     `---\n\n` +
     `### Rule ownership — target state\n` +
     `Every rule must be owned by exactly ONE expert, and every expert must own at least a\n` +
-    `few rules (no orphan rules, no jobless experts). The starter rules are pre-assigned\n` +
-    `below; assign each TODO as you replace it — if a rule has no plausible owner in this\n` +
-    `roster, either the roster is missing an expert or the rule doesn't belong here.\n\n${owners}\n`
+    `few rules. The starter rules are pre-assigned below; assign each TODO as you replace\n` +
+    `it — if a rule has no plausible owner in this roster, either the roster is missing an\n` +
+    `expert or the rule doesn't belong here.\n\n${ROSTER_SCOPE_NOTE}\n\n${owners}\n`
   );
 }
 

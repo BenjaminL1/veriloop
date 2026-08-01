@@ -84,3 +84,22 @@ Both are defensible. Deletion is strictly safer under the evidence; substitution
 A year on, the persona work shipped and failed — not because the text was wrong, but because it was **unfalsifiable**. The contrast sits below the noise floor of the tool it modifies: formatting changes alone swing accuracy up to 76 points ([Sclar et al., ICLR 2024](https://arxiv.org/abs/2310.11324), 44 cites), instruction paraphrases flip model rankings ([Mizrahi et al., TACL](https://arxiv.org/abs/2401.00595), 91 cites), and baseline-vs-best-persona in the advisory study was **p = 1.0**. Every future disagreement about the persona was settled by taste, because nothing could measure it. Meanwhile the same-model council kept producing correlated opinions at 4× cost.
 
 **What would falsify the recommendation:** an instance-level persona (per-consult, not per-repo) showing a measurable effect — Kim et al. found instance-aligned beats dataset-aligned consistently, and *that* granularity was never tested here.
+
+---
+
+## SUPERSESSION — 2026-07-31 (owner decision)
+
+**The owner overruled this verdict.** All three judges landed on **C — build nothing**, on
+the ground that the failing granularity is dataset-level and that "one persona per repo" is
+exactly that granularity. The owner chose the per-repo persona anyway, and it shipped in
+**0.5.0** as `.claude/veriloop/domain/expert.md`, backed by a three-category, host-allowlisted
+reference library (`references.json`) and a tier-scored, code-cited audit (`audit.md`). The
+binding spec is `.claude/veriloop/specs/domain-expert-persona.md`; the counter-case was put
+to the owner and declined, and is recorded in that spec's § Open RISKS.
+
+**This dissent stands as RECORDED, not as RESOLVED.** Nothing in what shipped answers it.
+The reference library — the one part of the feature every council brief agreed the persona
+literature does *not* refute, because retrieval changes inputs rather than identity claims —
+is the part with a live mechanism behind it. The persona wrapper is not, and the falsifier
+this document already named is still the right one: an **instance-level** persona
+(per-consult, not per-repo) showing a measurable effect. Nothing in 0.5.0 measures that.

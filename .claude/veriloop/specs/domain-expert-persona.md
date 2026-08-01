@@ -468,3 +468,75 @@ position.
 - **M5's two open exit criteria** — the branch is still unpushed (17 commits; no Actions run exists,
   nodes 18 and 22 never exercised) and the DA2 recording was never made. ~12 minutes of owner action
   closes both.
+
+---
+
+## Implementation notes — Phase 1, 2026-07-31 (v0.5.0)
+
+Phase 1 shipped as specified, with two recorded deviations and one resolution the spec
+left open. Phases 2 and 3 are untouched.
+
+**Authority note, recorded first because it governs everything below.** This section is
+written by the *implementer* into a **RATIFIED — BINDING** owner artifact. It records what
+shipped and where it diverged; it does **not** settle anything, and nothing here amends the
+spec above it. The status line at the end is an implementer's self-report — this repo lists
+"never grade your own homework" as a core concept, so read it as a **claim to be checked**,
+not as a ratification.
+
+**1. Guard-wiring item 2 shipped, re-scoped — the middle path, not the dissolution first
+proposed.** The spec contradicts itself here and the contradiction is real: § Guard wiring
+(written from the pre-T12 baseline) asks for `lint-bundle.mjs`'s 700-word persona cap to be
+path-scoped to `domain/expert.md`, while **T12 deletes that cap outright** and § Open RISKS
+("Cap-removal risk") deliberates the consequence at length and accepts it — explicitly naming
+`domain/expert.md` reaching 3,000 words with nothing to notice. Resolving a ratified spec's
+internal contradiction is an owner ruling, not an implementer's, so **both were satisfied
+literally instead**: the three T12-named cap sites are deleted (T12 executed in full,
+accounted for in the CHANGELOG and in the commit message), and a **new, narrower tripwire**
+was added — `lint-bundle.mjs` check 6d, path-scoped to `.claude/veriloop/domain/expert.md`
+and nothing else, WARN-only, ceiling 1,200 words against an emitted 681. It is mutation-tested
+in `selftest.mjs` the way the pair T12 deleted was: fresh bundle silent, fattened bundle names
+the file and the count. **All four guard-wiring items are therefore in the same commit as
+`domain/` (criterion 6 met).** Residual, stated plainly: the tripwire watches the emitted
+artifact, so `persona.body` still has no length validation inside `domain.mjs` itself, and no
+other file in the repo has an accretion check — that part of § Open RISKS stands as accepted.
+
+**1b. Guard-wiring item 3 shipped, then shipped again with teeth.** As first written it was
+vacuous: `selftest.mjs`'s `CITE` pattern is `scripts/*.mjs:<line> <symbol>`, and the audit
+cites `.claude/veriloop/veriloop-manifest.json`, `.claude-plugin/marketplace.json`,
+`SECURITY.md`, `skills/veriloop/SKILL.md` — zero matches, so the largest-citation file in the bundle was
+registered and still checked by nothing, which is § Guard wiring's own stated failure mode.
+The `CITED` entries stay (they cover the form for a future audit that does cite a script
+line), and two real guards were added: `domain.mjs resolveSource` fails the build on a
+citation that does not resolve, and a selftest scan re-resolves every citation in the
+committed `audit.md`.
+
+**2. How LLM-authored content reaches `makeWriter`.** § What ships requires `domain/*` to be
+written through the existing `makeWriter`, which lives in a deterministic script that cannot
+author prose. Resolved by mirroring the established `interview.json` pattern: the domain
+phase writes **`.claude/veriloop/domain.json`** (git-tracked, hand/LLM-owned, never written
+by the generator), and `generate.mjs` reads it — default
+`<out>/.claude/veriloop/domain.json`, `--domain <path>` to override — and renders the four
+artifacts through `machine()` / `handOnce()` exactly as the spec requires. No `domain.json`
+means the domain writer is a no-op, so every pre-existing bundle and fixture is unaffected.
+
+**3. R3 is satisfied by a new manifest block, because the manifest carried no deps.**
+`veriloop-manifest.json` had `stack`, `package_manager`, `polyglot`, `has_ui` and
+`commands_summary` — no dependency list; deps were read inside the detector only to compute
+`has_ui` and were never emitted. So "read deps from the manifest" was not literally
+satisfiable. `generate.mjs` now emits a script-owned **`domain_facts`** block (deps with
+`path:line` sources, a bounded file census, stack, package manager), built by
+`scripts/lib/domain.mjs`. Tier 1 and Tier 3 cite it. No detector code path is imported,
+extended or branched, per R3's own wording.
+
+**4. Pipeline ordering.** The audit must cite manifest facts, and the manifest exists only
+after generate, so `SKILL.md` gains **Phase 7.5** between Phase 7 and Phase 8: generate #1
+writes the manifest with `domain_facts` → the LLM audits and verifies sources → writes
+`domain.json` → generate #2 emits `domain/` and re-stamps `emitted_files` → lint. Generate #2
+is idempotent for every pre-existing artifact. `--force` was never run.
+
+**Acceptance criteria status — the implementer's self-report, not a ratification (see the
+authority note above).** 1, 4, 6, 8, 9, 10 met for Phase 1's scope; criterion 6 by the
+re-scoping in note 1, which the owner may still overrule in either direction. 7 met for
+T1/T2/T3/T4/T6/T7/T8/T11; T5, T9, T10 and T13 belong to Phases 2–3 and are open by design.
+2, 3 and 5 concern `/advise` and are untouched — `/advise` is byte-identical in 0.5.0, so
+every pinned literal in criteria 3 and 5 still holds, and criterion 2's assertion is intact.

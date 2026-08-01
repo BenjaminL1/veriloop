@@ -480,7 +480,7 @@ git diff --stat docs/plans/roadmap-v1.md        # → 1 file, +2/-1 (pointer onl
   `lint-bundle.mjs:88,118`; rule 8 `generate.mjs:249,287,261,237` (all four).
 - **Two extensions beyond the repair, both strengthenings:**
   1. **`experts/*.overrides.md` are included.** They are hand-owned, so `handOnce`
-     (`generate.mjs:342`) preserves them forever — no regenerate will ever repair them, and
+     (`generate.mjs:351`) preserves them forever — no regenerate will ever repair them, and
      "later" therefore means "never." They carried five of the dead citations.
   2. **A symbol token is now REQUIRED on every citation**, not optional. This was forced by
      mutation testing, and it is the substantive finding of this step: an

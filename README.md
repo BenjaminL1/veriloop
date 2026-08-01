@@ -94,13 +94,17 @@ all** (`isCleanInvocation`, `scripts/lib/detectors.mjs:627`). Every entry in the
 `commands.json` carries a `source` citation naming the file and line it came from, so you can
 audit what veriloop decided and why.
 
-The deterministic scripts make **no network calls** and there is **no telemetry** — nothing
-is reported anywhere. Two network paths do exist in the emitted bundle and are deliberate:
-`/advise` may use `WebSearch`/`WebFetch` to check a claim against a source, and the optional
-cross-model second opinion passes your diff to the `codex` CLI at `high` tier when enabled.
-Both are documented, with the opt-out, in **[SECURITY.md](./SECURITY.md)** — which also
-covers the threat model, a known `npx` look-alike limitation, and how to report a
-vulnerability. veriloop never suggests `--dangerously-skip-permissions`.
+There is **no telemetry** — nothing about you is reported anywhere, ever. But **three**
+deliberate network paths exist and are worth knowing about before you install: `/advise` may
+use `WebSearch`/`WebFetch` to check a claim against a source; the optional cross-model second
+opinion passes your diff to the `codex` CLI at `high` tier when enabled; and, new in 0.5.0,
+the **domain reference library fetches sources during setup**, choosing them from a model's
+reading of your private repo and marking `VERIFIED` only what a four-host allowlist admits. All
+three are documented — with what the opt-out actually is, and is not, and the known
+weaknesses — in
+**[SECURITY.md](./SECURITY.md)** — which also covers the threat model, a known `npx`
+look-alike limitation, and how to report a vulnerability. veriloop never suggests
+`--dangerously-skip-permissions`.
 
 ## Install
 
@@ -120,7 +124,7 @@ install a tag or a commit SHA rather than tracking a branch — a tool that runs
 should not change under you silently:
 
 ```bash
-npx skills add BenjaminL1/veriloop#veriloop-v0.4.0
+npx skills add BenjaminL1/veriloop#veriloop-v0.5.0
 ```
 
 The version in `.claude-plugin/plugin.json` is canonical (it wins over marketplace-entry
@@ -162,6 +166,7 @@ blaming your change.
 | 5 | Interview | LLM | ≤5 non-derivable questions (tiers, merge policy, lenses, waivers). |
 | 6 | **Generate** | script | Slot-fill the portable template with verified commands + roster + tiers. |
 | 7 | **Wire the gate** | script | The gate literally runs the verified commands; exit codes decide. |
+| 7.5 | Domain audit | LLM + script | Classify the repo's field on tiered, cited evidence (HALT on low confidence); build a three-category reference library, host-allowlisted and verified over the network; emit the advisory domain persona. |
 | 8 | **Validate** | script + LLM | Lint every artifact; then a *fresh-context* agent drives the real loop. |
 | 9 | Report + stamp | script | `veriloop-manifest.json`: version, repo SHA, roster, verification results. |
 | 10 | Maintenance | script | Re-run regenerates only marked sections; hand-owned files are preserved untouched. |
@@ -180,6 +185,11 @@ blaming your change.
 .claude/veriloop/experts/<name>.md            expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md  manual tweaks (hand-owned; never clobbered)
 .claude/veriloop/specs/<slug>.md              feature specs (hand-owned, ratified by owner, git-tracked)
+.claude/veriloop/domain.json                  the domain audit's answers (hand/LLM-owned, git-tracked)
+.claude/veriloop/domain/audit.md              field classification + vocabulary + architecture (machine-owned)
+.claude/veriloop/domain/expert.md             the advisory domain persona (machine-owned)
+.claude/veriloop/domain/expert.overrides.md   manual tweaks (hand-owned; never clobbered)
+.claude/veriloop/domain/references.json       the verified three-category reference library (machine-owned)
 .claude/veriloop/veriloop-manifest.json       version, repo SHA, roster, verification
 ```
 
@@ -278,7 +288,13 @@ SECURITY.md                         threat model, safety tiers, network paths, r
 ```
 
 Every script is in-repo, dependency-free and meant to be read — there is no `curl | bash`
-step and nothing is minified or fetched at install time. One reader's note: `selftest.mjs` is
+step and no code is downloaded or minified: what you clone is what runs. **Setup is not
+network-free, though.** Since 0.5.0 the domain phase fetches the reference sources it stores
+(host-allowlisted, `SECURITY.md` §3), so an install does reach the network — for *data*, not
+for code. Note the condition, because the intuitive guess is backwards: the fetch is Phase 7.5
+of the *skill*, not anything in `scripts/`, and it runs when `.claude/veriloop/domain.json` is
+**absent** (a first install) or `--refresh` is asked for. An existing `domain.json` is what
+suppresses it. One reader's note: `selftest.mjs` is
 the outlier at ~1,400 lines. It is a flat sequence of independent assertion blocks with
 section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
 for the behavior you care about.
@@ -291,6 +307,24 @@ renamed or hoisted to the plugin root to tidy up a namespace prefix.
 Publishing is just `git push`. Requires Node ≥ 18.
 
 ## Status
+
+**v0.5.0 — the domain subsystem (Phase 1 of three).** A new advisory path,
+`.claude/veriloop/domain/`, ships an audit that classifies the repo's field on tiered,
+cited evidence; a domain-expert persona; and a three-category reference library whose every
+entry's verification status is recomputed by a script — the status the entry *claims* is
+discarded, and only a four-host allowlist plus a 200 can yield `VERIFIED`. That recomputation
+is narrower than it sounds and the docs say so: the HTTP result and the `attempted_at` stamp
+are reported by the verification subagent, nothing in `scripts/` fetches, so no deterministic
+component re-checks them. **Advisory only:** it is not
+a reviewing lens, not in the roster, and has no gate authority. Setup now reaches the
+network for the first time, which retires three published no-network claims; see
+[`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
+behavior, and the three known weaknesses. Three length caps came out by owner decision — four
+assertions deleted outright, three narrowed to their surviving trigger-first half, two
+`lint-bundle` WARN checks removed; the gate went 253 → 297 and `CHANGELOG.md` names every
+removal individually. **Phases 2
+(`/advise` redesign) and 3 (a `SessionStart` hook) are NOT shipped** — `/advise` is
+unchanged in this release.
 
 **v0.4.0 — launch machinery (partial).** veriloop's own gate is now enforced rather than
 remembered: `.github/workflows/ci.yml` runs `npm run lint` + `npm run test` on push and PR

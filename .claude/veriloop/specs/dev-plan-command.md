@@ -137,3 +137,18 @@ merges later gets rebased by the owner; expected, not a defect.
 3. Self-host `.claude/commands/dev-plan.md` exists with correct frontmatter (veriloop's own
    interview.json sets `phase_models.plan: "fable"` → the emitted file carries a model line).
 4. Version stamps agree; `git status` clean on the branch after land.
+
+---
+
+## SUPERSESSION — 2026-07-31 (T1 of `domain-expert-persona.md`)
+
+The non-goal above — *"NO council seats beyond the existing roster (\"no jobless experts\"
+also means no invented ones)"* — is **narrowed by owner decision to the ROSTER**: the
+reviewing lenses the gate spawns, which remain capped and evidence-nominated exactly as this
+spec required. It no longer governs **advisory** personas under `.claude/veriloop/domain/`,
+which are generated unconditionally, hold no gate authority, and are not council seats.
+
+Everything else in this spec stands. The retirement is recorded in
+`.claude/veriloop/specs/domain-expert-persona.md` § Retirement ledger (T1) and executed in
+0.5.0; the same narrowing is mirrored in `render.mjs`'s `ROSTER_SCOPE_NOTE` and in this
+repo's committed `constitution.md`.

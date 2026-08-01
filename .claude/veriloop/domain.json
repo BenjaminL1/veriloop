@@ -1,0 +1,174 @@
+{
+  "_note": "Hand/LLM-owned. generate.mjs READS this file and never writes it — the same posture as interview.json. Rebuilt by /veriloop --refresh. Its Tier 1 and Tier 3 claims cite veriloop-manifest.json -> domain_facts rather than re-deriving them (constitution rule 2).",
+  "classification": {
+    "primary": "AI developer tooling — agentic code review and gating",
+    "confidence": "high",
+    "evidence": [
+      {
+        "tier": 1,
+        "field": "AI developer tooling — agentic code review and gating",
+        "score": 4,
+        "claim": "the script-owned domain_facts.deps block is EMPTY — the collector parsed no dependency from any manifest it reads, so the tree carries no runtime, framework or test-runner signature (that is the absence of a parsed declaration, not evidence the repo declares none). A tree with no framework signature fits a self-contained CLI compiler and fits no framework-bearing application field",
+        "source": ".claude/veriloop/veriloop-manifest.json"
+      },
+      {
+        "tier": 1,
+        "field": "AI developer tooling — agentic code review and gating",
+        "score": 2,
+        "claim": "domain_facts.package_manager is npm and the manifest's commands_summary records the ENTIRE declared command surface as a bundle linter plus a self-test — the only build steps this project declares check its own output, which is a tool's shape rather than an application's",
+        "source": ".claude/veriloop/veriloop-manifest.json"
+      },
+      {
+        "tier": 2,
+        "field": "AI developer tooling — agentic code review and gating",
+        "score": 3,
+        "claim": "the repo carries the Claude Code plugin/marketplace contract and a skill manifest, so its topology is mandated by an agent harness rather than chosen",
+        "source": ".claude-plugin/marketplace.json"
+      },
+      {
+        "tier": 2,
+        "field": "software supply-chain and artifact trust",
+        "score": 2,
+        "claim": "a published threat model with safety tiers, declared network paths and a reporting path is a supply-chain artifact, not application documentation",
+        "source": "SECURITY.md"
+      },
+      {
+        "tier": 3,
+        "field": "AI developer tooling — agentic code review and gating",
+        "score": 2,
+        "claim": "the census records exactly four top-level directories — docs/, fixtures/, scripts/, skills/ — with scripts/ the sole source directory at .mjs:13 plus a single .js (the workflow template the generator emits), and no framework, app or package directory anywhere",
+        "source": ".claude/veriloop/veriloop-manifest.json"
+      },
+      {
+        "tier": 3,
+        "field": "static analysis and CI gating",
+        "score": 2,
+        "claim": "the census records fixtures/ as .toml:6, .json:3, .yaml:2 and .rs:1 with no application sources at all — manifests and CI files, i.e. synthetic INPUTS to a parser rather than test data for a product",
+        "source": ".claude/veriloop/veriloop-manifest.json"
+      },
+      {
+        "tier": 4,
+        "field": "AI developer tooling — agentic code review and gating",
+        "score": 1,
+        "claim": "the skill states the mental model outright: veriloop is a compiler and the dev-loop it emits is the compiled output",
+        "source": "skills/veriloop/SKILL.md"
+      }
+    ]
+  },
+  "vocabulary": [
+    {
+      "term": "bundle",
+      "meaning": "the set of plain files veriloop emits into a target repo — workflow, commands, personas, constitution, manifest. The unit everything else is measured against.",
+      "source": "skills/veriloop/SKILL.md"
+    },
+    {
+      "term": "gate",
+      "meaning": "the ordered list of real commands whose EXIT CODES decide PASS/FAIL. Never a model's self-assessment.",
+      "source": ".claude/veriloop/constitution.md"
+    },
+    {
+      "term": "roster",
+      "meaning": "the reviewing lenses the gate spawns, each nominated by concrete detected evidence. Distinct from the advisory domain persona, which is not in it.",
+      "source": "scripts/lib/roster.mjs"
+    },
+    {
+      "term": "machine-owned / hand-owned",
+      "meaning": "the ownership asymmetry: machine files are rewritten on every run, hand files are written once and never clobbered.",
+      "source": ".claude/veriloop/constitution.md"
+    },
+    {
+      "term": "attestation record",
+      "meaning": "a committed JSON record of what a dev-loop run actually did, redacted at emit and re-scanned at lint.",
+      "source": "scripts/lint-bundle.mjs"
+    }
+  ],
+  "concepts": [
+    {
+      "name": "scripts own facts, the LLM owns judgment",
+      "detail": "every path, command, number and citation comes from a deterministic script; the model decides personas, invariants and classification. The dividing line is enforced, not advisory.",
+      "source": ".claude/veriloop/constitution.md"
+    },
+    {
+      "name": "never grade your own homework",
+      "detail": "validation runs the real commands and, in the full pipeline, a fresh-context agent — the generator's self-report is never the evidence.",
+      "source": "skills/veriloop/SKILL.md"
+    },
+    {
+      "name": "citation liveness",
+      "detail": "a citation must carry a symbol token that still resolves near the cited line. An existence-only check would not have caught the defect the guard was written for.",
+      "source": "scripts/selftest.mjs"
+    },
+    {
+      "name": "claims discipline",
+      "detail": "a published claim about veriloop must be true as stated, not true on a technicality. Retiring an overclaim is a shipped work item, not a wording pass.",
+      "source": "SECURITY.md"
+    }
+  ],
+  "architecture": {
+    "summary": "A four-stage deterministic pipeline with LLM judgment interleaved between stages. Detection parses the target repo's declared command surface; verification runs the safe subset for real and records exit codes; generation slot-fills a portable workflow template plus the personas, commands and manifest; linting re-reads the emitted bundle without executing it. Nothing downstream may re-derive a fact an upstream stage already established, and nothing may claim a check ran that did not.",
+    "data_flow": [
+      "detect.mjs parses package.json / Makefile / pyproject.toml / CI run blocks into commands.json, each command carrying a source citation and a safety tier",
+      "verify.mjs executes only the safe tier, writing verified / verify_exit / verify_skipped back into the same file",
+      "generate.mjs reads commands.json plus the hand-owned interview.json and domain.json, and emits the bundle through one writer that records ownership per file",
+      "lint-bundle.mjs re-reads the emitted bundle scoped to the manifest's emitted_files and fails on portability, placeholder, frontmatter, gate-parity and missing-artifact defects",
+      "the emitted workflow then runs the same commands at review time and reports from their exit codes"
+    ],
+    "sources": [
+      "scripts/detect.mjs",
+      "scripts/verify.mjs",
+      "scripts/generate.mjs",
+      "scripts/lint-bundle.mjs",
+      "skills/veriloop/SKILL.md"
+    ]
+  },
+  "persona": {
+    "body": "You are a domain expert in **AI developer tooling** — specifically the compilation, verification and gating of agentic engineering loops. Your working knowledge is this repo's own subject matter: how an agent harness loads skills, commands and personas; where an LLM-authored artifact is allowed to be the source of truth and where a deterministic script must be; and how a check that cannot fail becomes indistinguishable from no check at all.\n\nYou are opinionated about mechanism over ceremony. A guard is worth its cost only if you can name the failure it would have caught and the input that would trip it. When someone proposes a new artifact, your first question is which existing artifact it duplicates and what happens when the two disagree. When someone proposes a new claim, your first question is what would make it false.\n\nYou hold two additional beats because this repo's history keeps returning to them. The first is **deletion collateral**: large removals here have silently taken artifacts nobody listed, on a green gate. The second is **claims discipline**: a statement that is true on a technicality is treated as an overclaim, and retiring one is a work item with an edit attached, never a wording pass."
+  },
+  "references": {
+    "attempted_at": "2026-08-01T00:41:35.000Z",
+    "reachable": true,
+    "research": [
+      {
+        "url": "https://arxiv.org/abs/2310.11324",
+        "title": "Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design or: How I learned to start worrying about prompt formatting",
+        "http_status": 200,
+        "rationale": "Reports that formatting-only prompt changes swing task accuracy by a wide margin, which bounds how much any persona-text edit can be credited."
+      },
+      {
+        "url": "https://arxiv.org/abs/2401.00595",
+        "title": "State of What Art? A Call for Multi-Prompt LLM Evaluation",
+        "http_status": 200,
+        "rationale": "Argues single-prompt evaluation is unreliable and can reorder model rankings; relevant to any claim measured on one prompt."
+      },
+      {
+        "url": "https://arxiv.org/abs/2503.13657",
+        "title": "Why Do Multi-Agent LLM Systems Fail?",
+        "http_status": 200,
+        "rationale": "Builds a failure taxonomy for multi-agent LLM systems from annotated traces — the closest published work to this repo's council and lens design."
+      }
+    ],
+    "products_tools": [
+      {
+        "url": "https://api.github.com/repos/anthropics/claude-code",
+        "title": "anthropics/claude-code",
+        "http_status": 200,
+        "rationale": "The agentic terminal tool whose skill, command and plugin contracts every emitted veriloop bundle must satisfy."
+      },
+      {
+        "url": "https://api.github.com/repos/openai/codex",
+        "title": "openai/codex",
+        "http_status": 200,
+        "rationale": "The independent CLI the emitted loop shells out to for its optional cross-model second opinion at high tier."
+      }
+    ],
+    "current_discussions": [
+      {
+        "url": "https://api.github.com/repos/anthropics/claude-code/issues?state=open&per_page=1",
+        "title": "anthropics/claude-code — open issue tracker",
+        "http_status": 200,
+        "rationale": "What practitioners currently report about the host harness. Signal about reality, never evidence for a claim."
+      }
+    ],
+    "staged": []
+  }
+}

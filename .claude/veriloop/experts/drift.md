@@ -33,7 +33,7 @@ These are the surfaces that put you on this roster.
 Ground your review in them first. If a citation no longer resolves, say so as a finding:
 a stale beat is drift.
 
-- machine/hand ownership + backup promises (scripts/generate.mjs:304 machine, scripts/generate.mjs:342 handOnce, scripts/generate.mjs:294 backup)
+- machine/hand ownership + backup promises (scripts/generate.mjs:313 machine, scripts/generate.mjs:351 handOnce, scripts/generate.mjs:303 backup)
 - splice-marker integrity (scripts/lib/render.mjs:11 AUTO_START)
 - manifest↔workflow gate parity check (scripts/lint-bundle.mjs:177 gate_commands)
 - selftest golden expectations — the assertions are this repo's only gate

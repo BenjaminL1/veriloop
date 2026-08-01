@@ -11,6 +11,8 @@
 //     --repo      repo to scan (roster signals + repo SHA); default cwd
 //     --commands  the commands.json produced by detect/verify
 //     --out       bundle destination root (default: --repo)
+//     --domain    the domain audit's input (default:
+//                 <out>/.claude/veriloop/domain.json; absent → no domain/ bundle)
 //     --force     overwrite hand-owned files too (default: preserve them)
 
 import { writeFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
@@ -19,9 +21,10 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto } from './lib/render.mjs';
+import { collectDomainFacts, buildReferences, renderDomainAudit, renderDomainExpert, renderDomainOverrides, readDomainInput } from './lib/domain.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.4.0';
+const VERILOOP_VERSION = '0.5.0';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid
@@ -30,13 +33,14 @@ const BLOCK_START = '# <<< veriloop:auto:start >>>';
 const BLOCK_END = '# <<< veriloop:auto:end >>>';
 
 function parseArgs(argv) {
-  const args = { repo: process.cwd(), commands: null, out: null, force: false, interview: null };
+  const args = { repo: process.cwd(), commands: null, out: null, force: false, interview: null, domain: null };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--repo') args.repo = resolve(argv[++i]);
     else if (a === '--commands') args.commands = resolve(argv[++i]);
     else if (a === '--out') args.out = resolve(argv[++i]);
     else if (a === '--interview') args.interview = resolve(argv[++i]);
+    else if (a === '--domain') args.domain = resolve(argv[++i]);
     else if (a === '--force') args.force = true;
     else if (a === '--help' || a === '-h') args.help = true;
   }
@@ -213,6 +217,11 @@ function applyRosterAdd(roster, interview) {
       tiers: Array.isArray(add.tiers) && add.tiers.length ? add.tiers.map(String) : [...def.tiers],
       evidence,
     });
+    // T4 (2026-07-31): the 4-expert cap is scoped to the ROSTER — the reviewing
+    // lenses the gate spawns. It does not, and never did, cover the advisory
+    // domain persona under `.claude/veriloop/domain/`, which sits outside
+    // `roster` and generates unconditionally. Retired as intent, not as code:
+    // bounded persona count still governs the roster exactly as before.
     if (roster.experts.length > 4) {
       throw new Error(`interview.roster_add: roster would exceed the cap of 4 experts (baseline + 3 specialists)`);
     }
@@ -357,7 +366,7 @@ function makeWriter(outRoot, force) {
 function main() {
   const args = parseArgs(process.argv);
   if (args.help || !args.commands) {
-    console.log('Usage: node generate.mjs --repo <path> --commands <commands.json> [--out <dir>] [--force]');
+    console.log('Usage: node generate.mjs --repo <path> --commands <commands.json> [--out <dir>] [--domain <domain.json>] [--force]');
     return;
   }
   const cj = JSON.parse(readFileSync(args.commands, 'utf8'));
@@ -376,6 +385,11 @@ function main() {
   applyRosterAdd(roster, interview);
   const config = buildConfig(cj, roster, repoName, interview);
   const meta = buildMeta(repoName, cj.has_ui);
+  // Tier 1 (declared dependencies) and Tier 3 (file census) facts for the domain
+  // audit. Computed HERE, by a script, and published in the manifest so the audit
+  // CITES them instead of deriving them (constitution rule 2). Always computed —
+  // the manifest carries the facts whether or not a domain bundle is emitted.
+  const domainFacts = collectDomainFacts(args.repo, cj);
 
   const template = readFileSync(join(HERE, 'templates/dev-loop.template.js'), 'utf8');
   const workflow = spliceAuto(template, renderAutoBlock(meta, config));
@@ -411,6 +425,27 @@ function main() {
   // hand-owned constitution (starter; preserved untouched on future re-runs — handOnce)
   w.handOnce(P('.claude/veriloop/constitution.md'), renderConstitution({ repoName, stack: cj.stack, roster, gate: config.gate }), 'starter');
 
+  // domain subsystem (v0.5.0) — the advisory domain-expert path. Its judgment half
+  // (classification, vocabulary, persona body, source SELECTION) is LLM-authored and
+  // arrives as `.claude/veriloop/domain.json`, which this generator READS and never
+  // writes — the same posture as interview.json. No domain.json → no domain/ bundle,
+  // and every check below is skipped rather than half-satisfied.
+  // `required` when --domain was passed EXPLICITLY: an unreadable explicit path is a typo,
+  // not "the subsystem is not installed", and silently dropping domain/ on a green gate is
+  // the failure mode lint check 7 exists to prevent.
+  const domainInput = readDomainInput(args.domain || P('.claude/veriloop/domain.json'), { required: !!args.domain });
+  let references = null;
+  if (domainInput) {
+    references = buildReferences(domainInput, { warn: (m) => console.error(m) });
+    // `repo` is passed so every `source` in domain.json is RESOLVED against the real
+    // tree — a citation that does not exist fails the build instead of rendering into
+    // audit.md reading exactly like a checked one.
+    w.machine(P('.claude/veriloop/domain/audit.md'), renderDomainAudit(domainInput, domainFacts, { repoName, repo: args.repo }));
+    w.machine(P('.claude/veriloop/domain/expert.md'), renderDomainExpert(domainInput, references, { repoName, repo: args.repo }));
+    w.machine(P('.claude/veriloop/domain/references.json'), JSON.stringify(references, null, 2) + '\n');
+    w.handOnce(P('.claude/veriloop/domain/expert.overrides.md'), renderDomainOverrides(repoName), 'hand');
+  }
+
   // shared owner files: veriloop keeps one marked block in each.
   // .gitignore — the rolling backups of clobbered machine files are local state, and so
   // are dry-run attestation records (owner decision: dry runs emit locally but never commit).
@@ -445,6 +480,7 @@ function main() {
     budget: config.budget,
     e2e: config.e2e,
     commands_summary: Object.fromEntries(Object.entries(cj.commands).map(([k, c]) => [k, { cmd: c.cmd, safety: c.safety, verified: c.verified, verified_by_ci: c.verified_by_ci }])),
+    domain_facts: domainFacts,
     verified_at: cj.verified_at || null,
     emitted_files: w.emitted,
     interview_answers: interview,
@@ -461,6 +497,7 @@ function main() {
     console.error(`  budget: posture=${b.posture} — ${PHASE_GROUPS.map((g) => `${g}:${r(g)}`).join(' ')}`);
   }
   if (config.e2e) console.error(`  e2e/screenshot: ${config.e2e.cmd}`);
+  if (references) console.error(`  domain: references ${references.verified} verified / ${references.unverified} unverified (reachable: ${references.reachable})`);
   console.error('  emitted:');
   for (const f of w.emitted) console.error(`    [${f.ownership}/${f.status}] ${f.path}`);
   console.error(`  backups (if any): .claude/veriloop/.backups/`);

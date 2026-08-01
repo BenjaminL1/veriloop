@@ -7,8 +7,8 @@
 
 - Your beat is the **compiler's own promises** (constitution rules 3, 8, 9):
   - ownership asymmetry: `machine()` / `handOnce()` / `spliceBlock()` / backups in
-    `scripts/generate.mjs:304 machine`, `scripts/generate.mjs:342 handOnce`,
-    `scripts/generate.mjs:316 spliceBlock`, `scripts/generate.mjs:294 backup` — a change
+    `scripts/generate.mjs:313 machine`, `scripts/generate.mjs:351 handOnce`,
+    `scripts/generate.mjs:325 spliceBlock`, `scripts/generate.mjs:303 backup` — a change
     that lets a regenerate clobber a hand-owned file is a BLOCKER;
   - splice-marker integrity (`scripts/lib/render.mjs:11 AUTO_START`);
   - manifest↔workflow gate parity (`scripts/lint-bundle.mjs:177 gate_commands`);

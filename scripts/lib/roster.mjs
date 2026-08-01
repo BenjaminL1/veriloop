@@ -106,6 +106,12 @@ export function detectRoster(root, commandsJson) {
     if (SEC_KEYWORDS.test(docs)) secEvidence.push('docs also mention auth/secrets/permissions');
     experts.push({ key: 'security', ...SPECIALIST_DEFAULTS.security, evidence: secEvidence });
   } else {
+    // T3 (owner retirement, 2026-07-31) narrowed the SCOPE of evidence-required
+    // nomination, not this code: the principle no longer governs the advisory
+    // domain persona under `.claude/veriloop/domain/`, which generates
+    // unconditionally. Roster behavior is unchanged and must stay so —
+    // lint-bundle.mjs's jobless-expert warning reads the evidence this gate keeps
+    // empty-free.
     notes.push('security expert NOT added — no concrete auth/db/secret surface detected (avoids a jobless expert)');
   }
 

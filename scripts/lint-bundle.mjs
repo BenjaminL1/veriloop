@@ -196,23 +196,25 @@ function main() {
   //     workflow itself (the same marker-slice-and-`new Function` technique the selftest
   //     uses), never a second hardcoded copy (constitution rule 9). A hit here means a
   //     record escaped redaction and got committed anyway.
+  //     Hoisted out of the history block because `.claude/veriloop/domain/` needs the
+  //     same array (check 6b): both are committed files fed by third-party text.
+  const wfDirH = join(args.bundle, '.claude/workflows');
+  const wfH = (listDir(wfDirH) || []).find((n) => n.endsWith('-dev-loop.js'));
+  let secretPatterns = [];
+  if (wfH) {
+    const src = readFileSync(join(wfDirH, wfH), 'utf8');
+    const S = '// <<< veriloop:emit:start >>>';
+    const E = '// <<< veriloop:emit:end >>>';
+    const si = src.indexOf(S);
+    const ei = src.indexOf(E);
+    if (si !== -1 && ei !== -1) {
+      try {
+        secretPatterns = new Function(`${src.slice(si + S.length, ei)}; return SECRET_PATTERNS;`)();
+      } catch { /* fall through — treated as no patterns available */ }
+    }
+  }
   const histDir = join(args.bundle, '.claude/veriloop/history');
   if (isDir(histDir)) {
-    const wfDirH = join(args.bundle, '.claude/workflows');
-    const wfH = (listDir(wfDirH) || []).find((n) => n.endsWith('-dev-loop.js'));
-    let secretPatterns = [];
-    if (wfH) {
-      const src = readFileSync(join(wfDirH, wfH), 'utf8');
-      const S = '// <<< veriloop:emit:start >>>';
-      const E = '// <<< veriloop:emit:end >>>';
-      const si = src.indexOf(S);
-      const ei = src.indexOf(E);
-      if (si !== -1 && ei !== -1) {
-        try {
-          secretPatterns = new Function(`${src.slice(si + S.length, ei)}; return SECRET_PATTERNS;`)();
-        } catch { /* fall through — treated as no patterns available */ }
-      }
-    }
     let histHits = 0;
     const walkHist = (dir, rel) => {
       for (const name of listDir(dir)) {
@@ -235,25 +237,110 @@ function main() {
     if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns');
   }
 
-  // 7. authoring budget — the persona word cap is an ACCRETION TRIPWIRE, not a
-  //    token/dilution claim: a persona past 700 words has usually grown unreviewed
-  //    bolt-ons, so a human should re-read and re-distill it. WARN-only (it's a
-  //    smell, not a correctness bug). Scoped to the same emitted-file list.
-  for (const f of files) {
-    const rel = f.slice(args.bundle.length + 1);
-    if (!/\.claude\/veriloop\/experts\/.*\.md$/.test(rel) || rel.endsWith('.overrides.md')) continue;
-    const words = readFileSync(f, 'utf8').split(/\s+/).filter(Boolean).length;
-    if (words > 700) {
-      const persona = rel.split('/').pop().replace(/\.md$/, '');
-      warn(`persona ${persona} grew past 700 words (${words}) — usually unreviewed bolt-ons; a human should re-read and re-distill it`);
+  // 6b. the domain bundle — the SAME backstop, for the same reason (constitution rule 7).
+  //     `.claude/veriloop/domain/` is fed entirely by third-party text: dependency version
+  //     strings copied out of a `package.json` / `pyproject.toml` / `Cargo.toml` (a
+  //     `git+https://x-access-token:<PAT>@…` requirement or a private index URL is a
+  //     common real pattern) and the url/title/rationale of an external source. Those are
+  //     scrubbed at the source in `domain.mjs scrubSecrets`, and these files are
+  //     COMMITTED, so the scrub gets a backstop rather than being trusted alone. Scoped
+  //     to `domain/` deliberately: the manifest legitimately carries `"key": "code-review"`
+  //     and would trip the KEY pattern.
+  const domDir = join(args.bundle, '.claude/veriloop/domain');
+  if (isDir(domDir)) {
+    let domHits = 0;
+    for (const name of listDir(domDir)) {
+      if (!/\.(md|json)$/.test(name)) continue;
+      readFileSync(join(domDir, name), 'utf8').split('\n').forEach((line, i) => {
+        for (const re of secretPatterns) {
+          if (re.test(line)) { domHits++; fail(`secret-shaped content in emitted domain artifact .claude/veriloop/domain/${name}:${i + 1}`); break; }
+        }
+      });
+    }
+    if (!domHits) ok('domain bundle scanned for secret patterns (dependency specs and third-party source metadata)');
+  }
+
+  // 6c. the SAME third-party dependency strings also land in `veriloop-manifest.json` →
+  //     `domain_facts`, which `generate.mjs` emits UNCONDITIONALLY — for every adopter,
+  //     whether or not `domain.json` exists and `domain/` is ever written. Scoping the
+  //     backstop to `domain/` alone therefore left the common case with exactly one line
+  //     of defence (`domain.mjs scrubSecrets`), which is the posture 6b's own comment
+  //     rejects. Scoped to the `domain_facts` BLOCK, not the whole manifest, for the
+  //     reason 6b gives: the manifest legitimately carries `"key": "code-review"`.
+  //     (Absolute paths in the manifest are already covered by check 1 — it is a `.json`
+  //     in `emitted_files` — so only the secret patterns are re-scanned here.)
+  if (existsSync(man) && secretPatterns.length) {
+    try {
+      const facts = JSON.parse(readFileSync(man, 'utf8')).domain_facts;
+      if (facts) {
+        let factHits = 0;
+        JSON.stringify(facts, null, 2).split('\n').forEach((line, i) => {
+          for (const re of secretPatterns) {
+            if (re.test(line)) { factHits++; fail(`secret-shaped content in veriloop-manifest.json → domain_facts (block line ${i + 1}): ${line.trim().slice(0, 60)}`); break; }
+          }
+        });
+        if (!factHits) ok('manifest domain_facts scanned for secret patterns (emitted for every adopter, domain subsystem or not)');
+      }
+    } catch { /* the manifest-integrity check above already reported this */ }
+  }
+
+  // 6d. ACCRETION TRIPWIRE — scoped to `.claude/veriloop/domain/expert.md` and nothing
+  //     else. T12 deleted the 700-word cap on `experts/*.md` and § Open RISKS deliberately
+  //     accepted the consequence, so this is NOT that cap re-scoped: it is a new, narrower
+  //     guard on the ONE artifact § Open RISKS names as designed to grow (references,
+  //     vocabulary, stances) and says nothing would notice reaching 3,000 words. WARN, not
+  //     FAIL — accretion is a smell that wants a human re-read, not a correctness bug, and
+  //     the persona must never be able to block an install. The ceiling is deliberately
+  //     well above the emitted size (~680 words for this repo, of which ~450 is the
+  //     script-owned invariant text) so it fires on growth, not on existing content.
+  const DOMAIN_PERSONA_WORDS = 1200;
+  const domExpert = join(args.bundle, '.claude/veriloop/domain/expert.md');
+  if (existsSync(domExpert)) {
+    const words = readFileSync(domExpert, 'utf8').split(/\s+/).filter(Boolean).length;
+    if (words > DOMAIN_PERSONA_WORDS) {
+      warn(`domain/expert.md grew past ${DOMAIN_PERSONA_WORDS} words (${words}) — the one artifact designed to accrete; a human should re-read it and re-distill \`persona.body\` in domain.json`);
+    } else {
+      ok(`domain/expert.md within the accretion tripwire (${words}/${DOMAIN_PERSONA_WORDS} words)`);
     }
   }
-  for (const c of EMITTED_COMMANDS) {
-    const cmdBudget = join(args.bundle, '.claude/commands', c);
-    if (files.includes(cmdBudget) && existsSync(cmdBudget)) {
-      const dm = readFileSync(cmdBudget, 'utf8').match(/^description:\s*(.*)$/m);
-      if (dm && dm[1].length > 500) warn(`/${c.replace(/\.md$/, '')} description is ${dm[1].length} chars (budget 500) — trim the command frontmatter`);
+
+  // 7. domain subsystem existence — `.claude/veriloop/domain/` is deliberately NOT in
+  //    `manifest.roster`, so the persona-presence check above (`roster persona present`)
+  //    cannot cover it, and `bundleFiles` SILENTLY DROPS emitted paths that no longer
+  //    exist on disk (`.filter((p) => existsSync(p))`) — so a deleted domain file is
+  //    invisible to every other check here. That is the `c88f130` class: a deletion that
+  //    takes an artifact nobody listed, on a green gate. Two directions, both FAIL:
+  //    (a) an `emitted_files` entry under `domain/` that is gone; (b) a bundle that has
+  //    the domain INPUT but is missing one of the three machine-owned outputs (a generate
+  //    run that skipped the domain writer). No domain input → one explicit `ok`, so the
+  //    skip is visible in the report rather than being an absence of output.
+  const DOMAIN_REQUIRED = ['audit.md', 'expert.md', 'references.json'];
+  const domainInputPath = join(args.bundle, '.claude/veriloop/domain.json');
+  const domainInstalled = existsSync(domainInputPath);
+  if (existsSync(man)) {
+    let domainEmitted = [];
+    try {
+      domainEmitted = (JSON.parse(readFileSync(man, 'utf8')).emitted_files || [])
+        .map((e) => e.path)
+        .filter((p) => p.startsWith('.claude/veriloop/domain/'));
+    } catch { /* the manifest-integrity check above already reported this */ }
+    let missing = 0;
+    for (const p of domainEmitted) {
+      if (!existsSync(join(args.bundle, p))) { missing++; fail(`domain file listed in emitted_files is missing on disk: ${p}`); }
     }
+    if (domainEmitted.length && !missing) ok(`domain subsystem: all ${domainEmitted.length} emitted domain files present`);
+  }
+  if (domainInstalled) {
+    let absent = 0;
+    for (const f of DOMAIN_REQUIRED) {
+      if (!existsSync(join(args.bundle, '.claude/veriloop/domain', f))) {
+        absent++;
+        fail(`domain.json is present but .claude/veriloop/domain/${f} was never emitted — re-run generate`);
+      }
+    }
+    if (!absent) ok('domain subsystem: domain.json has all three machine-owned artifacts');
+  } else {
+    ok('domain subsystem not installed — check skipped');
   }
 
   // report

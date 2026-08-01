@@ -23,6 +23,13 @@ allowed-tools: Read, Grep, Glob, Write, Edit, AskUserQuestion, Task, Bash(node:*
   There is no `git commit`, no `git push`, no branch or worktree verb — landing is
   owner-reserved (constitution rule 10). Commands the TARGET repo declares are run
   by `scripts/verify.mjs` inside its own safety tiers, never by this skill directly.
+
+  What the fence does NOT bound, as of 0.5.0: the NETWORK. `Task` is already granted,
+  and a subagent it spawns can hold tools this fence does not list. Phase 7.5 uses
+  exactly that — it spawns a source-verification subagent whose only network grant is
+  `WebFetch`. No `WebFetch`/`WebSearch` was added to the line above and its bytes are
+  unchanged, but the fence's honest DESCRIPTION changed: setup now performs network
+  I/O. Claiming the fence holds unchanged would be technically true and misleading.
 -->
 
 
@@ -44,6 +51,11 @@ dev-loop). It emits **plain files** into the target repo:
 .claude/veriloop/experts/<name>.md       expert personas (machine-owned)
 .claude/veriloop/experts/<name>.overrides.md   manual tweaks (hand-owned, never clobbered)
 .claude/veriloop/specs/<slug>.md         feature specs (hand-owned, ratified by owner, git-tracked)
+.claude/veriloop/domain.json             the domain audit's answers (hand/LLM-owned, git-tracked)
+.claude/veriloop/domain/audit.md         field classification, vocabulary, architecture (machine-owned)
+.claude/veriloop/domain/expert.md        the domain-expert persona (machine-owned)
+.claude/veriloop/domain/expert.overrides.md    manual tweaks (hand-owned, never clobbered)
+.claude/veriloop/domain/references.json  the three-category reference library (machine-owned)
 .claude/veriloop/veriloop-manifest.json  version, repo SHA, roster, verification results
 ```
 
@@ -194,6 +206,8 @@ DB-touching changes:
    ```
    node SKILL_DIR/../../scripts/generate.mjs --repo "$REPO" --commands "$REPO/.claude/veriloop/commands.json"
    ```
+   On a first run the domain subsystem is not built yet, so this pass emits no
+   `domain/` — Phase 7.5 writes `domain.json` and re-runs the generator.
    This slot-fills the portable template with the verified commands, the roster →
    lens map, risk tiers, and stack-specific worktree-deps setup; writes the
    workflow, the five commands — `/dev-plan` (spec interview + expert council),
@@ -209,13 +223,90 @@ DB-touching changes:
    real footguns — the generated persona is a functional default. Keep manual
    tweaks in the `.overrides.md` sibling.
 
+### Phase 7.5 — Domain audit + reference library (LLM + deterministic)
+
+**Built on FIRST RUN only.** Rebuilt by `/veriloop --refresh`. Skip this phase entirely
+on a re-run where `$REPO/.claude/veriloop/domain.json` already exists and `--refresh` was
+not asked for — regenerating is `node generate.mjs` alone, which re-emits `domain/` from
+the existing `domain.json` byte-identically.
+
+The generator you just ran wrote `veriloop-manifest.json` with a script-owned
+`domain_facts` block — the declared dependencies (each with a `path:line` source) and a
+bounded file census. **Read those facts and CITE them; never re-derive them** (constitution
+rule 2). That is why this phase runs after Phase 6/7 and before Phase 8.
+
+1. **Audit the repo's domain** on tiered evidence: **Tier 1** dependency manifests >
+   **Tier 2** framework-mandated topology > **Tier 3** file census > **Tier 4** prose.
+   Scores **accumulate** within a tier; a lower tier never overrides a higher one (the
+   ranking is lexicographic on the tier vector, and the script enforces it). Every factual
+   claim carries a `path` or `path:line` citation **that resolves in the repo** — a path
+   that does not exist, or a line past EOF, fails the build. Cite the narrowest real thing:
+   a bare directory is accepted but is practically unfalsifiable, and a Tier 1 / Tier 3
+   claim should cite `.claude/veriloop/veriloop-manifest.json` (the `domain_facts` block)
+   rather than re-derive what the block already says.
+2. **On low classification confidence, HALT and ask the owner** with `AskUserQuestion`
+   rather than guessing. A `confidence: "low"` classification without
+   `owner_confirmed: true` **fails the build** — never bake a guessed field into a bundle.
+3. **Select sources by judgment** across three categories — `research`, `products_tools`,
+   `current_discussions` — balancing quality against topic diversity. There is no
+   selection algorithm. Each entry needs a **one-line rationale**: it is the only field
+   that records what the source *says*, and it is what a later claim-level guard checks.
+4. **Verify each source resolves — in a `Task` subagent whose ONLY network grant is
+   `WebFetch`.** It returns `{url, status, title}` and nothing else. The parent context
+   holds `Write` and **never fetches**: this feature is a path where repo prose steers
+   which URL gets fetched and the response reaches disk, so keeping *fetch* and *write* in
+   separate contexts is the structural mitigation. Hosts are checked against a literal
+   allowlist in `scripts/lib/domain.mjs` (`arxiv.org`, `api.semanticscholar.org`,
+   `api.github.com`, `doi.org`); anything off-list, unreachable, or non-200 is stored
+   `UNVERIFIED` no matter what you claim, and the script recomputes every status.
+5. **Sources found on-demand mid-conversation are STAGED for owner approval**, in the
+   `staged` array — never auto-appended to the three categories, and never `VERIFIED`.
+6. Write the answers to `$REPO/.claude/veriloop/domain.json` and **re-run the generator**
+   so it emits `domain/`:
+   ```
+   node SKILL_DIR/../../scripts/generate.mjs --repo "$REPO" \
+     --commands "$REPO/.claude/veriloop/commands.json"
+   ```
+   (`--domain <path>` overrides the default location. Never use `--force`.)
+
+Schema (`domain.json`):
+```
+{ "classification": {
+    "primary": string,                    // must AGREE with the script's tier ranking
+    "confidence": "high" | "medium" | "low",
+    "owner_confirmed": bool,              // REQUIRED when confidence is "low"
+    "evidence": [ { "tier": 1|2|3|4, "field": string, "score": number,
+                    "claim": string, "source": "path" | "path:line" } ] },
+  "vocabulary": [ { "term": string, "meaning": string, "source": string } ],
+  "concepts":   [ { "name": string, "detail": string, "source": string } ],
+  "architecture": { "summary": string, "data_flow": string[], "sources": string[] },
+  "persona": { "body": string },          // stances + citation protocol are script-owned
+  "references": {
+    // attempted_at: the instant you ACTUALLY attempted the fetches. Format-checked
+    // against ISO-8601; a placeholder fails the build. No script fetches, so nothing
+    // recomputes this or http_status — both are YOUR report, and the emitted
+    // references.json labels them as such in `attempted_at_note`.
+    "attempted_at": iso8601, "reachable": bool,
+    "research" | "products_tools" | "current_discussions" | "staged":
+      [ { "url": string, "title": string, "rationale": string,   // ≤200 chars, one line
+          "http_status": int } ] } }
+```
+
+**Offline is not a failure.** If the network is unreachable, set `reachable: false`: a
+valid `references.json` is still written with every entry `UNVERIFIED`, a warning prints,
+the install does **not** block, and the emitted persona says the library could not be
+verified instead of citing anything as checked.
+
 ### Phase 8 — Validate (never grade your own homework)
 1. **Lint the artifacts (deterministic):**
    ```
    node SKILL_DIR/../../scripts/lint-bundle.mjs --bundle "$REPO"
    ```
    Fails on invalid workflow syntax, absolute paths, leftover placeholders, a
-   dangling expert reference, missing command frontmatter, or an empty gate. It also
+   dangling expert reference, missing command frontmatter, an empty gate, or a
+   **missing domain artifact** (an `emitted_files` entry under
+   `.claude/veriloop/domain/` gone from disk, or a `domain.json` whose three
+   machine-owned outputs were never emitted). It also
    rejects **harness-forbidden APIs** in the workflow (`Date.now`, `new Date`,
    `Math.random`, `process.*`, `require`, `import` — syntax-valid but banned at
    runtime) and **config↔file mismatches** (a roster expert whose persona file is
@@ -263,6 +354,8 @@ implementer build to it, and a review lens treats contradicting an explicit deci
 BLOCKER.
 
 ## Guardrails
+- The domain phase is the only one that reaches the network, and only through a
+  `WebFetch`-only subagent. Never fetch from the context that holds `Write`.
 - Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`,
   `.claude/workflows/<repo>-dev-loop.js`, the five emitted commands
   `.claude/commands/{dev-plan,dev-loop,advise,review,posture}.md`, and the marked
