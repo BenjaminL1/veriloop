@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-01T01:25:13.824Z",
+  "generated_at": "2026-08-01T02:21:34.787Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "fc378f198a7014c2faba62c7c2c8f79729906d30",
+  "repo_sha": "fe1db209b91e2f1b7cabdc29f54e29ebb3d11c74",
   "stack": [
     "node"
   ],
@@ -245,6 +245,13 @@
         "source": "skills/"
       }
     ],
+    "census_bounds": {
+      "listed": 4,
+      "top_level_dirs": 7,
+      "dir_cap": 24,
+      "max_depth": 4,
+      "truncated": false
+    },
     "stack": [
       "node"
     ],
@@ -260,27 +267,27 @@
     {
       "path": ".claude/commands/dev-loop.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/advise.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/review.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/dev-plan.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/commands/posture.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/commands.json",
@@ -290,7 +297,7 @@
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
@@ -300,7 +307,7 @@
     {
       "path": ".claude/veriloop/experts/security.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/security.overrides.md",
@@ -310,7 +317,7 @@
     {
       "path": ".claude/veriloop/experts/drift.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/experts/drift.overrides.md",
@@ -325,12 +332,12 @@
     {
       "path": ".claude/veriloop/domain/audit.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/domain/expert.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/domain/references.json",

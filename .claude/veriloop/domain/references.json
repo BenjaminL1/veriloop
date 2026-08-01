@@ -8,6 +8,7 @@
   "research": [
     {
       "url": "https://arxiv.org/abs/2310.11324",
+      "url_rewritten": false,
       "title": "Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design or: How I learned to start worrying about prompt formatting",
       "host": "arxiv.org",
       "host_allowed": true,
@@ -17,6 +18,7 @@
     },
     {
       "url": "https://arxiv.org/abs/2401.00595",
+      "url_rewritten": false,
       "title": "State of What Art? A Call for Multi-Prompt LLM Evaluation",
       "host": "arxiv.org",
       "host_allowed": true,
@@ -26,6 +28,7 @@
     },
     {
       "url": "https://arxiv.org/abs/2503.13657",
+      "url_rewritten": false,
       "title": "Why Do Multi-Agent LLM Systems Fail?",
       "host": "arxiv.org",
       "host_allowed": true,
@@ -37,6 +40,7 @@
   "products_tools": [
     {
       "url": "https://api.github.com/repos/anthropics/claude-code",
+      "url_rewritten": false,
       "title": "anthropics/claude-code",
       "host": "api.github.com",
       "host_allowed": true,
@@ -46,6 +50,7 @@
     },
     {
       "url": "https://api.github.com/repos/openai/codex",
+      "url_rewritten": false,
       "title": "openai/codex",
       "host": "api.github.com",
       "host_allowed": true,
@@ -57,6 +62,7 @@
   "current_discussions": [
     {
       "url": "https://api.github.com/repos/anthropics/claude-code/issues?state=open&per_page=1",
+      "url_rewritten": false,
       "title": "anthropics/claude-code — open issue tracker",
       "host": "api.github.com",
       "host_allowed": true,

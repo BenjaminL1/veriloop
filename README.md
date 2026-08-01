@@ -321,7 +321,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 297 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 324 and `CHANGELOG.md` names every
 removal individually. **Phases 2
 (`/advise` redesign) and 3 (a `SessionStart` hook) are NOT shipped** — `/advise` is
 unchanged in this release.

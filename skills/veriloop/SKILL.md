@@ -258,7 +258,10 @@ rule 2). That is why this phase runs after Phase 6/7 and before Phase 8.
    separate contexts is the structural mitigation. Hosts are checked against a literal
    allowlist in `scripts/lib/domain.mjs` (`arxiv.org`, `api.semanticscholar.org`,
    `api.github.com`, `doi.org`); anything off-list, unreachable, or non-200 is stored
-   `UNVERIFIED` no matter what you claim, and the script recomputes every status.
+   `UNVERIFIED` no matter what you claim, and the script recomputes every status. So is any
+   entry whose `url` the sanitizer had to REWRITE — over 200 chars, embedded newlines, an
+   absolute path: the stored string is then not the string that was fetched, so the reported
+   `http_status` cannot describe it. Such an entry carries `url_rewritten: true`.
 5. **Sources found on-demand mid-conversation are STAGED for owner approval**, in the
    `staged` array — never auto-appended to the three categories, and never `VERIFIED`.
 6. Write the answers to `$REPO/.claude/veriloop/domain.json` and **re-run the generator**
@@ -283,7 +286,9 @@ Schema (`domain.json`):
   "persona": { "body": string },          // stances + citation protocol are script-owned
   "references": {
     // attempted_at: the instant you ACTUALLY attempted the fetches. Format-checked
-    // against ISO-8601; a placeholder fails the build. No script fetches, so nothing
+    // against ISO-8601; a placeholder fails the build. REQUIRED once any entry exists
+    // and `reachable` is not false — omit it and EVERY entry is stored UNVERIFIED, because
+    // an undated fetch cannot be checked for staleness. No script fetches, so nothing
     // recomputes this or http_status — both are YOUR report, and the emitted
     // references.json labels them as such in `attempted_at_note`.
     "attempted_at": iso8601, "reachable": bool,

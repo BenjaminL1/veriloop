@@ -79,7 +79,7 @@ technically-true framing this project's claims discipline exists to prevent.)_
 Subprocess use in the scripts is limited to three things:
 
 - `node --check` on an emitted file, to syntax-check it (`scripts/lint-bundle.mjs:81`)
-- `git rev-parse HEAD`, to stamp the manifest (`scripts/generate.mjs:52`)
+- `git rev-parse HEAD`, to stamp the manifest (`scripts/generate.mjs:56 repoSha`)
 - your own detected commands, under the safety tiers above (`scripts/verify.mjs:64`)
 
 **Three deliberate network paths exist, and you should know about all three:**
@@ -168,9 +168,9 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 ### 5. Your files are not overwritten
 
 Machine-owned files regenerate on every run. **Hand-owned files are preserved untouched** —
-`handOnce`, `scripts/generate.mjs:342` — which covers `constitution.md`, every
+`scripts/generate.mjs:351 handOnce` — which covers `constitution.md`, every
 `*.overrides.md`, and `specs/*`. With `--force` they are backed up first
-(`scripts/generate.mjs:294`). Inside shared files like `.gitignore`, only the marked block
+(`scripts/generate.mjs:303 backup`). Inside shared files like `.gitignore`, only the marked block
 is rewritten; your lines outside it are preserved byte for byte.
 
 Note the consequence: because hand-owned files are *preserved* rather than merged, a

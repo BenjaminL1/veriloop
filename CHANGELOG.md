@@ -76,7 +76,7 @@ dependency-free. Cargo's section test used `\w`, which excludes `-`, silently dr
 `[dev-dependencies]`, `[build-dependencies]` and `[target.'cfg(..)'.dependencies]`, and an
 inline table recorded its whole body as the version. Replaced with a sectioned TOML reader:
 PEP 621 / PEP 735 arrays (single- and multi-line, extras-aware), poetry dep tables, and every
-Cargo dependency table including subtable form. Five new assertions cover it — the existing
+Cargo dependency table including subtable form. Six new assertions cover it — the existing
 domain assertions all used a JS-only fixture with zero deps, so the parser had none
 (constitution rule 3). The empty case no longer renders *"this repo is dependency-free"*: it
 now states that nothing was **parsed** from the three manifests it reads, which is not the
@@ -108,6 +108,78 @@ lint, byte-identically on every re-run, and the failure named a machine-owned fi
 is explicitly told not to hand-edit. The rule now takes the trigger with the value, and
 matches a bare `TOKEN=` with no value at all — the other case `SECRET_PATTERNS[0]` catches
 and the scrub did not.
+
+**...and the trigger is now IDENTIFIER-shaped, because the broad form destroyed prose.**
+`\b[A-Za-z0-9_]*(KEY|TOKEN|SECRET|…)[A-Za-z0-9_]*\s*[=:]` is a **prefix** match, and academic
+titles are overwhelmingly `Term: Subtitle` — so it rewrote *"Tokenization: A Survey of
+Subword Methods"* into *"\*\*\* Survey of Subword Methods"* and *"Secretariat: an agent
+benchmark"* into *"\*\*\* agent benchmark"*, corrupting `title` and `rationale` — the field
+the spec calls *"the only field that records what the source SAYS"*. The trigger word must
+now be delimited by `_` or the string boundary. `API_KEY=`, `access_token:`,
+`AWS_SECRET_ACCESS_KEY=`, `password=` and a bare `token=` still scrub whole; the two titles
+survive verbatim; both directions are asserted. Check 6b uses the **same** regex for
+`domain/*` (imported from `domain.mjs`, not re-typed) so the scrub and its backstop cannot
+drift apart again. **Residual, stated not hidden:** `MY_TOKENIZER=secret` now matches
+neither form.
+
+**A rewritten `url` is not the url that was fetched.** `http_status` is reported by the
+subagent that fetched the RAW string, but the stored url goes through `sanitizeField` first
+— which may truncate at 200 chars, collapse whitespace, or scrub an absolute path to
+`%ABS%` — and the host check plus the status decision then ran on the **rewritten** string.
+A 303-char allowlisted `api.semanticscholar.org` query URL was therefore stored as a 200-char
+fragment carrying `status: "VERIFIED"`: two different resources in one entry. A rewrite now
+forces `UNVERIFIED` and is recorded on the entry as `url_rewritten`, so it is diagnosable
+rather than silent.
+
+**`attempted_at` is required once entries exist.** An unstamped library is a set of
+`http_status` values nobody can date, and staleness is the only thing a reader could have
+checked. Missing (with `reachable` not false) now downgrades **every** entry to `UNVERIFIED`
+and warns — the same fail-open shape as an outage: a valid file, an install that is not
+blocked.
+
+**Audit prose is sanitized, not trimmed.** Five LLM-authored fields reached the committed,
+machine-owned `audit.md` with only `String().trim()`: the vocabulary/concept `name` and
+`detail`, an evidence `claim` and `field`, `architecture.summary` and each `data_flow` step.
+A newline in any of them escaped its markdown bullet and rendered a real heading, and an
+absolute path or secret-shaped line hard-FAILED lint's own `ABS` / `SECRET_PATTERNS` checks
+on a file with no self-service fix. All of them now route through `sanitizeField` with a
+prose-sized cap; the field name is sanitized once at the ranking site, so `expert.md`'s title
+and Field section are covered by the same change.
+
+**The file census states its bounds.** *"File census (4 top-level directories)"* was printed
+for a repo with 7 — hidden directories are excluded, the listing caps at 24 and the walk
+stops at depth 4, none of which the heading said. The bounds are script-owned facts, so they
+ship in `domain_facts.census_bounds` and render beside the count: *"4 of 7 top-level
+directories; hidden and vendor directories excluded, walk depth <= 4"*. `venv/`, `vendor/`,
+`coverage/` and `site-packages/` join the skip list.
+
+**`lint-bundle` no longer executes the bundle it is pointed at unless a check needs it.** The
+`new Function(...)` that extracts `SECRET_PATTERNS` from the emitted workflow had been
+hoisted to run for **every** bundle — and `lint-bundle` is a scanner aimed at third-party
+bundles. It is now lazy and memoized, called only by the three rule-7 backstops. Check 6b
+also gained 6c's `secretPatterns.length` guard (it printed its `ok()` line even when the
+pattern set was empty and the loop never ran), an `isDir` guard before `readFileSync` (a
+directory named `notes.md` crashed it with EISDIR), and the empty-pattern case is warned
+**once**, at the extraction site, as SKIPPED rather than passing.
+
+**Check 7 recognises `--domain` installs.** "Installed" keyed off the default
+`.claude/veriloop/domain.json` path alone, so a bundle generated with `--domain <path>` from
+outside `.claude/veriloop/` got the reassuring *"not installed — check skipped"* line for a
+subsystem that is installed. It now also treats any `.claude/veriloop/domain/` entry in
+`emitted_files` as proof.
+
+**Three dead `SECURITY.md` citations, and a scan so the class cannot recur.**
+`generate.mjs` grew nine lines and `SECURITY.md`'s three citations into it all rotted
+(`:52` → `:56 repoSha`, `:342` → `:351 handOnce`, `:294` → `:303 backup`) with the gate
+green — the same rot the citation-liveness scan exists to catch, in the two files nobody had
+registered with it. `SECURITY.md` and `README.md` are now scanned. They are held to a
+**weaker** bar than the bundle files, stated rather than glossed: most of their citations
+carry no trailing symbol token, so those are checked for file + line existence only, which
+the scan's own comment calls unfalsifiable in practice. The three repaired citations were
+given tokens, so they are real guards — mutation-tested: reverting the two nine-line drifts
+turns the assertion red. Also pinned: `README.md` and `CHANGELOG.md` must publish the same
+gate figures (README said `253 → 297` for a release the CHANGELOG and the commit both put
+at 307).
 
 **Absolute local paths are redacted too — rule 7's portability half.**
 `"local-lib": "file:/Users/me/dev/local-lib"` is the ordinary npm/pnpm/yarn local-dependency
@@ -183,29 +255,32 @@ property — and lose only the `<= 500` description-length clause: `/advise`, `/
 tripwire and the 500-char command-description budget. *"A fresh bundle passes"* is
 **retained** — it is not a cap claim.
 
-**Gate count: 253 → 307, deliberately.** Minus the four deleted assertions (249), plus 58
-new ones covering the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1
-dependency parser and its citation resolution, the rule 7 scrub, both backstops and their
-agreement, the portability redaction, the `--domain` failure mode, the `attempted_at`
-provenance check, the accretion tripwire and the `SKILL.md` fence. The drop is accounted for
-above; the rise is new coverage, not padding.
+**Gate count: 253 → 324, deliberately.** Minus the four T12 assertions named above and the
+three accretion-tripwire assertions the owner later ruled out (246), plus 78 new ones covering
+the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
+and its citation resolution, the rule 7 scrub in both directions, both backstops and their
+agreement, the portability redaction, the `--domain` failure modes, the `attempted_at`
+requirement, the url-rewrite fail-closed rule, audit-prose sanitization, the census bounds,
+the published-doc citation scan and the `SKILL.md` fence. The drop is accounted for above;
+the rise is new coverage, not padding.
 
-**Cap-removal risk (T12), and the narrower guard that replaces it.** The 700-word tripwire
-was never a token-economy claim — its comment said a persona past 700 words *"has usually
-grown unreviewed."* It was the only mechanism in the repo that detected **accretion**, and
-`domain/expert.md` is the one artifact designed to grow. The spec is genuinely
+**Cap-removal risk (T12): no replacement, by owner ruling.** The 700-word tripwire was never
+a token-economy claim — its comment said a persona past 700 words *"has usually grown
+unreviewed."* It was the only mechanism in the repo that detected **accretion**, and
+`domain/expert.md` is the one artifact designed to grow. The spec reads as
 self-contradictory here: § Guard wiring (item 2) asks for that cap to be re-scoped to
 `domain/expert.md`, while T12 deletes it and § Open RISKS deliberates the consequence and
-accepts it, naming `domain/expert.md` reaching 3,000 words unnoticed. Resolving a ratified
-spec's internal contradiction is an owner call, not an implementer's, so **both were
-satisfied literally**: T12 executed in full (the three cap sites and their assertions are
-gone, named individually above), and a **new** check — `lint-bundle.mjs` 6d — path-scoped to
-`.claude/veriloop/domain/expert.md` and nothing else, WARN-only, ceiling 1,200 words against
-an emitted 681, mutation-tested the way the pair T12 deleted was. Acceptance criterion 6 is
-therefore met: all four guard-wiring items ship in the same commit as `domain/`. **Residual,
-recorded rather than mitigated:** no other file in the repo has an accretion check, and
-`persona.body` still has no length validation inside `domain.mjs` — the tripwire watches the
-emitted artifact, not the input.
+accepts it, naming `domain/expert.md` reaching 3,000 words unnoticed. A first pass tried to
+satisfy both by adding a NEW 1,200-word tripwire (`lint-bundle.mjs` check 6d) plus two
+assertions. **The owner ruled that out; the check and all three of its assertions are deleted:** T12 retired ALL THREE
+length caps and § Open RISKS declined a replacement in as many words — *"Accepted by the
+owner; no replacement mechanism is specified. If one is wanted later, a review-on-growth
+prompt costs less than a cap and does not constrain length."* Guard-wiring item 2 asked for
+the SCOPE of a cap T12 had already deleted to be extended, so there was nothing to extend;
+the spec is amended to say so, and guard-wiring items 1, 3 and 4 ship in the same commit as
+`domain/`. **Residual, recorded rather than mitigated:** nothing in the repo watches
+`domain/expert.md` for growth, and `persona.body` has no length validation inside
+`domain.mjs`.
 
 **Retirements executed (owner decisions of 2026-07-31).**
 

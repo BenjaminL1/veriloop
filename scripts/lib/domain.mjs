@@ -51,7 +51,13 @@ const DATA_NOTICE =
 
 const CENSUS_DIR_CAP = 24;
 const CENSUS_EXT_CAP = 4;
-const SKIP_DIRS = new Set(['node_modules', '__pycache__', 'target', 'dist', 'build']);
+const CENSUS_MAX_DEPTH = 4;
+const SKIP_DIRS = new Set([
+  'node_modules', '__pycache__', 'target', 'dist', 'build',
+  // vendored / generated trees: they are somebody else's code or a tool's output, so
+  // counting them describes the toolchain rather than the repo's own shape.
+  'venv', 'vendor', 'coverage', 'site-packages',
+]);
 // Hidden directories are tooling, not domain evidence — and `.claude/` is veriloop's
 // OWN output, so counting it would make the census (and therefore audit.md) change on
 // every re-run. Skipping them is what makes a re-generate byte-identical.
@@ -60,6 +66,24 @@ const skipDir = (name) => name.startsWith('.') || SKIP_DIRS.has(name);
 // ---------------------------------------------------------------------------
 // Facts — the script-owned block that lands in the manifest
 // ---------------------------------------------------------------------------
+
+/**
+ * The KEY/TOKEN/SECRET trigger, IDENTIFIER-shaped. The trigger word must be delimited by
+ * `_` or the string boundary — it may not merely be a PREFIX of a longer natural word.
+ * The earlier `\b[A-Za-z0-9_]*(?:KEY|TOKEN|…)[A-Za-z0-9_]*` form was a prefix match, and
+ * academic titles are overwhelmingly `Term: Subtitle`, so it rewrote
+ * `Tokenization: A Survey of Subword Methods` into `*** Survey of Subword Methods` and
+ * `Secretariat: an agent benchmark` into `*** agent benchmark` — destroying `title` and
+ * `rationale`, the field the spec calls "the only field that records what the source SAYS".
+ * Exported because `lint-bundle.mjs`'s domain backstop re-scans the scrub's own output and
+ * must use the SAME rule (rule 9 — one source of truth): a backstop that rejects what its
+ * scrub emits leaves the gate permanently red on a machine-owned file.
+ * Residual miss, stated rather than hidden: `MY_TOKENIZER=secret` matches neither form,
+ * because `TOKEN` is not `_`-delimited there.
+ */
+const SECRET_TRIGGER_SRC =
+  '\\b(?:[A-Za-z0-9]+_)*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(?:_[A-Za-z0-9]+)*\\s*[=:]';
+export const SECRET_TRIGGER = new RegExp(SECRET_TRIGGER_SRC, 'i');
 
 /**
  * A dependency spec is THIRD-PARTY TEXT and routinely carries credentials — a
@@ -86,7 +110,7 @@ const SECRET_SCRUBS = [
   // line that then hard-FAILED lint check 6b, deterministically, in a machine-owned file
   // the owner is told not to hand-edit. The value is also optional here (`\S*`) because
   // `SECRET_PATTERNS[0]` fires on a bare `TOKEN=` with nothing after it.
-  [/\b[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_]*\s*[=:]\s*\S*/gi, '***'],
+  [new RegExp(`${SECRET_TRIGGER_SRC}\\s*\\S*`, 'gi'), '***'],
   // Portability — the OTHER half of constitution rule 7, and the half a secret scrub does
   // not cover. `"local-lib": "file:/Users/me/dev/local-lib"` is the ordinary npm/pnpm/yarn
   // local-dependency pattern; copied verbatim it lands in `veriloop-manifest.json` →
@@ -291,15 +315,21 @@ function collectDeps(repo) {
 
 function collectCensus(repo) {
   const census = [];
+  // The census is BOUNDED in three ways at once, and the audit used to render only the
+  // resulting count ("File census (4 top-level directories)") for a repo with 7 — reading
+  // as a complete enumeration when it is a filtered, capped, depth-limited sample. The
+  // bounds travel with the facts so the renderer can state them beside the number.
+  const topLevelDirs = listDir(repo).filter((n) => isDir(join(repo, n))).length;
+  let truncated = false;
   for (const name of listDir(repo).sort()) {
     if (skipDir(name)) continue;
     const abs = join(repo, name);
     if (!isDir(abs)) continue;
-    if (census.length >= CENSUS_DIR_CAP) break;
+    if (census.length >= CENSUS_DIR_CAP) { truncated = true; break; }
     const exts = new Map();
     let files = 0;
     const walk = (dir, depth) => {
-      if (depth > 4) return;
+      if (depth > CENSUS_MAX_DEPTH) return;
       for (const child of listDir(dir)) {
         if (skipDir(child)) continue;
         const p = join(dir, child);
@@ -316,7 +346,7 @@ function collectCensus(repo) {
     const safeName = sanitizeField(name);
     census.push({ dir: `${safeName}/`, files, extensions: top.map(([ext, n]) => `${ext}:${n}`), source: `${safeName}/` });
   }
-  return census;
+  return { census, bounds: { listed: census.length, top_level_dirs: topLevelDirs, dir_cap: CENSUS_DIR_CAP, max_depth: CENSUS_MAX_DEPTH, truncated } };
 }
 
 /**
@@ -325,9 +355,11 @@ function collectCensus(repo) {
  * detector.
  */
 export function collectDomainFacts(repo, cj) {
+  const { census, bounds } = collectCensus(repo);
   return {
     deps: collectDeps(repo),
-    census: collectCensus(repo),
+    census,
+    census_bounds: bounds,
     stack: cj.stack || [],
     package_manager: cj.package_manager || null,
   };
@@ -382,7 +414,12 @@ function requireSource(where, item, repo) {
 export function rankFields(evidence, { repo } = {}) {
   const byField = new Map();
   for (const e of evidence) {
-    const field = String(e.field || '').trim();
+    // Sanitized HERE, at the one place the field name enters the ranking, because the
+    // ranked names are rendered into two committed machine-owned files (`audit.md`'s
+    // primary/secondary headings, `expert.md`'s title and Field section) — sanitizing
+    // only the render sites would leave the same string escaping its markdown in the
+    // other file.
+    const field = sanitizeField(e.field || '', AUDIT_CAP.field);
     if (!field) throw new Error('domain.json: classification.evidence[].field is required');
     if (!EVIDENCE_TIERS.includes(e.tier)) {
       throw new Error(`domain.json: classification.evidence[].tier '${e.tier}' is not one of ${EVIDENCE_TIERS.join(' | ')}`);
@@ -470,11 +507,23 @@ function normalizeEntry(entry, where, { reachable, staged }) {
   // parsing strips control characters for the host check, but nothing stripped them for
   // the stored string. `references.json`'s own `data_notice` names url alongside title
   // and rationale as third-party data; it is the field the injection chain flows through.
-  const url = sanitizeField(entry.url);
+  const rawUrl = String(entry.url);
+  const url = sanitizeField(rawUrl);
+  // FAIL CLOSED when sanitizing REWROTE the url. `http_status` was reported by a subagent
+  // that fetched the RAW string; `sanitizeField` may return a different one (whitespace
+  // collapse, backtick → quote, `/Users/`+`/home/` → `%ABS%`, and a hard 200-char
+  // truncation that turns a 303-char `api.semanticscholar.org` query URL into a fragment).
+  // Both `hostAllowed` and the status ternary then run on the REWRITTEN string, so an
+  // entry could be stored as a truncated fragment carrying `status: "VERIFIED"` — a
+  // rewritten string is not the string that was fetched, and the stored url and the
+  // reported status would describe two different resources. The fact is exposed on the
+  // entry (`url_rewritten`) so it is diagnosable rather than silent.
+  const rewritten = url !== rawUrl;
   const probe = hostAllowed(url);
   const status =
     !staged &&
     reachable &&
+    !rewritten &&
     probe &&
     probe.allowed &&
     entry.reachable !== false &&
@@ -483,6 +532,7 @@ function normalizeEntry(entry, where, { reachable, staged }) {
       : 'UNVERIFIED';
   return {
     url,
+    url_rewritten: rewritten,
     title: sanitizeField(entry.title || ''),
     host: probe ? probe.host : null,
     host_allowed: !!(probe && probe.allowed),
@@ -532,23 +582,32 @@ export function buildReferences(domainInput, { warn = () => {} } = {}) {
     unverified: 0,
     data_notice: DATA_NOTICE,
   };
+  // `attempted_at` is REQUIRED once entries exist and the network was reported reachable:
+  // an unstamped library is a set of `http_status` values nobody can date, and staleness is
+  // the only thing a reader could have checked. Missing → every entry is forced UNVERIFIED
+  // (the same fail-open shape as an outage: a VALID file, an install that is not blocked).
+  const entryCount = REFERENCE_CATEGORIES.reduce((n, c) => n + (Array.isArray(src[c]) ? src[c].length : 0), 0);
+  const stamped = typeof src.attempted_at === 'string' && !!src.attempted_at;
+  const verifiable = reachable && stamped;
   let verified = 0;
   let unverified = 0;
   for (const cat of REFERENCE_CATEGORIES) {
     const list = Array.isArray(src[cat]) ? src[cat] : [];
     out[cat] = list.map((e, i) => {
-      const norm = normalizeEntry(e, `references.${cat}[${i}]`, { reachable, staged: false });
+      const norm = normalizeEntry(e, `references.${cat}[${i}]`, { reachable: verifiable, staged: false });
       if (norm.status === 'VERIFIED') verified++; else unverified++;
       return norm;
     });
   }
   out.staged = (Array.isArray(src.staged) ? src.staged : []).map((e, i) =>
-    normalizeEntry(e, `references.staged[${i}]`, { reachable, staged: true }),
+    normalizeEntry(e, `references.staged[${i}]`, { reachable: verifiable, staged: true }),
   );
   out.verified = verified;
   out.unverified = unverified;
   if (!reachable) {
     warn('veriloop domain: the reference library could not be verified (network unreachable) — every entry is stored UNVERIFIED and the expert must say so rather than cite it as checked. The install is NOT blocked.');
+  } else if (entryCount && !stamped) {
+    warn(`veriloop domain: references.attempted_at is missing while ${entryCount} entr${entryCount === 1 ? 'y exists' : 'ies exist'} — an unstamped library cannot be dated, so every entry is stored UNVERIFIED. Record the instant the fetch was attempted and re-run.`);
   } else if (unverified) {
     warn(`veriloop domain: ${unverified} reference(s) stored UNVERIFIED (off-allowlist host, non-200, or unreachable) — they require owner approval before the expert may cite them as checked.`);
   }
@@ -564,12 +623,22 @@ const MACHINE_BANNER = (what) =>
   `> \`.claude/veriloop/domain.json\`. Do not hand-edit it; put manual tweaks in\n` +
   `> \`.claude/veriloop/domain/expert.overrides.md\` (never overwritten, wins on conflict).\n`;
 
+// Prose caps for `audit.md`. `sanitizeField`'s 200-char default is a URL/version budget and
+// is far too small for prose, so each site passes its own. The cap is NOT the load-bearing
+// part — the newline/backtick collapse and the secret/%ABS% scrub are. These fields are
+// LLM-authored and land in a COMMITTED, machine-owned file the owner is told not to
+// hand-edit: an un-collapsed newline escapes its markdown bullet and renders a real
+// heading, and an absolute path or a secret-shaped line hard-FAILS `lint-bundle`'s ABS /
+// SECRET_PATTERNS checks on a file with no self-service fix (re-running generate
+// reproduces it byte for byte).
+const AUDIT_CAP = { name: 120, detail: 400, claim: 400, field: 80, summary: 2000, flow: 400 };
+
 function citeList(items, where, repo) {
   return items
     .map((it) => {
       const source = requireSource(where, it, repo);
-      const name = String(it.term || it.name || '').trim();
-      const detail = String(it.meaning || it.detail || '').trim();
+      const name = sanitizeField(it.term || it.name || '', AUDIT_CAP.name);
+      const detail = sanitizeField(it.meaning || it.detail || '', AUDIT_CAP.detail);
       return `- **${name}** — ${detail} _(\`${source}\`)_`;
     })
     .join('\n');
@@ -592,13 +661,22 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
   const censusLines = census.length
     ? census.map((c) => `- \`${c.dir}\` — ${c.files} file${c.files === 1 ? '' : 's'}${c.extensions.length ? ` (${c.extensions.join(', ')})` : ''}`).join('\n')
     : '- _no top-level directories_';
+  // The census is a FILTERED, CAPPED, DEPTH-LIMITED sample, and the heading used to render
+  // only the surviving count — "File census (4 top-level directories)" for a repo with 7 —
+  // reading as a complete enumeration. State the bounds beside the number.
+  const cb = facts.census_bounds || null;
+  const censusHeading = cb
+    ? `File census (${cb.listed} of ${cb.top_level_dirs} top-level directories; hidden and vendor directories excluded, walk depth <= ${cb.max_depth}${cb.truncated ? `, listing capped at ${cb.dir_cap}` : ''})`
+    : `File census (${census.length} top-level directories)`;
 
   const byTier = EVIDENCE_TIERS.map((t) => {
     const rows = cls.evidence.filter((e) => e.tier === t);
     if (!rows.length) return '';
     return (
       `\n#### ${TIER_LABEL[t]}\n\n` +
-      rows.map((e) => `- \`${e.field}\` **+${e.score}** — ${String(e.claim).trim()} _(\`${String(e.source).trim()}\`)_`).join('\n') + '\n'
+      // `e.field` sits INSIDE a backtick code span, so a backtick in it closes the span and
+      // everything after renders as prose; `sanitizeField` replaces backticks with quotes.
+      rows.map((e) => `- \`${sanitizeField(e.field, AUDIT_CAP.field)}\` **+${e.score}** — ${sanitizeField(e.claim, AUDIT_CAP.claim)} _(\`${String(e.source).trim()}\`)_`).join('\n') + '\n'
     );
   }).join('');
 
@@ -627,7 +705,7 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
     `(constitution rule 2 — scripts own facts, the LLM owns judgment).\n\n` +
     `**Stack:** ${(facts.stack || []).join(' + ') || '(none detected)'} · **Package manager:** ${facts.package_manager || '(none)'}\n\n` +
     `### Declared dependencies (${deps.length})\n\n${depLines}\n\n` +
-    `### File census (${census.length} top-level directories)\n\n${censusLines}\n\n` +
+    `### ${censusHeading}\n\n${censusLines}\n\n` +
     `## Field classification\n\n` +
     `**Primary field: ${cls.primary}** — ${vector(cls.ranked[0])} (total ${cls.ranked[0].total})\n\n` +
     `Confidence: **${cls.confidence}**${cls.ownerConfirmed ? ' (owner-confirmed)' : ''}. Tiers are ranked\n` +
@@ -637,8 +715,8 @@ export function renderDomainAudit(domainInput, facts, { repoName, repo }) {
     `### Evidence by tier\n${byTier}\n` +
     `## Domain vocabulary\n\n${vocab.length ? citeList(vocab, 'vocabulary[]', repo) : '- _none recorded_'}\n\n` +
     `## Core concepts\n\n${concepts.length ? citeList(concepts, 'concepts[]', repo) : '- _none recorded_'}\n\n` +
-    `## Architecture and data flow\n\n${arch.summary.trim()}\n\n` +
-    (flow.length ? flow.map((s, i) => `${i + 1}. ${String(s).trim()}`).join('\n') + '\n\n' : '') +
+    `## Architecture and data flow\n\n${sanitizeField(arch.summary, AUDIT_CAP.summary)}\n\n` +
+    (flow.length ? flow.map((s, i) => `${i + 1}. ${sanitizeField(s, AUDIT_CAP.flow)}`).join('\n') + '\n\n' : '') +
     `Sources: ${archSources.map((s) => `\`${s}\``).join(' · ')}\n`
   );
 }

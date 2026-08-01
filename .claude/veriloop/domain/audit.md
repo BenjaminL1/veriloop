@@ -16,7 +16,7 @@ generator computes. The audit **cites** these; it never re-derives them
 
 - _no dependency was parsed from `package.json`, `pyproject.toml` or `Cargo.toml`. That is the absence of a PARSED declaration, not evidence the repo declares none — no other manifest format is read._
 
-### File census (4 top-level directories)
+### File census (4 of 7 top-level directories; hidden and vendor directories excluded, walk depth <= 4)
 
 - `docs/` — 13 files (.md:10, .sh:3)
 - `fixtures/` — 12 files (.toml:6, .json:3, .yaml:2, .rs:1)
@@ -74,7 +74,7 @@ scores accumulate within a tier.
 
 ## Architecture and data flow
 
-A four-stage deterministic pipeline with LLM judgment interleaved between stages. Detection parses the target repo's declared command surface; verification runs the safe subset for real and records exit codes; generation slot-fills a portable workflow template plus the personas, commands and manifest; linting re-reads the emitted bundle without executing it. Nothing downstream may re-derive a fact an upstream stage already established, and nothing may claim a check ran that did not.
+A four-stage deterministic pipeline with LLM judgment interleaved between stages. Detection parses the target repo's declared command surface; verification runs the safe subset for real and records exit codes; generation slot-fills a portable workflow template plus the personas, commands and manifest; linting re-reads the emitted bundle and runs none of it, with one narrow exception taken only when a bundle has committed artifacts that need it (the workflow's marker-bounded secret-pattern region). Nothing downstream may re-derive a fact an upstream stage already established, and nothing may claim a check ran that did not.
 
 1. detect.mjs parses package.json / Makefile / pyproject.toml / CI run blocks into commands.json, each command carrying a source citation and a safety tier
 2. verify.mjs executes only the safe tier, writing verified / verify_exit / verify_skipped back into the same file

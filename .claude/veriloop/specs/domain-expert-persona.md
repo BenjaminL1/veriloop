@@ -282,11 +282,17 @@ pattern-walk fallback never runs. The 700-word tripwire is path-scoped to
 hardcoded paths (`:1329-1336`). Persona-presence (`lint-bundle.mjs:172-176`) iterates
 `manifest.roster`, which the domain expert is deliberately not in.
 
-**All four are edited in the same commit that creates the directory**, or `domain/` lints clean by
-being unseen — the largest-citation file in the bundle, checked by nothing:
+**All of the live items are edited in the same commit that creates the directory** (item 2 is moot,
+see below), or `domain/` lints clean by being unseen — the largest-citation file in the bundle,
+checked by nothing:
 
 1. Every `domain/*` file registered via `machine()` / `handOnce()` so it enters `emitted_files`.
-2. `lint-bundle.mjs:244` word-cap scope extended to `domain/expert.md`.
+2. ~~`lint-bundle.mjs:244` word-cap scope extended to `domain/expert.md`.~~ **MOOT — owner
+   ruling, 2026-07-31.** T12 deleted the cap this item names, so there is no scope to extend.
+   § Open RISKS ("Cap-removal risk") declined a replacement — *"Accepted by the owner; no
+   replacement mechanism is specified."* **No accretion guard covers `domain/expert.md`, by
+   owner decision.** A 1,200-word tripwire added during implementation was deleted with its
+   three assertions (the ceiling check, its WARN-not-FAIL half, and the mutation-tested prover).
 3. `selftest.mjs` `CITED` gains `.claude/veriloop/domain/expert.md` and `audit.md`.
 4. An existence guard for `domain/expert.md` — it is not in `manifest.roster`, so
    `lint-bundle.mjs:172-176` does not cover it. A generate run that silently skipped the domain
@@ -483,22 +489,21 @@ spec above it. The status line at the end is an implementer's self-report — th
 "never grade your own homework" as a core concept, so read it as a **claim to be checked**,
 not as a ratification.
 
-**1. Guard-wiring item 2 shipped, re-scoped — the middle path, not the dissolution first
-proposed.** The spec contradicts itself here and the contradiction is real: § Guard wiring
-(written from the pre-T12 baseline) asks for `lint-bundle.mjs`'s 700-word persona cap to be
-path-scoped to `domain/expert.md`, while **T12 deletes that cap outright** and § Open RISKS
-("Cap-removal risk") deliberates the consequence at length and accepts it — explicitly naming
-`domain/expert.md` reaching 3,000 words with nothing to notice. Resolving a ratified spec's
-internal contradiction is an owner ruling, not an implementer's, so **both were satisfied
-literally instead**: the three T12-named cap sites are deleted (T12 executed in full,
-accounted for in the CHANGELOG and in the commit message), and a **new, narrower tripwire**
-was added — `lint-bundle.mjs` check 6d, path-scoped to `.claude/veriloop/domain/expert.md`
-and nothing else, WARN-only, ceiling 1,200 words against an emitted 681. It is mutation-tested
-in `selftest.mjs` the way the pair T12 deleted was: fresh bundle silent, fattened bundle names
-the file and the count. **All four guard-wiring items are therefore in the same commit as
-`domain/` (criterion 6 met).** Residual, stated plainly: the tripwire watches the emitted
-artifact, so `persona.body` still has no length validation inside `domain.mjs` itself, and no
-other file in the repo has an accretion check — that part of § Open RISKS stands as accepted.
+**1. Guard-wiring item 2 is MOOT — owner ruling, 2026-07-31.** § Guard wiring (written from
+the pre-T12 baseline) asks for `lint-bundle.mjs`'s 700-word persona cap to be path-scoped to
+`domain/expert.md`, while **T12 deletes that cap outright** and § Open RISKS ("Cap-removal
+risk") deliberates the consequence at length and accepts it — explicitly naming
+`domain/expert.md` reaching 3,000 words with nothing to notice. The first implementation
+tried to satisfy both by adding a NEW 1,200-word tripwire (`lint-bundle.mjs` check 6d) plus
+three mutation-tested assertions. **The owner ruled that out; the check and all three of its
+assertions were deleted.** T12 retired ALL THREE length caps, and § Open RISKS declined a replacement in as many words:
+*"Accepted by the owner; no replacement mechanism is specified. If one is wanted later, a
+review-on-growth prompt costs less than a cap and does not constrain length."* Item 2 asked
+for the SCOPE of a deleted cap to be extended, so there was nothing to extend. **Guard-wiring
+items 1, 3 and 4 ship in the same commit as `domain/` (criterion 6 met for the live items).**
+Residual, stated plainly: nothing in the repo watches `domain/expert.md` for growth, and
+`persona.body` has no length validation inside `domain.mjs` — that part of § Open RISKS
+stands as accepted.
 
 **1b. Guard-wiring item 3 shipped, then shipped again with teeth.** As first written it was
 vacuous: `selftest.mjs`'s `CITE` pattern is `scripts/*.mjs:<line> <symbol>`, and the audit
