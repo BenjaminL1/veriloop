@@ -512,7 +512,11 @@ function main() {
     // ROUTED, and the check would have stopped requiring the route while the payload kept
     // sending the model to a command that no longer exists. A DISAGREEMENT between the two
     // lists must be a failure, never a silent narrowing.
-    const ROUTED_COMMANDS = ['advise.md', 'dev-plan.md', 'dev-loop.md'];
+    // `dev-loop.md` was here until 2026-08-01 and is deliberately NOT: `/dev-loop` is no
+    // longer a routing DESTINATION, it is reached only through `/dev-plan`. The row check
+    // below is the other half — requiring the two routes is not the same as forbidding a
+    // third, and a renderer regression that re-added the row would satisfy this list.
+    const ROUTED_COMMANDS = ['advise.md', 'dev-plan.md'];
     const unemitted = ROUTED_COMMANDS.filter((c) => !EMITTED_COMMANDS.includes(c));
     const ROUTED = ROUTED_COMMANDS.map((c) => `/${c.replace(/\.md$/, '')}`);
     const settingsPath = join(args.bundle, CLAUDE_SETTINGS);
@@ -627,6 +631,16 @@ function main() {
         const dangling = [...new Set([...table.matchAll(/`\/([a-z0-9-]+)`/g)].map((m) => m[1]))]
           .filter((n) => !EMITTED_COMMANDS.includes(`${n}.md`));
         for (const n of dangling) { bad++; fail(`session-routing.md's route table sends the session to /${n}, which veriloop does not emit`); }
+        // /dev-loop is EMITTED, so the dangling check above can never catch a row routing to
+        // it — and a direct route there is exactly the defect the two-row table fixed: "fix
+        // the typo in README line 40" went straight into a worktree + gate + lens + auto-fix
+        // drive with no proportionality valve. The valve lives in `/dev-plan` now. ROWS only,
+        // so the payload may still EXPLAIN why /dev-loop is not a destination.
+        const devLoopRows = table.split('\n').filter((l) => l.trim().startsWith('|') && l.includes('`/dev-loop`'));
+        if (devLoopRows.length) {
+          bad++;
+          fail('session-routing.md\'s route table has a row routing the session DIRECTLY to /dev-loop — /dev-loop is not a routing destination: /dev-plan is the implementation gateway and is the only path to it (it judges proportionality with a cited danger surface)');
+        }
       }
       if (!bad) ok(`SessionStart routing payload intact: ${SESSION_ROUTING_DOC} and ${SESSION_HOOK_SCRIPT} both byte-identical to what veriloop emits (<SUBAGENT-STOP>, <ALREADY-ROUTED>, routes ${ROUTED.join(' ')})`);
     }

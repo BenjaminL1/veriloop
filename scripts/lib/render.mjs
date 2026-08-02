@@ -434,8 +434,14 @@ export function renderAdviseCommand({ repoName, gate }) {
 // (the interview is a dialogue). Writes ONLY the spec — no code, no verdicts.
 // ---------------------------------------------------------------------------
 
-export function renderDevPlanCommand({ repoName, roster, planModel, questionCap }) {
+export function renderDevPlanCommand({ repoName, roster, planModel, questionCap, gate }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
+  // The repo's OWN gate commands, derived exactly as `/advise` derives them (rule 9 — a
+  // rust repo gets `cargo test`, never a hardcoded `npm`). `/dev-plan` is now allowed to
+  // write ONE temporary probe test and RUN it, so it needs the commands that run it; the
+  // probe is worthless if the answer has to be guessed instead of executed.
+  const gateAllows = (gate || []).map((c) => `Bash(${c.cmd}:*)`).join(', ');
+  const gateText = (gate || []).map((c) => `\`${c.cmd}\``).join(' + ');
   // frontmatter model line: emitted ONLY when the interview set phase_models.plan
   // (verbatim, no hardcoded fallback — rule 9). Absent key → no line, inherit the
   // session model. The BODY documents the model semantics only when a line ships.
@@ -466,19 +472,43 @@ export function renderDevPlanCommand({ repoName, roster, planModel, questionCap 
     `---\n` +
     `description: Use when the owner wants to turn a feature idea into a BINDING spec for ${repoName} — recon first, an interleaved spec interview, then an expert council (${lenses}) that pressure-tests the design before a spec is written and the owner ratifies it. Runs inline (the interview is a dialogue). Writes ONLY the spec, never code, and produces NO PASS/FAIL verdict (verdicts belong to /dev-loop).\n` +
     modelLine +
-    `allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*)\n` +
+    `allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*)${gateAllows ? `, ${gateAllows}` : ''}\n` +
     `---\n\n` +
     modelNote +
     `Plan a feature for **${repoName}** and leave a ratified, BINDING spec — this runs\n` +
     `**inline, in the main session**, because the interview is a dialogue and background\n` +
-    `agents cannot talk to you. \`/dev-plan\` is **upstream** of \`/dev-loop\`: it produces the\n` +
-    `spec; \`/dev-loop\` builds to it.\n\n` +
+    `agents cannot talk to you. \`/dev-plan\` is the **IMPLEMENTATION GATEWAY**: everything that\n` +
+    `is not an open-ended question arrives here, from a multi-file feature down to a one-line\n` +
+    `typo fix, and \`/dev-loop\` is reached only through it. It produces the spec; \`/dev-loop\`\n` +
+    `builds to it.\n\n` +
     `> $ARGUMENTS\n\n` +
-    `## Step 1 — Recon first, then interview interleaved with planning\n\n` +
+    `## Step 1 — Recon, the two gateway checks, then interview interleaved with planning\n\n` +
+    `Checks 2 and 3 run **BEFORE the interview** and decide how much process this change gets.\n` +
+    `Proportionality is decided HERE, with a citation, and nowhere else.\n\n` +
     `1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part\n` +
     `   of \`.claude/veriloop/constitution.md\`. Most of what you need is derivable — derive it.\n` +
     `   Note which files the feature touches: that set drives the council firing rule below.\n` +
-    `2. **Interview interleaved with planning** — questions surface as design decisions arise,\n` +
+    `2. **Is there already a spec or plan for this feature?** Check\n` +
+    `   \`.claude/veriloop/specs/\` (and any plan doc the owner names). **If one exists, do NOT\n` +
+    `   silently re-interview over it** — a ratified spec is a decision the owner already took.\n` +
+    `   **Review it with the council** (Step 2, fired for this purpose regardless of \`auto\`)\n` +
+    `   against the owner's current request and your recon, then do exactly one of two things:\n` +
+    `   make the **appropriate EDITS** to it, or **SIGN OFF on it UNCHANGED** if the council\n` +
+    `   finds nothing wrong. Say which happened, and what the council actually said.\n` +
+    `3. **Judge triviality — and CITE, never assert.** If the change is a **one-liner that\n` +
+    `   touches NO danger surface and threatens no other part of the code**, it does not need a\n` +
+    `   spec: hand it to **\`/dev-loop\` in TRIVIAL MODE** — no interview, no council, no spec\n` +
+    `   (that is \`/dev-loop\`'s Step 1 confirm-and-go path), and **the gate still runs in full**.\n` +
+    `   Anything else: produce the full spec below and route to \`/dev-loop\` normally.\n` +
+    `   **The triviality judgment must CITE a danger surface** it was checked against — they are\n` +
+    `   already in the bundle: this repo's \`high_risk_areas\` (in\n` +
+    `   \`.claude/veriloop/veriloop-manifest.json\`), the deep scan's danger-surface list in\n` +
+    `   \`.claude/veriloop/scan-notes.md\` if present, and the constitution's invariants. Name the\n` +
+    `   surface, and say why this change does not reach it, with \`file:line\` where the claim is\n` +
+    `   checkable. **An UNCITED triviality claim is NOT permitted** — "this is obviously trivial"\n` +
+    `   is the sentence that ships a one-liner into a danger surface. If you cannot cite one, it\n` +
+    `   is not trivial: take the full path.\n` +
+    `4. **Interview interleaved with planning** — questions surface as design decisions arise,\n` +
     `   not as an up-front interrogation. Ask ONLY what you genuinely cannot derive: scope\n` +
     `   boundaries and explicit non-goals, a design fork with more than one defensible answer\n` +
     `   (where state lives, client vs server, which existing pattern to follow), user-visible\n` +
@@ -488,12 +518,22 @@ export function renderDevPlanCommand({ repoName, roster, planModel, questionCap 
     `   Forks that co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.\n` +
     `   **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A\n` +
     `   trivial change should not trigger an interrogation.\n` +
-    `3. **If you see a BETTER route than the one asked for, PROPOSE IT — do not just spec the\n` +
+    `5. **If you see a BETTER route than the one asked for, PROPOSE IT — do not just spec the\n` +
     `   owner's vision faithfully.** Distinct from the premise attacks below: those fire when the\n` +
     `   owner is WRONG; this fires when they are RIGHT and something still beats it. Raise it as a\n` +
     `   named ALTERNATIVE with the tradeoff, in the dialogue AND at ratification (Step 3). A better\n` +
     `   idea found while planning and dropped because it was not what was asked for is the most\n` +
     `   expensive kind of deference. Do NOT invent one: if the owner's route is best, say so.\n\n` +
+    `## Probe test — write it, run it, record it, DELETE it\n\n` +
+    `When a design question has a FACTUAL answer the code can settle — does this actually throw?\n` +
+    `does the check really go red on that input? — you may write **ONE temporary test file**, run\n` +
+    `it with this repo's own gate commands (${gateText || 'the repo\'s gate commands'}), and **record what it\n` +
+    `PROVED in the spec**. The finding is the deliverable; the file is not.\n\n` +
+    `**Then DELETE it, before you finish. ZERO RESIDUE.** A probe left on disk turns the owner's\n` +
+    `gate red for a file that was never a deliverable, and lands a test nobody planned, reviewed\n` +
+    `or specced. This is an investigative tool — \`/dev-loop\` writes the real tests, to the spec.\n` +
+    `If you somehow cannot delete it, **say so by name** in your reply rather than leaving it\n` +
+    `there silently. Never touch an EXISTING test file to probe: write a new one, delete it.\n\n` +
     `## Step 2 — Convene the expert council\n\n` +
     `The council is the repo's existing roster personas (${lenses}) loaded in **MODE: ADVISE**\n` +
     `(read \`.claude/veriloop/experts/*.md\` + each \`.overrides.md\` sibling, the override winning\n` +
@@ -560,14 +600,18 @@ export function renderDevPlanCommand({ repoName, roster, planModel, questionCap 
     `   spec → background implementer prompts is a laundering path; owner ratification cuts it.)\n\n` +
     `## Step 4 — Off-ramp\n\n` +
     `Once the spec is ratified, offer to run **\`/dev-loop\`** with it — the ratified spec is the\n` +
-    `binding \`args.spec\`, and \`/dev-loop\` builds, gates, and pushes a preview.\n\n` +
+    `binding \`args.spec\`, and \`/dev-loop\` builds, gates, and pushes a preview. On the TRIVIAL\n` +
+    `path from Step 1 there is no spec to ratify: hand off to \`/dev-loop\` directly, carrying the\n` +
+    `one-line change and the danger surface you CITED it clear of, and nothing else.\n\n` +
     `## HARD LIMITS\n\n` +
     `- **Write covenant.** You write **ONLY** \`.claude/veriloop/specs/<slug>.md\` (re-writing\n` +
-    `  that same path while iterating is fine). **Never touch:** code, branches/worktrees,\n` +
+    `  that same path while iterating is fine), **plus — optionally — ONE temporary probe test\n` +
+    `  that you DELETE before you finish** (above): its result belongs in the spec, the file does\n` +
+    `  not survive this command. **Never touch:** code, branches/worktrees,\n` +
     `  mutating git, \`constitution.md\`, \`experts/*\` (incl. \`.overrides.md\`), \`interview.json\`,\n` +
-    `  \`commands.json\`, the manifest, \`.claude/commands/*\`, \`.env*\`. **No scratch files.** The\n` +
+    `  \`commands.json\`, the manifest, \`.claude/commands/*\`, \`.env*\`. **No other scratch files.** The\n` +
     `  council subagents are **read-only** (they inherit \`/advise\`'s contract) — **only the main\n` +
-    `  session writes**, and it writes only the spec.\n` +
+    `  session writes**, and it writes only the spec and that one deleted probe.\n` +
     `- **NO VERDICTS.** You produce planning advice and a proposed spec — never PASS / FAIL /\n` +
     `  approval. A verdict belongs exclusively to the \`/dev-loop\` gate; \`/dev-plan\` never\n` +
     `  substitutes for it.\n` +
@@ -727,22 +771,39 @@ export const SESSION_ROUTING_DOC = '.claude/veriloop/session-routing.md';
 export const SESSION_HOOK_SCRIPT = '.claude/veriloop/session-start.mjs';
 export const CLAUDE_SETTINGS = '.claude/settings.json';
 
-// The routing table. `lint-bundle.mjs` re-derives the same three commands from its
-// own `EMITTED_COMMANDS` instead of importing this, and FAILS when the two disagree in
+// The routing table. `lint-bundle.mjs` re-derives the same commands from its own
+// `EMITTED_COMMANDS` instead of importing this, and FAILS when the two disagree in
 // either direction — a bundle may only be routed to a command veriloop actually emits.
+//
+// TWO rows since 2026-08-01, and row 2 is RESIDUAL by construction (owner decision).
+// The three-row table was probe-tested and row 1 SWALLOWED the other two: "anything that
+// is not a direct implementation request" is also satisfied by a feature request, and the
+// table carried no precedence rule, so every probe could defend `/advise`. A residual row
+// cannot be swallowed — it is defined as the complement of the row above it.
+//
+// `/dev-loop` is deliberately NOT a destination. It used to be, and "fix the typo in
+// README line 40" routed into a full worktree + gate + lens + auto-fix drive with no
+// proportionality valve anywhere. The valve now lives INSIDE `/dev-plan` (judge triviality,
+// cite a danger surface, hand off), which is why routing here can be unconditional.
 export const SESSION_ROUTES = [
-  { trigger: 'an open-ended question — anything that is not a direct implementation request', command: '/advise' },
-  { trigger: 'a feature request', command: '/dev-plan' },
-  { trigger: 'an implementation request', command: '/dev-loop' },
+  { trigger: 'an OPEN-ENDED QUESTION — you are being asked to think, weigh, compare or advise, and nothing is being asked to change', command: '/advise' },
+  { trigger: 'ANYTHING NOT COVERED BY THE ROW ABOVE — a feature request, an implementation request, a bug report, a one-line fix, a typo', command: '/dev-plan' },
 ];
 
 // The four rationalizations a model reaches for when it is about to skip the route.
 // Named verbatim, because a red flag that is not named is not pre-empted.
+//
+// The moves are deliberately split across BOTH routes: the probes showed a payload whose
+// worked examples all name `/advise` biases a pattern-matcher toward `/advise`.
+// "the skill is overkill" no longer answers "you are not the one who decides that" — under
+// the two-row table triviality IS decided, by `/dev-plan`, with a cited danger surface. The
+// old wording foreclosed the exit that now exists, so the model had nowhere to put a correct
+// observation except into skipping the route.
 const SESSION_RED_FLAGS = [
-  ['"this is just a simple question"', 'A question IS the `/advise` case. Route.'],
-  ['"let me explore the codebase first"', '`/advise` does its own recon, with the repo\'s domain expert seated. Exploring first is doing the command\'s first step badly.'],
-  ['"the skill is overkill"', 'You are not the one who decides that. Route, and say in one line why it may be overkill.'],
-  ['"I need more context first"', 'Getting context is what the route is for. Ask the owner inside the command, not instead of it.'],
+  ['"this is just a simple question"', 'If nothing is being asked to CHANGE, a question is row 1 — route to `/advise`. If something is, it is row 2 and the question framing is not a reason to skip it.'],
+  ['"let me explore the codebase first"', 'Both routes open with their own recon — `/advise` with the repo\'s domain expert seated, `/dev-plan` with a deep-scan-grounded pass. Exploring first is doing the command\'s first step badly.'],
+  ['"the skill is overkill"', 'It may well be, and `/dev-plan` is where that gets DECIDED. Route there and say why you think so; if the change really is a one-liner clear of every danger surface, `/dev-plan` cites that and hands it straight to `/dev-loop` with no interview and no spec.'],
+  ['"I need more context first"', 'Getting context is what the route is for — `/advise`\'s dialogue and `/dev-plan`\'s interview both ask the owner. Ask inside the command, not instead of it.'],
 ];
 
 // The ANNOUNCEMENT + SESSION-NOTES clauses (owner decisions, 2026-08-01), modelled on
@@ -763,15 +824,23 @@ const SESSION_RED_FLAGS = [
 // read-only by gate assertion (no `Write`, no `Edit`, no unscoped `Bash`), so it cannot
 // write a history record of its own invocation, and giving it write access to do so would
 // trade a real covenant for a bookkeeping entry.
+// The worked example names the RESIDUAL route, and the owner-typed example names the other
+// one, so the section demonstrates both rows. Every example naming `/advise` was one of the
+// four places the probes found biasing a pattern-matcher toward it.
+// "or decline to route at all" is GONE: with the proportionality valve inside `/dev-plan`
+// there is no case the table cannot serve, and an escape hatch beside "you do not have a
+// choice" is a contradiction the reader gets to resolve either way. What remains is the
+// truth-telling half — if you route somewhere else anyway, SAY so.
 const SESSION_ANNOUNCE = (routes) =>
   `## Say that you routed, and say who routed you\n\n` +
   `When this block is why you enter a veriloop command, **announce it in your reply before you\n` +
   `do the work** — one plain sentence, in the shape superpowers uses:\n\n` +
-  `> Using \`${routes[0].command}\` to <purpose> — routed by veriloop's SessionStart hook, not requested directly.\n\n` +
-  `Name the command and why that route (which row of the table above you matched). If the OWNER\n` +
+  `> Using \`${routes[1].command}\` to <purpose> — routed by veriloop's SessionStart hook, not requested directly.\n\n` +
+  `Name the command and why that route (which row of the table above you matched) — the same\n` +
+  `sentence with \`${routes[0].command}\` when the message was an open-ended question. If the OWNER\n` +
   `typed the command themselves, say that instead — *"running \`${routes[0].command}\` as you asked"* — because\n` +
   `the two are not the same event and only one of them was the owner's decision. If you consider\n` +
-  `this block and route ANYWAY for your own reasons, or decline to route at all, say that too.\n` +
+  `this block and route somewhere OTHER than the table sends you, say that and say why.\n` +
   `The owner never sees this payload. An unannounced route is a reply shaped by an instruction\n` +
   `they did not write and cannot audit.\n\n` +
   `Then note it in the session's working notes / summary — the running record of what this\n` +
@@ -790,23 +859,38 @@ export function renderSessionRouting() {
     `recurses into the surface that spawned it — \`/advise\` from inside \`/advise\`. Do your task.\n` +
     `</SUBAGENT-STOP>\n\n` +
     `<ALREADY-ROUTED>\n` +
-    `If this MAIN session is already executing a veriloop command — you are inside \`/advise\`,\n` +
-    `\`/dev-plan\` or \`/dev-loop\`, or you are resuming one after a compaction or a \`--continue\` —\n` +
-    `you have already routed. Continue the task in flight; do not re-enter the command you are\n` +
-    `running. Routing is a decision taken once, at the top of a session, never a loop.\n` +
+    `Scope: the COMMAND IN FLIGHT, not the session. If this MAIN session is already executing a\n` +
+    `veriloop command — you are inside \`/advise\`, \`/dev-plan\` or \`/dev-loop\`, or you are resuming\n` +
+    `one after a compaction or a \`--continue\` — you have already routed FOR THAT REQUEST.\n` +
+    `Continue the task in flight; do not re-enter the command you are running.\n` +
+    `Two things this does NOT suspend. A **handoff is not a re-entry**: \`/dev-plan\` handing a\n` +
+    `ratified spec — or a change it judged trivial and cited — to \`/dev-loop\` is the designed\n` +
+    `path, and nothing here blocks it. And routing is **per REQUEST, not once per session**: when\n` +
+    `the command finishes, the owner's next message routes from the table below like any other.\n` +
     `</ALREADY-ROUTED>\n\n` +
     `<EXTREMELY-IMPORTANT>\n` +
     `This repo has veriloop installed. Its commands are the entry points for real work here, and\n` +
     `**you do not have a choice** about routing through them. Route FIRST, then work. Name the\n` +
-    `route you took in your first sentence, so the owner can redirect you before you spend tokens.\n` +
+    `route you took in your first sentence: neither route writes code — \`/advise\` is read-only and\n` +
+    `\`/dev-plan\` writes only a spec the owner ratifies — so saying it gives the owner a turn to\n` +
+    `send you elsewhere before anything is built.\n` +
     `</EXTREMELY-IMPORTANT>\n\n` +
     `## Where to route\n\n` +
     `| When the owner's message is | Route to |\n|---|---|\n${routes}\n\n` +
+    `**Two rows, read IN ORDER, and row 2 is RESIDUAL** — it takes everything row 1 does not, so\n` +
+    `there is always exactly one answer and never a judgment call about which row wins. A message\n` +
+    `that is both a question and a request to change something is a request: row 2.\n\n` +
+    `**\`/dev-loop\` is NOT a routing destination** — you never send a session there from this\n` +
+    `table. It is reached only through \`/dev-plan\`, which decides how much process a change gets:\n` +
+    `the full spec for anything real, and for a genuine one-liner clear of every danger surface a\n` +
+    `direct handoff with no interview and no spec — the gate still runs either way. That judgment\n` +
+    `is \`/dev-plan\`'s, it has to CITE the danger surface it cleared, and it is not yours to make\n` +
+    `here instead of routing.\n\n` +
     SESSION_ANNOUNCE(SESSION_ROUTES) +
     `## Red flags — thoughts that mean you are about to skip the route\n\n` +
     `| If you catch yourself thinking | The correct move |\n|---|---|\n${flags}\n\n` +
     `## Turning this off\n\n` +
-    `Delete the \`SessionStart\` entry from \`.claude/settings.json\`. That removes **all three**\n` +
+    `Delete the \`SessionStart\` entry from \`.claude/settings.json\`. That removes **both**\n` +
     `routes at once — there is no partial disable — and the commands remain invocable by hand.\n` +
     `Deleting THIS file is not a disable: it is **machine-owned** and rewritten on the next\n` +
     `\`/veriloop\` run, so routing would silently resume. Hand edits here are overwritten for the\n` +

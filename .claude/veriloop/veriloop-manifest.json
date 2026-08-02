@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-01T20:46:52.104Z",
+  "generated_at": "2026-08-02T01:39:42.513Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "61802bda89e46c95ef03f7119c4407dca11eab3c",
+  "repo_sha": "15bdf9c391f08c3e1196dae516d67f9e32545b01",
   "stack": [
     "node"
   ],
@@ -286,7 +286,7 @@
     {
       "path": ".claude/commands/dev-plan.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/commands/posture.md",
@@ -356,7 +356,7 @@
     {
       "path": ".claude/veriloop/session-routing.md",
       "ownership": "machine",
-      "status": "unchanged"
+      "status": "written"
     },
     {
       "path": ".claude/veriloop/session-start.mjs",

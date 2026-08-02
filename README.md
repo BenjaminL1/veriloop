@@ -212,17 +212,21 @@ Emitted artifacts are **portable** — they resolve the repo root at run time vi
 absolute path is ever baked in.
 
 **On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
-session to **bias** routing toward `/advise`, `/dev-plan` and `/dev-loop`, and to ask the
-model to say plainly when this block — rather than you — is why it entered a veriloop
-command. It is prose in a
-context window: it raises the odds the model routes and announces, it cannot compel either,
-and all three
-commands stay invocable by hand either way. Two things worth knowing before you keep it.
+session to **bias** routing toward `/advise` and `/dev-plan`, and to ask the model to say
+plainly when this block — rather than you — is why it entered a veriloop command.
+**`/dev-loop` is deliberately NOT a routing destination**: it is reached only through
+`/dev-plan`, which decides how much process a change gets and can hand a genuine one-liner
+straight through with a cited danger surface — the gate runs either way. That table used to
+route to `/dev-loop` directly, and "fix the typo in README line 40" went into a full
+worktree + gate + lens + auto-fix drive with no proportionality valve anywhere.
+It is prose in a context window: it raises the odds the model routes and announces, it
+cannot compel either, and both commands stay invocable by hand regardless. Two things worth
+knowing before you keep it.
 **It does not arbitrate with anyone else's hook** — if you also run a skill pack that
 injects its own `SessionStart` block (superpowers does), you get both at full strength and
 nothing resolves a disagreement between them. And **the disable path is all-or-nothing**:
-deleting the `SessionStart` entry from `.claude/settings.json` removes the routing for all
-three commands at once.
+deleting the `SessionStart` entry from `.claude/settings.json` removes the routing for both
+commands at once.
 
 ## The emitted loop's shape
 
@@ -265,7 +269,7 @@ loop had — they must be declared through the interview.
    and if you do, veriloop **never merges or edits it** (absent `--force`, which overwrites
    every hand-owned file after a backup) — it prints a complete hook-only settings.json for
    you to merge the `SessionStart` entry out of. Disable by deleting that entry, or the whole
-   file (it takes all three routes with it; there is no partial disable).
+   file (it takes both routes with it; there is no partial disable).
 4. **Auto-run safe-list.** Verify auto-runs typecheck + lint; asks before test /
    build; never auto-runs e2e / deploy / integration (real side effects). Verify
    runs commands with `CI=1` (deterministic, non-watch), which can make a
@@ -368,7 +372,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 448 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 464 and `CHANGELOG.md` names every
 removal individually. The one cap the owner later wanted back came back as a **prompt**: a
 re-render of `domain/expert.md` more than 20% longer than the size recorded in
 `veriloop-manifest.json` makes `generate` ask you to re-read the file. It has no ceiling and
@@ -398,7 +402,7 @@ command yourself — and to note the fired command and its provenance in the ses
 notes; the gate asserts the payload carries those instructions, and nothing asserts the model
 obeyed them, because nothing observes a reply. It cannot compel invocation, nothing
 arbitrates it against another pack's `SessionStart` block, and deleting the entry disables
-all three routes at once. Locked decision #3 was rewritten rather than deleted (T5), and the
+both routes at once. Locked decision #3 was rewritten rather than deleted (T5), and the
 unmeasured five-minute quickstart claim was retired for the measured 14s spine plus an
 explicit statement that the LLM phases are unmeasured (T10).
 

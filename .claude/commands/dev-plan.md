@@ -1,7 +1,7 @@
 ---
 description: Use when the owner wants to turn a feature idea into a BINDING spec for veriloop — recon first, an interleaved spec interview, then an expert council (code-review, security, drift) that pressure-tests the design before a spec is written and the owner ratifies it. Runs inline (the interview is a dialogue). Writes ONLY the spec, never code, and produces NO PASS/FAIL verdict (verdicts belong to /dev-loop).
 model: opus
-allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*)
+allowed-tools: Read, Grep, Glob, AskUserQuestion, Task, Write, Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(npm run lint:*), Bash(npm run test:*)
 ---
 
 ## About the `model:` frontmatter
@@ -14,17 +14,42 @@ value spends **that model's quota**, not the session's.
 
 Plan a feature for **veriloop** and leave a ratified, BINDING spec — this runs
 **inline, in the main session**, because the interview is a dialogue and background
-agents cannot talk to you. `/dev-plan` is **upstream** of `/dev-loop`: it produces the
-spec; `/dev-loop` builds to it.
+agents cannot talk to you. `/dev-plan` is the **IMPLEMENTATION GATEWAY**: everything that
+is not an open-ended question arrives here, from a multi-file feature down to a one-line
+typo fix, and `/dev-loop` is reached only through it. It produces the spec; `/dev-loop`
+builds to it.
 
 > $ARGUMENTS
 
-## Step 1 — Recon first, then interview interleaved with planning
+## Step 1 — Recon, the two gateway checks, then interview interleaved with planning
+
+Checks 2 and 3 run **BEFORE the interview** and decide how much process this change gets.
+Proportionality is decided HERE, with a citation, and nowhere else.
 
 1. **Recon first, cheaply.** Read the code the feature would touch and the relevant part
    of `.claude/veriloop/constitution.md`. Most of what you need is derivable — derive it.
    Note which files the feature touches: that set drives the council firing rule below.
-2. **Interview interleaved with planning** — questions surface as design decisions arise,
+2. **Is there already a spec or plan for this feature?** Check
+   `.claude/veriloop/specs/` (and any plan doc the owner names). **If one exists, do NOT
+   silently re-interview over it** — a ratified spec is a decision the owner already took.
+   **Review it with the council** (Step 2, fired for this purpose regardless of `auto`)
+   against the owner's current request and your recon, then do exactly one of two things:
+   make the **appropriate EDITS** to it, or **SIGN OFF on it UNCHANGED** if the council
+   finds nothing wrong. Say which happened, and what the council actually said.
+3. **Judge triviality — and CITE, never assert.** If the change is a **one-liner that
+   touches NO danger surface and threatens no other part of the code**, it does not need a
+   spec: hand it to **`/dev-loop` in TRIVIAL MODE** — no interview, no council, no spec
+   (that is `/dev-loop`'s Step 1 confirm-and-go path), and **the gate still runs in full**.
+   Anything else: produce the full spec below and route to `/dev-loop` normally.
+   **The triviality judgment must CITE a danger surface** it was checked against — they are
+   already in the bundle: this repo's `high_risk_areas` (in
+   `.claude/veriloop/veriloop-manifest.json`), the deep scan's danger-surface list in
+   `.claude/veriloop/scan-notes.md` if present, and the constitution's invariants. Name the
+   surface, and say why this change does not reach it, with `file:line` where the claim is
+   checkable. **An UNCITED triviality claim is NOT permitted** — "this is obviously trivial"
+   is the sentence that ships a one-liner into a danger surface. If you cannot cite one, it
+   is not trivial: take the full path.
+4. **Interview interleaved with planning** — questions surface as design decisions arise,
    not as an up-front interrogation. Ask ONLY what you genuinely cannot derive: scope
    boundaries and explicit non-goals, a design fork with more than one defensible answer
    (where state lives, client vs server, which existing pattern to follow), user-visible
@@ -37,12 +62,25 @@ spec; `/dev-loop` builds to it.
    Forks that co-arise are **coalesced into ONE AskUserQuestion call**, not asked serially.
    **If nothing is genuinely ambiguous, ask nothing** and go straight to the council. A
    trivial change should not trigger an interrogation.
-3. **If you see a BETTER route than the one asked for, PROPOSE IT — do not just spec the
+5. **If you see a BETTER route than the one asked for, PROPOSE IT — do not just spec the
    owner's vision faithfully.** Distinct from the premise attacks below: those fire when the
    owner is WRONG; this fires when they are RIGHT and something still beats it. Raise it as a
    named ALTERNATIVE with the tradeoff, in the dialogue AND at ratification (Step 3). A better
    idea found while planning and dropped because it was not what was asked for is the most
    expensive kind of deference. Do NOT invent one: if the owner's route is best, say so.
+
+## Probe test — write it, run it, record it, DELETE it
+
+When a design question has a FACTUAL answer the code can settle — does this actually throw?
+does the check really go red on that input? — you may write **ONE temporary test file**, run
+it with this repo's own gate commands (`npm run lint` + `npm run test`), and **record what it
+PROVED in the spec**. The finding is the deliverable; the file is not.
+
+**Then DELETE it, before you finish. ZERO RESIDUE.** A probe left on disk turns the owner's
+gate red for a file that was never a deliverable, and lands a test nobody planned, reviewed
+or specced. This is an investigative tool — `/dev-loop` writes the real tests, to the spec.
+If you somehow cannot delete it, **say so by name** in your reply rather than leaving it
+there silently. Never touch an EXISTING test file to probe: write a new one, delete it.
 
 ## Step 2 — Convene the expert council
 
@@ -122,16 +160,20 @@ Carry both to ratification (Step 3) as **CHALLENGES** — under the anti-launder
 ## Step 4 — Off-ramp
 
 Once the spec is ratified, offer to run **`/dev-loop`** with it — the ratified spec is the
-binding `args.spec`, and `/dev-loop` builds, gates, and pushes a preview.
+binding `args.spec`, and `/dev-loop` builds, gates, and pushes a preview. On the TRIVIAL
+path from Step 1 there is no spec to ratify: hand off to `/dev-loop` directly, carrying the
+one-line change and the danger surface you CITED it clear of, and nothing else.
 
 ## HARD LIMITS
 
 - **Write covenant.** You write **ONLY** `.claude/veriloop/specs/<slug>.md` (re-writing
-  that same path while iterating is fine). **Never touch:** code, branches/worktrees,
+  that same path while iterating is fine), **plus — optionally — ONE temporary probe test
+  that you DELETE before you finish** (above): its result belongs in the spec, the file does
+  not survive this command. **Never touch:** code, branches/worktrees,
   mutating git, `constitution.md`, `experts/*` (incl. `.overrides.md`), `interview.json`,
-  `commands.json`, the manifest, `.claude/commands/*`, `.env*`. **No scratch files.** The
+  `commands.json`, the manifest, `.claude/commands/*`, `.env*`. **No other scratch files.** The
   council subagents are **read-only** (they inherit `/advise`'s contract) — **only the main
-  session writes**, and it writes only the spec.
+  session writes**, and it writes only the spec and that one deleted probe.
 - **NO VERDICTS.** You produce planning advice and a proposed spec — never PASS / FAIL /
   approval. A verdict belongs exclusively to the `/dev-loop` gate; `/dev-plan` never
   substitutes for it.

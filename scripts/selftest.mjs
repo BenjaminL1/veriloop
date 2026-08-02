@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
-import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, SESSION_ROUTES, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, SESSION_START_SOURCES, CLAUDE_SETTINGS } from './lib/render.mjs';
+import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, renderDevPlanCommand, SESSION_ROUTES, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, SESSION_START_SOURCES, CLAUDE_SETTINGS } from './lib/render.mjs';
 import { REFERENCE_HOST_ALLOWLIST, REFERENCE_CATEGORIES, STANCES, collectDomainFacts, scrubSecrets, renderDomainAudit, renderDomainExpert, buildReferences } from './lib/domain.mjs';
 // probe: a persona rendered with NO evidence must omit the beat section entirely
 const renderExpertProbe = () => renderExpert('security', { repoName: 'r', stack: ['node'], gate: [], constitutionPath: 'c.md', title: 't', evidence: [] });
@@ -1401,6 +1401,24 @@ function assert(cond, desc) {
     /Premise-rider — ALWAYS/.test(committedDevPlan) && /Pre-mortem \(REQUIRED\)/.test(committedDevPlan),
     'self-host /dev-plan: committed dev-plan.md carries the ALWAYS premise-rider (pre-mortem) — guards against a stale, never-re-rendered command file',
   );
+  // The GATEWAY half (v0.5.0), on the COMMITTED file for the same reason: `/dev-loop` is no
+  // longer a routing destination, so this repo's own one-line fixes arrive at THIS file. A
+  // stale dev-plan.md would take them with no proportionality valve and no probe.
+  assert(
+    /IMPLEMENTATION GATEWAY/.test(committedDevPlan)
+      && /Is there already a spec or plan for this feature/.test(committedDevPlan)
+      && /An UNCITED triviality claim is NOT permitted/.test(committedDevPlan)
+      && /## Probe test — write it, run it, record it, DELETE it/.test(committedDevPlan),
+    'self-host /dev-plan: committed dev-plan.md carries the gateway (existing-spec review, cited triviality) and the delete-the-probe covenant',
+  );
+  // ...and its gate entries are THIS repo's, from the manifest — the tool line is what makes
+  // the probe runnable, so a stale one turns the probe instruction into a lie.
+  const cdpAllowed = (committedDevPlan.match(/^allowed-tools:\s*(.*)$/m) || [])[1] || '';
+  const selfGate = (JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/veriloop-manifest.json'), 'utf8')).gate_commands || []).map((c) => c.cmd);
+  assert(
+    selfGate.length > 0 && selfGate.every((c) => cdpAllowed.includes(`Bash(${c}:*)`)) && !/Bash\(\*\)/.test(cdpAllowed),
+    `self-host /dev-plan: committed allowed-tools carries this repo's own gate commands and no bare Bash(*) (expected ${selfGate.map((c) => `Bash(${c}:*)`).join(', ')})`,
+  );
 }
 
 // --- host-hook cleanliness: emitted text carries NO trailing whitespace (the
@@ -1468,6 +1486,81 @@ function assert(cond, desc) {
   const dpAllowed = (devPlan.match(/^allowed-tools:\s*(.*)$/m) || [])[1] || '';
   assert(/\bWrite\b/.test(dpAllowed) && /AskUserQuestion/.test(dpAllowed) && /\bTask\b/.test(dpAllowed), '/dev-plan: allowed-tools lists the write/ask/subagent tools');
   assert(/Bash\(git log:\*\)/.test(dpAllowed) && !/Bash\(\*\)/.test(dpAllowed), '/dev-plan: allowed-tools scopes Bash to read-only git patterns (no bare Bash(*))');
+
+  // --- v0.5.0 (owner decision, 2026-08-01): /dev-plan is the IMPLEMENTATION GATEWAY.
+  //     `/dev-loop` left the routing table, so everything that is not an open-ended question
+  //     lands here — including the one-line typo fix that used to route into a full worktree
+  //     + gate + lens + auto-fix drive. The proportionality valve is these two checks.
+  //
+  //     The gate commands. `/advise` has appended its repo's rendered gate list to
+  //     `allowed-tools` since v0.3.19; `/dev-plan` did not, so the probe test below would have
+  //     been unrunnable. DERIVED per repo, never hardcoded — proved on a CARGO render, where a
+  //     hardcoded `npm` would leave the tool line wrong and the probe instruction lying.
+  const dpGate = (JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8')).gate_commands || []).map((c) => c.cmd);
+  assert(
+    dpGate.length > 0 && dpGate.every((c) => dpAllowed.includes(`Bash(${c}:*)`)),
+    `/dev-plan: allowed-tools carries this repo's OWN gate commands so the probe test can actually be RUN (expected ${dpGate.map((c) => `Bash(${c}:*)`).join(', ')})`,
+  );
+  {
+    const cargo = renderDevPlanCommand({ repoName: 'r', roster: { experts: [{ key: 'code-review' }] }, planModel: null, questionCap: null, gate: [{ cmd: 'cargo test' }] });
+    const cargoAllowed = (cargo.match(/^allowed-tools:\s*(.*)$/m) || [])[1] || '';
+    assert(
+      cargoAllowed.includes('Bash(cargo test:*)') && !/npm/.test(cargoAllowed) && /`cargo test`/.test(cargo),
+      '/dev-plan: the gate entry and the probe-test instruction are DERIVED from the repo\'s gate — a cargo repo gets `cargo test`, with no npm anywhere (rule 9)',
+    );
+    const noGate = renderDevPlanCommand({ repoName: 'r', roster: { experts: [{ key: 'code-review' }] }, planModel: null, questionCap: null, gate: [] });
+    assert(
+      !/^allowed-tools:.*Bash\((?!git )/m.test(noGate) && /the repo's gate commands/.test(noGate),
+      '/dev-plan: a repo with NO detected gate commands gets no invented Bash entry and prose that names the absence (proves the gate list is conditional, not a constant)',
+    );
+  }
+  // Gateway check 1 — an existing spec is REVIEWED, then edited or signed off unchanged.
+  // Never silently re-interviewed over: a ratified spec is a decision the owner already took.
+  assert(
+    /Is there already a spec or plan for this feature/.test(devPlan)
+      && /do NOT\s+silently re-interview over it/.test(devPlan)
+      && /Review it with the council/.test(devPlan)
+      && /appropriate EDITS/.test(devPlan) && /SIGN OFF on it UNCHANGED/.test(devPlan),
+    '/dev-plan gateway: an existing spec is reviewed with the council and then EDITED or SIGNED OFF unchanged — never silently re-interviewed over',
+  );
+  // Gateway check 2 — triviality, and the CITATION requirement that makes it falsifiable.
+  // "this is obviously trivial" is the sentence that ships a one-liner into a danger surface,
+  // so the claim must name a surface from the bundle (high_risk_areas / the deep scan's
+  // danger-surface list / the constitution) and say why the change does not reach it.
+  assert(
+    /Judge triviality — and CITE, never assert/.test(devPlan)
+      && /An UNCITED triviality claim is NOT permitted/.test(devPlan)
+      && /high_risk_areas/.test(devPlan) && /scan-notes\.md/.test(devPlan)
+      && /If you cannot cite one, it\s+is not trivial/.test(devPlan),
+    '/dev-plan gateway: the triviality judgment must CITE a danger surface from the bundle, and an uncited claim is refused (no citation → not trivial → full path)',
+  );
+  assert(
+    /`\/dev-loop` in TRIVIAL MODE/.test(devPlan)
+      && /no interview, no council, no spec/.test(devPlan)
+      && /the gate still runs in full/.test(devPlan),
+    '/dev-plan gateway: a cited-trivial change hands off to /dev-loop in TRIVIAL MODE — no interview, no council, no spec, and the GATE still runs in full',
+  );
+  // The PROBE TEST (owner decision, 2026-08-01). An investigative tool, not a deliverable:
+  // the finding goes in the spec and the file must not survive the command. Zero residue is
+  // the whole point — a probe left behind turns the owner's gate red for a file that was
+  // never planned, reviewed or specced.
+  assert(
+    /## Probe test — write it, run it, record it, DELETE it/.test(devPlan)
+      && /ONE temporary test file/.test(devPlan)
+      && /record what it\s+PROVED in the spec/.test(devPlan)
+      && /\*\*Then DELETE it, before you finish\. ZERO RESIDUE\.\*\*/.test(devPlan),
+    '/dev-plan: a temporary PROBE test may be written and run to settle a factual design question — its result is recorded in the spec and the file is DELETED before finishing (zero residue)',
+  );
+  // The covenant AMENDMENT, asserted as an amendment: the probe is permitted and every other
+  // prohibition survives. Owner ruling: prose only, NO enforcing assertion pinning obedience —
+  // this pins what the COMMAND SAYS, which is the same thing every other covenant check does.
+  const dpCovenant = (devPlan.match(/- \*\*Write covenant\.\*\*[\s\S]*?(?=\n- \*\*NO VERDICTS)/) || [, ''])[0].replace(/\s+/g, ' ');
+  assert(
+    /ONE temporary probe test that you DELETE before you finish/.test(dpCovenant)
+      && /No other scratch files/.test(dpCovenant)
+      && ['code', 'branches/worktrees', 'mutating git', '`constitution.md`', '`experts/*`', '`interview.json`', '`commands.json`', 'the manifest', '`.claude/commands/*`', '`.env*`'].every((p) => dpCovenant.includes(p)),
+    '/dev-plan: the Write covenant now permits ONE deleted probe test and keeps every other prohibition (code, worktrees, mutating git, constitution, experts, interview.json, commands.json, the manifest, .claude/commands/*, .env*)',
+  );
 
   // (b) model line PRESENT when phase_models.plan is set (verbatim from the interview)
   assert(/^model:\s*fable\s*$/m.test(devPlan), '/dev-plan: frontmatter carries `model: fable` when the interview sets phase_models.plan');
@@ -2907,16 +3000,75 @@ function assert(cond, desc) {
   // which is what a `clear` mid-command, or any harness path `SESSION_START_SOURCES` does not
   // control, hands the full-strength block to. "Route FIRST, then work" arriving inside a
   // running `/dev-loop` is an instruction to re-enter the command in flight.
+  //
+  // SCOPE, added 2026-08-01 and asserted because the first version over-reached: "routing is
+  // a decision taken once, at the top of a session, never a loop" reads literally as making
+  // the `/dev-plan` → `/dev-loop` handoff unreachable AND as exempting every message after the
+  // first from routing at all. The clause is about the COMMAND IN FLIGHT; both consequences
+  // are now stated in the payload and pinned here, because the over-reaching sentence looked
+  // exactly as correct as the scoped one.
   assert(
-    /<ALREADY-ROUTED>/.test(routing) && /already executing a veriloop command/i.test(routing) && /do not re-enter the command you are\n?\s*running/i.test(routing),
+    /<ALREADY-ROUTED>/.test(routing) && /already executing a\s+veriloop command/i.test(routing) && /do not re-enter the command you are running/i.test(routing.replace(/\n/g, ' ')),
     'session routing: carries the <ALREADY-ROUTED> clause — a MAIN session already inside /advise, /dev-plan or /dev-loop is told to continue the task in flight, not to re-route into the command it is running',
+  );
+  assert(
+    /handoff is not a re-entry/i.test(routing.replace(/\n/g, ' '))
+      && /`\/dev-plan` handing a ratified spec/.test(routing.replace(/\n/g, ' '))
+      && /per REQUEST, not once per session/i.test(routing.replace(/\n/g, ' ')),
+    'session routing: <ALREADY-ROUTED> is scoped to the COMMAND IN FLIGHT — the /dev-plan → /dev-loop handoff stays reachable and the owner\'s NEXT message still routes (the "decided once, at the top of a session" wording made both unreachable on a literal read)',
   );
   const RATIONALIZATIONS = ['this is just a simple question', 'let me explore the codebase first', 'the skill is overkill', 'I need more context first'];
   const missingFlags = RATIONALIZATIONS.filter((f) => !routing.includes(f));
   assert(missingFlags.length === 0, `session routing: pre-empts all four named rationalizations${missingFlags.length ? ` [missing: ${missingFlags.join('; ')}]` : ''}`);
+  // TWO rows since 2026-08-01, and the count is pinned: the retired three-row table had
+  // `/advise` on "anything that is not a direct implementation request", which a feature
+  // request ALSO satisfies, with no precedence rule anywhere — three routing probes all
+  // reproduced row 1 swallowing rows 2 and 3. This is the count assertion updated to the new
+  // design, not a deletion: it still requires every SESSION_ROUTES entry to appear as one
+  // trigger→command row, and it still fails if a route goes missing from the table.
   assert(
-    SESSION_ROUTES.length === 3 && SESSION_ROUTES.every((r) => routingLines.some((l) => l.startsWith('|') && l.includes(r.trigger) && l.includes(`\`${r.command}\``))),
-    `session routing: all three SESSION_ROUTES appear in the route table, each trigger paired with its command on ONE row (${SESSION_ROUTES.map((r) => r.command).join(' ')})`,
+    SESSION_ROUTES.length === 2 && SESSION_ROUTES.every((r) => routingLines.some((l) => l.startsWith('|') && l.includes(r.trigger) && l.includes(`\`${r.command}\``))),
+    `session routing: BOTH SESSION_ROUTES appear in the route table, each trigger paired with its command on ONE row (${SESSION_ROUTES.map((r) => r.command).join(' ')})`,
+  );
+  // The anti-swallow property itself, separate from the count. A two-row table with two
+  // overlapping positive triggers would pass the assertion above and re-open the defect:
+  // what makes row 2 unswallowable is that it is defined as the COMPLEMENT of row 1.
+  const routeTable = (routing.match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
+  assert(
+    /ANYTHING NOT COVERED BY THE ROW ABOVE/.test(SESSION_ROUTES[1].trigger)
+      && /row 2 is RESIDUAL/.test(routeTable)
+      && /read IN ORDER/.test(routeTable),
+    'session routing: row 2 is explicitly RESIDUAL and the rows are read IN ORDER — the retired table had two positive triggers that both matched a feature request and no precedence rule, so every probe could defend /advise',
+  );
+  // /dev-loop is NOT a destination (owner decision, 2026-08-01). Asserted in BOTH directions:
+  // no table ROW may route there, and the payload must SAY why, because a table that merely
+  // omits it leaves the model to guess whether the omission was an oversight.
+  assert(
+    routeTable.split('\n').filter((l) => l.trim().startsWith('|') && l.includes('`/dev-loop`')).length === 0
+      && /`\/dev-loop` is NOT a routing destination/.test(routeTable)
+      && /reached only through `\/dev-plan`/.test(routeTable.replace(/\n/g, ' ')),
+    'session routing: NO row routes a session directly to /dev-loop, and the payload says why — "fix the typo in README line 40" used to route into a full worktree + gate + lens + auto-fix drive, and the proportionality valve now lives inside /dev-plan',
+  );
+  // The FALSE claim, retired. `/dev-loop` spends tokens on recon, planning and a worktree
+  // before the owner can reply, so "before you spend tokens" was never true of the route it
+  // was written for. This repo retired 13 published claims for exactly this class and has a
+  // claims-discipline scan for it; the injected payload gets the same treatment by hand.
+  assert(
+    !/before you spend tokens/.test(routing)
+      && /neither route writes code/i.test(routing)
+      && /`\/advise` is read-only and `\/dev-plan` writes only a spec the owner ratifies/.test(routing.replace(/\n/g, ' ')),
+    'session routing: the reason for announcing the route is TRUE of the routes that exist — neither writes code, so the owner gets a turn before anything is built (the retired "so the owner can redirect you before you spend tokens" was false for the /dev-loop route it was written for)',
+  );
+  // The overkill red flag, rewritten. Under the two-row table triviality IS decided — by
+  // `/dev-plan`, with a cited danger surface — so "You are not the one who decides that"
+  // forbade a thought that now has a correct destination. Probe 3 hit exactly this: the model
+  // saw a one-line typo fix was over-served and the payload's only answer was to deny it.
+  const overkill = routingLines.find((l) => l.startsWith('|') && l.includes('the skill is overkill')) || '';
+  assert(
+    !/You are not the one who decides that/.test(routing)
+      && /\/dev-plan` is where that gets DECIDED/.test(overkill)
+      && /no interview and no spec/.test(overkill),
+    'session routing: the "the skill is overkill" red flag ROUTES the thought to /dev-plan (which decides triviality, with a citation) instead of forbidding it',
   );
 
   // --- ANNOUNCEMENT + SESSION NOTES (owner decisions, 2026-08-01), in superpowers' shape —
@@ -2930,18 +3082,29 @@ function assert(cond, desc) {
   //     behind it. Nothing in either gate observes a reply, so no check of obedience exists
   //     or is claimed. Read as enforcement they would be a false statement about the gate's
   //     own evidence, which is the class of overclaim this repo retires by hand.
+  // The worked example names the RESIDUAL route (`/dev-plan`), not `/advise`. Four places in
+  // the payload named `/advise` — the announcement template, the counterexample, the read-only
+  // caveat and three of four red-flag rows — and a payload whose every example is one route
+  // biases a pattern-matching model toward it. The example is derived from SESSION_ROUTES so
+  // it cannot drift from the table it demonstrates.
   assert(
     /## Say that you routed/.test(routing)
       && /announce it in your reply before you\n?\s*do the work/i.test(routing)
-      && /Using `\/advise` to <purpose> — routed by veriloop's SessionStart hook, not requested directly\./.test(routing)
+      && routing.includes(`> Using \`${SESSION_ROUTES[1].command}\` to <purpose> — routed by veriloop's SessionStart hook, not requested directly.`)
+      && routing.includes(`the same\nsentence with \`${SESSION_ROUTES[0].command}\` when the message was an open-ended question`)
       && /Name the command and why that route/.test(routing),
-    'session routing: the payload REQUIRES the model to announce a hook-routed invocation in its reply, naming the command and why it routed there (superpowers shape) — this asserts the instruction is CARRIED, never that it was obeyed',
+    `session routing: the payload REQUIRES the model to announce a hook-routed invocation in its reply, naming the command and why it routed there (superpowers shape), and its worked examples cover BOTH routes — this asserts the instruction is CARRIED, never that it was obeyed`,
   );
+  // "or decline to route at all" is GONE (owner decision, 2026-08-01): with the proportionality
+  // valve inside `/dev-plan` routing is genuinely unconditional, and an escape hatch printed
+  // beside "you do not have a choice" let the reader resolve the contradiction either way. The
+  // truth-telling half survives — route elsewhere and you must SAY so.
   assert(
     /If the OWNER\n?\s*typed the command themselves/.test(routing)
       && /not the same event/.test(routing)
-      && /decline to route at all, say that too/.test(routing),
-    'session routing: the announcement DISTINGUISHES a hook-routed invocation from the owner typing the command themselves (and from declining to route) — an announcement that conflates them tells the owner nothing they did not already know',
+      && !/decline to route at all/.test(routing)
+      && /route somewhere OTHER than the table sends you, say that and say why/.test(routing),
+    'session routing: the announcement DISTINGUISHES a hook-routed invocation from the owner typing the command themselves, and the "or decline to route at all" escape hatch is gone while the say-so-if-you-route-elsewhere duty remains',
   );
   assert(
     /note it in the session's working notes \/ summary/.test(routing)
@@ -2964,9 +3127,21 @@ function assert(cond, desc) {
   {
     const cr = existsSync(committedRouting) ? readFileSync(committedRouting, 'utf8') : '';
     assert(/<SUBAGENT-STOP>/.test(cr) && /dispatched as a subagent/i.test(cr), 'session routing (COMMITTED): session-routing.md carries the <SUBAGENT-STOP> guard');
-    assert(/<ALREADY-ROUTED>/.test(cr) && /already executing a veriloop command/i.test(cr), 'session routing (COMMITTED): session-routing.md carries the <ALREADY-ROUTED> main-session re-entry clause');
+    assert(
+      /<ALREADY-ROUTED>/.test(cr) && /already executing a\s+veriloop command/i.test(cr) && /handoff is not a re-entry/i.test(cr.replace(/\n/g, ' ')),
+      'session routing (COMMITTED): session-routing.md carries the <ALREADY-ROUTED> clause, scoped to the command IN FLIGHT so the /dev-plan → /dev-loop handoff stays reachable',
+    );
     assert(/you do not have a choice/i.test(cr) && RATIONALIZATIONS.every((f) => cr.includes(f)), 'session routing (COMMITTED): the no-choice directive and all four rationalizations are present');
-    assert(SESSION_ROUTES.every((r) => cr.includes(`\`${r.command}\``)), 'session routing (COMMITTED): all three routes are present');
+    assert(SESSION_ROUTES.every((r) => cr.includes(`\`${r.command}\``)), 'session routing (COMMITTED): both routes are present');
+    // The two-row design on the COMMITTED payload — the file the hook actually injects into
+    // this repo's own sessions. Template-only assertions leave a never-re-rendered bundle green.
+    const crTable = (cr.match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
+    assert(
+      crTable.split('\n').filter((l) => l.trim().startsWith('|') && l.includes('`/dev-loop`')).length === 0
+        && /row 2 is RESIDUAL/.test(crTable)
+        && !/before you spend tokens/.test(cr),
+      'session routing (COMMITTED): this repo\'s own payload has NO direct /dev-loop route, a RESIDUAL row 2, and no "before you spend tokens" claim',
+    );
     assert(
       /## Say that you routed/.test(cr)
         && /routed by veriloop's SessionStart hook, not requested directly/.test(cr)

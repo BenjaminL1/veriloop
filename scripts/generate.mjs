@@ -457,7 +457,7 @@ function main() {
   // raw interview key if present, else undefined — no preset fallback); an absent
   // key emits NO model line (inherit the session model). Runs inline; writes only
   // the spec; carries NO gate authority.
-  w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan, questionCap: config.questionCap }));
+  w.machine(P('.claude/commands/dev-plan.md'), renderDevPlanCommand({ repoName, roster, planModel: config.budget.models.plan, questionCap: config.questionCap, gate: config.gate }));
   // /posture — change the repo's DEFAULT budget posture (the value baked into the
   // bundle from interview.json). The emitted valid-level list derives from the real
   // BUDGET_PRESETS keys (rule 9 — command text can't drift from the presets).

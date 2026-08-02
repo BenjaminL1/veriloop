@@ -117,7 +117,7 @@ discovered:
   gate over and print 80 characters of into the log. The scan tests bytes, not "does it wire
   veriloop's hook" — that test flips true the moment you merge, which is exactly backwards.
 - **Turning it off.** Delete the `SessionStart` entry from `.claude/settings.json`. That
-  removes routing for all three commands at once — there is no partial disable. Deleting
+  removes routing for both commands at once — there is no partial disable. Deleting
   `.claude/settings.json` outright works too and is supported (`lint` warns, it does not
   fail). Deleting `session-routing.md` is **not** a disable: it is machine-owned, so the next
   `/veriloop` run rewrites it and routing resumes.
@@ -263,7 +263,7 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 - a `session-routing.md` that is not byte-identical to what `renderSessionRouting()` emits —
   it is machine-owned and its entire text is injected into every session verbatim, so a hand
   edit there is an injection into every session; a routing payload missing its
-  `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, one of the three routes, its
+  `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, one of its two routes, its
   announcement requirement or its session-notes requirement; a
   payload routing the session to a command veriloop does not emit; or a missing hook script.
   **These payload checks run whether or not the hook is wired**, because the payload is

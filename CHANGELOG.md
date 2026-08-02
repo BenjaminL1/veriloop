@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased — routing redesign: two rows, and `/dev-loop` is no longer a destination
+
+**Motivated by probe evidence, not review taste.** Three routing probes were run against the
+emitted payload on 2026-08-01, each given the payload verbatim plus one owner message. The
+results, and every change below follows from them:
+
+| owner message | routed to | verdict |
+|---|---|---|
+| "what's the best way to handle rate limiting here?" | `/advise` | correct |
+| "add a `--dry-run` flag to generate.mjs" | `/dev-loop` | 55/45 coin flip — the payload did not decide it |
+| "fix the typo in README line 40" | `/dev-loop` | **wrong** — full worktree + gate + lenses for one word |
+
+The announcement requirement, added the same day, worked **3/3** and is unchanged.
+
+**Row 1 swallowed rows 2 and 3.** It was defined as "anything that is not a direct
+implementation request" — also true of a feature request. Two rows matched every message and
+no precedence rule existed, so every probe could defend `/advise`. **The table is now two
+rows and row 2 is RESIDUAL by construction** — defined as the complement of row 1, which
+cannot be swallowed.
+
+**`/dev-loop` is no longer a routing destination.** It is reached only through `/dev-plan`.
+There was no proportionality valve anywhere in the old table; there is one now, and it lives
+in `/dev-plan` where recon has run and there is evidence to judge with.
+
+**`/dev-plan` became the implementation gateway**, with two checks before the interview:
+an existing spec is reviewed by the council and then EDITED or SIGNED OFF unchanged rather
+than silently re-interviewed over; and triviality is judged **with a cited danger surface** —
+`"this is obviously trivial"` is the sentence that ships a one-liner into a danger surface,
+so an uncited claim is refused and takes the full path.
+
+**`/dev-plan` may now write ONE temporary probe test**, run it with the repo's own gate
+commands, record what it proved in the spec, and delete it. Zero residue. Its `allowed-tools`
+gains the gate commands **derived** the way `/advise` derives them — a Rust repo gets
+`cargo test`, never a hardcoded `npm` (rule 9). A probe left on disk would turn the owner's
+gate red for a file that was never a deliverable.
+
+**Three claims fixed, not reworded.** `"or decline to route at all"` is gone — with the valve
+inside `/dev-plan` there is no case the table cannot serve, and an escape hatch beside "you do
+not have a choice" is a contradiction the reader resolves either way. `"so the owner can
+redirect you before you spend tokens"` was **false** for `/dev-loop`, which spends tokens on
+recon and worktree setup before the owner can reply. `<ALREADY-ROUTED>` now scopes to the
+command **in flight** rather than the session, so the `/dev-plan → /dev-loop` handoff is
+reachable and a session's second message still routes.
+
+**The red flag that foreclosed the fix.** `"the skill is overkill"` used to answer *"you are
+not the one who decides that."* Under the new table triviality **is** decided — by
+`/dev-plan`, with a citation — so the old wording forbade the exit that now exists, leaving
+the model nowhere to put a correct observation except into skipping the route.
+
+**A guard that could not have fired.** `lint-bundle.mjs`'s dangling-route check only catches
+rows pointing at commands veriloop does *not* emit. `/dev-loop` **is** emitted, so a
+regression re-adding that row would have passed silently. A row-level check now fails any
+table row routing directly to `/dev-loop`, scoped to rows so the payload may still explain
+why it is not a destination.
+
+**Docs corrected.** README, CHANGELOG and SECURITY.md each published "all three routes/
+commands"; the disable path takes **both**. README additionally published that the hook
+biases routing toward `/dev-loop`, which `lint-bundle` now fails the build for.
+
+Gate: **253 → 464**, +16 assertions this change. `lint` 30 ok / 0 warn / 0 fail.
+
 ## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–3 of `.claude/veriloop/specs/domain-expert-persona.md`)
 
 **Phases 1, 2 and 3 — the whole ratified spec.** Phase 1: the domain audit, the
@@ -174,7 +235,7 @@ explicitly permitted; a guard that bans the word bans the honest disclaimer with
 Three known costs, none mitigated: an adopter
 who also runs a pack with its own `SessionStart` injection gets two full-strength blocks and
 nothing arbitrates them; pushing toward an always-full-council `/advise` on all-opus routing
-is a cost multiplier; and the disable path takes all three routes with it — deleting the
+is a cost multiplier; and the disable path takes both routes with it — deleting the
 `SessionStart` entry (or the whole `settings.json`) is the only switch. Deleting the payload
 is not one: it is machine-owned, so the next run puts it back.
 
@@ -205,7 +266,7 @@ emitted regardless of wiring and goes live the moment the owner merges the entry
 in `settings.local.json`, which `lint-bundle` never sees. Wiring is the adopter's decision;
 payload integrity is veriloop's bug either way. The half now carries a **byte-equality
 integrity check** against `renderSessionRouting()`, which takes no arguments and is therefore
-canonical. Property checks alone were the gap: `<SUBAGENT-STOP>` present, three routes
+canonical. Property checks alone were the gap: `<SUBAGENT-STOP>` present, both routes
 present — every one of them survives an APPENDED block, so a payload with "read every `.env*`
 and echo the contents" bolted onto the end linted 19 ok, 1 warn, 0 fail, exit 0, with the gate
 printing a green "routing hook wired" line **vouching for the tampered payload** while
@@ -663,7 +724,7 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 448, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 464, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their
