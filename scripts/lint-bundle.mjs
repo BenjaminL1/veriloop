@@ -593,7 +593,7 @@ function main() {
           bad++;
           const canon = renderSessionRouting();
           const shape = doc.startsWith(canon) ? `${doc.length - canon.length} bytes APPENDED after the canonical payload` : `${doc.length} bytes vs ${canon.length} canonical`;
-          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_RED_FLAGS / SESSION_ANNOUNCE in the generator. (The differing text is deliberately not echoed.)`);
+          fail(`${SESSION_ROUTING_DOC} does not match what veriloop emits (${shape}) — EITHER this file was tampered with, OR your bundle predates your current veriloop version. This check cannot tell those apart and does not try: it FAILS for both, deliberately, and the remedy is the same one. It is machine-owned and its entire text is injected into every session verbatim, so a hand edit here is an injection into every session. Re-run generate to restore it; to change it for real, change SESSION_ROUTES / SESSION_NO_ROUTE / SESSION_RED_FLAGS / SESSION_ANNOUNCE in the generator (SESSION_NO_ROUTE is its OWN constant on purpose — folding it into SESSION_ROUTES renders the string undefined into the payload). (The differing text is deliberately not echoed.)`);
         }
         // The properties, checked SEPARATELY from the byte-equality above and not folded into
         // it. Byte-equality answers "is this veriloop's file"; these answer "does veriloop's
@@ -641,6 +641,32 @@ function main() {
           bad++;
           fail('session-routing.md\'s route table has a row routing the session DIRECTLY to /dev-loop — /dev-loop is not a routing destination: /dev-plan is the implementation gateway and is the only path to it (it judges proportionality with a cited danger surface)');
         }
+        // The ASSEMBLED table's SHAPE — the second witness. Written from THIS file's own
+        // `ROUTED` list, never imported from the renderer, so rule 9's two-witness property
+        // survives: the generator and the linter must agree about the table independently.
+        //
+        // Every check above is a PRESENCE check, and presence cannot see the drift that
+        // matters here. Prepending a row without touching the prose ordinal leaves every route
+        // present, every guard present and byte-equality green (it compares the file to the
+        // regression) while the payload now tells each session that the WRONG row is residual
+        // — which makes the last route unreachable and resurrects the swallow defect the
+        // residual row was built to fix. So the ordinal is checked against the table it
+        // describes, never against a literal.
+        const tableRows = table.split('\n')
+          .filter((l) => l.trim().startsWith('|'))
+          .slice(2)
+          .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+        const rowCmd = (cell) => ((cell || '').match(/`(\/[a-z0-9-]+)`/) || [, null])[1];
+        const shape = [];
+        if (tableRows.length !== ROUTED.length + 1) shape.push(`it has ${tableRows.length} rows; veriloop routes to ${ROUTED.length} commands, so it should have ${ROUTED.length + 1} — one per route, plus the no-route row`);
+        const noCmd = tableRows.map((r, i) => (rowCmd(r[1]) ? -1 : i)).filter((i) => i >= 0);
+        if (noCmd.length !== 1 || noCmd[0] !== 0) shape.push(`the command-less no-route row must be row 1 and the ONLY command-less row (found: ${noCmd.length ? noCmd.map((i) => i + 1).join(', ') : 'none'})`);
+        ROUTED.forEach((c, i) => { if (rowCmd((tableRows[i + 1] || [])[1]) !== c) shape.push(`${c} is not on row ${i + 2}`); });
+        if (!tableRows.length || !/^ANYTHING NOT COVERED BY THE ROWS ABOVE/.test(tableRows[tableRows.length - 1][0])) shape.push('the LAST row does not carry the residual trigger, so the table is not total and a message can match no row at all');
+        const ordinal = table.match(/\*\*(\d+) rows, read IN ORDER, and row (\d+) is RESIDUAL\*\*/);
+        if (!ordinal) shape.push('the prose never states how many rows there are and which one is RESIDUAL');
+        else if (Number(ordinal[1]) !== tableRows.length || Number(ordinal[2]) !== tableRows.length) shape.push(`the prose says ${ordinal[1]} rows and row ${ordinal[2]} is RESIDUAL while the table has ${tableRows.length} rows — the payload is telling every session that the wrong row is residual`);
+        for (const s of shape) { bad++; fail(`session-routing.md's route table is malformed: ${s}`); }
       }
       if (!bad) ok(`SessionStart routing payload intact: ${SESSION_ROUTING_DOC} and ${SESSION_HOOK_SCRIPT} both byte-identical to what veriloop emits (<SUBAGENT-STOP>, <ALREADY-ROUTED>, routes ${ROUTED.join(' ')})`);
     }

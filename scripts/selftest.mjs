@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
-import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, renderDevPlanCommand, SESSION_ROUTES, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, SESSION_START_SOURCES, CLAUDE_SETTINGS } from './lib/render.mjs';
+import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, renderDevPlanCommand, SESSION_ROUTES, SESSION_NO_ROUTE, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, SESSION_START_SOURCES, CLAUDE_SETTINGS } from './lib/render.mjs';
 import { REFERENCE_HOST_ALLOWLIST, REFERENCE_CATEGORIES, STANCES, collectDomainFacts, scrubSecrets, renderDomainAudit, renderDomainExpert, buildReferences } from './lib/domain.mjs';
 // probe: a persona rendered with NO evidence must omit the beat section entirely
 const renderExpertProbe = () => renderExpert('security', { repoName: 'r', stack: ['node'], gate: [], constitutionPath: 'c.md', title: 't', evidence: [] });
@@ -2991,9 +2991,18 @@ function assert(cond, desc) {
     /<SUBAGENT-STOP>/.test(routing) && /dispatched as a subagent/i.test(routing) && /ignore this block/i.test(routing),
     'session routing: opens with <SUBAGENT-STOP> and the ignore-if-subagent instruction — REQUIRED, or every council seat and review lens inherits the routing and can recurse',
   );
+  // The no-choice directive, SCOPED. The unqualified form — "you do not have a choice about
+  // routing through them" — went FALSE the moment the no-route row shipped: that row IS a
+  // choice not to route, and two probes flagged the sentence fighting the table it introduces.
+  // This is a REPLACEMENT of the old literal pin, not a deletion: the obligation is still
+  // asserted, now scoped to the rows that name a command, and the retired absolute form is
+  // asserted ABSENT so a regression re-introducing it goes RED rather than silently passing.
   assert(
-    /<EXTREMELY-IMPORTANT>/.test(routing) && /you do not have a choice/i.test(routing),
-    'session routing: carries the <EXTREMELY-IMPORTANT> framing and the explicit no-choice directive',
+    /<EXTREMELY-IMPORTANT>/.test(routing)
+      && /\*\*when a row of the table below names a command, you do not have a choice\*\* about routing/i.test(routing.replace(/\n/g, ' '))
+      && /the one exception is the \*\*no-route row\*\*/i.test(routing.replace(/\n/g, ' '))
+      && !/\*\*you do not have a choice\*\* about routing through them/i.test(routing.replace(/\n/g, ' ')),
+    'session routing: carries the <EXTREMELY-IMPORTANT> framing and a no-choice directive that is TRUE of the table it introduces — scoped to the rows that name a command, with the no-route row stated as the explicit exception (the unqualified "about routing through them" form is retired and must stay gone)',
   );
   // The MAIN-session half of the re-entry guard. `<SUBAGENT-STOP>` exempts a dispatched
   // subagent and says nothing about a main session already executing a veriloop command —
@@ -3017,29 +3026,82 @@ function assert(cond, desc) {
       && /per REQUEST, not once per session/i.test(routing.replace(/\n/g, ' ')),
     'session routing: <ALREADY-ROUTED> is scoped to the COMMAND IN FLIGHT — the /dev-plan → /dev-loop handoff stays reachable and the owner\'s NEXT message still routes (the "decided once, at the top of a session" wording made both unreachable on a literal read)',
   );
-  const RATIONALIZATIONS = ['this is just a simple question', 'let me explore the codebase first', 'the skill is overkill', 'I need more context first'];
+  const RATIONALIZATIONS = ['this is just a simple question', 'let me explore the codebase first', 'the skill is overkill', 'I need more context first', 'I can just do this one myself'];
   const missingFlags = RATIONALIZATIONS.filter((f) => !routing.includes(f));
-  assert(missingFlags.length === 0, `session routing: pre-empts all four named rationalizations${missingFlags.length ? ` [missing: ${missingFlags.join('; ')}]` : ''}`);
-  // TWO rows since 2026-08-01, and the count is pinned: the retired three-row table had
-  // `/advise` on "anything that is not a direct implementation request", which a feature
-  // request ALSO satisfies, with no precedence rule anywhere — three routing probes all
-  // reproduced row 1 swallowing rows 2 and 3. This is the count assertion updated to the new
-  // design, not a deletion: it still requires every SESSION_ROUTES entry to appear as one
-  // trigger→command row, and it still fails if a route goes missing from the table.
-  assert(
-    SESSION_ROUTES.length === 2 && SESSION_ROUTES.every((r) => routingLines.some((l) => l.startsWith('|') && l.includes(r.trigger) && l.includes(`\`${r.command}\``))),
-    `session routing: BOTH SESSION_ROUTES appear in the route table, each trigger paired with its command on ONE row (${SESSION_ROUTES.map((r) => r.command).join(' ')})`,
-  );
-  // The anti-swallow property itself, separate from the count. A two-row table with two
-  // overlapping positive triggers would pass the assertion above and re-open the defect:
-  // what makes row 2 unswallowable is that it is defined as the COMPLEMENT of row 1.
+  assert(missingFlags.length === 0, `session routing: pre-empts all ${RATIONALIZATIONS.length} named rationalizations${missingFlags.length ? ` [missing: ${missingFlags.join('; ')}]` : ''}`);
   const routeTable = (routing.match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
-  assert(
-    /ANYTHING NOT COVERED BY THE ROW ABOVE/.test(SESSION_ROUTES[1].trigger)
-      && /row 2 is RESIDUAL/.test(routeTable)
-      && /read IN ORDER/.test(routeTable),
-    'session routing: row 2 is explicitly RESIDUAL and the rows are read IN ORDER — the retired table had two positive triggers that both matched a feature request and no precedence rule, so every probe could defend /advise',
-  );
+
+  // --- THE ASSEMBLED TABLE. The subject is the RENDERED rows, not the constants they came
+  //     from (spec `session-routing-redesign.md`, Required Assertions #1). The retired pair
+  //     of assertions here checked `SESSION_ROUTES.length === 2` and grepped the literal
+  //     `row 2 is RESIDUAL`, and the drift probe RAN the mutation they miss: prepending a row
+  //     without touching the prose passed both, plus every lint predicate, while the payload
+  //     told each session that `/advise` was residual and took everything row 1 did not —
+  //     making `/dev-plan` unreachable and resurrecting the swallow defect the two-row table
+  //     was built to fix. A bumped literal (`row 3 is RESIDUAL`) re-creates the same
+  //     false-green one row later, so both were REPLACED rather than updated.
+  //
+  //     `lint-bundle.mjs` check 8b mirrors this from its OWN `ROUTED_COMMANDS`, with no
+  //     import from the renderer, so constitution rule 9's two-witness property survives.
+  const routingRowProblems = (payload, expectedCommands) => {
+    const section = (payload.match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
+    // Table rows only: the header and its separator are dropped, and every paragraph in this
+    // section is prose that starts with `**`, never `|`.
+    const rows = section.split('\n')
+      .filter((l) => l.trim().startsWith('|'))
+      .slice(2)
+      .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+    const cmdOf = (cell) => ((cell || '').match(/`(\/[a-z0-9-]+)`/) || [, null])[1];
+    const problems = [];
+    if (rows.length !== expectedCommands.length + 1) problems.push(`table has ${rows.length} rows, expected ${expectedCommands.length + 1} (one per route, plus the no-route row)`);
+    const commandless = rows.map((r, i) => (cmdOf(r[1]) ? -1 : i)).filter((i) => i >= 0);
+    if (commandless.length !== 1 || commandless[0] !== 0) problems.push(`the command-less row must be row 1 and the ONLY one [command-less rows: ${commandless.length ? commandless.map((i) => i + 1).join(', ') : 'none'}]`);
+    if (!rows.length || !/no route/i.test(rows[0][1])) problems.push('row 1 does not name itself as the no-route row');
+    expectedCommands.forEach((c, i) => { if (cmdOf((rows[i + 1] || [])[1]) !== c) problems.push(`${c} is not on row ${i + 2}`); });
+    if (!rows.length || !/^ANYTHING NOT COVERED BY THE ROWS ABOVE/.test(rows[rows.length - 1][0])) problems.push('the LAST row does not carry the residual trigger');
+    const ord = section.match(/\*\*(\d+) rows, read IN ORDER, and row (\d+) is RESIDUAL\*\*/);
+    if (!ord) problems.push('no derived row-count / RESIDUAL sentence found in the prose');
+    else if (Number(ord[1]) !== rows.length || Number(ord[2]) !== rows.length) problems.push(`prose says ${ord[1]} rows and row ${ord[2]} residual; the table has ${rows.length}`);
+    return problems;
+  };
+  const ROUTE_CMDS = SESSION_ROUTES.map((r) => r.command);
+  {
+    const problems = routingRowProblems(routing, ROUTE_CMDS);
+    assert(
+      problems.length === 0,
+      `session routing: the ASSEMBLED table is ${ROUTE_CMDS.length + 1} ordered rows — the no-route row first and the only command-less one, each route on the row its constant claims, the LAST row RESIDUAL, and the prose ordinal DERIVED from the rendered row count${problems.length ? ` [${problems.join('; ')}]` : ''}`,
+    );
+    // MUTATION PROOF (a): the exact drift the retired assertions passed. In-memory copy only —
+    // never a committed fixture, which rule 3 forbids mutating.
+    const prepended = routing.replace(
+      `|---|---|\n| ${SESSION_NO_ROUTE.trigger} |`,
+      `|---|---|\n| a SYNTHETIC row prepended by the gate | \`${SESSION_ROUTES[0].command}\` |\n| ${SESSION_NO_ROUTE.trigger} |`,
+    );
+    assert(
+      prepended !== routing && routingRowProblems(prepended, ROUTE_CMDS).length > 0,
+      'session routing (MUTATION): prepending a row WITHOUT updating the prose ordinal goes RED — this is the drift that passed every retired assertion while telling each session the wrong row was residual',
+    );
+    // MUTATION PROOF (b) — NON-VACUITY. The assertions must not pass on a table whose
+    // no-route row is simply absent (Required Assertions #6).
+    const withoutRow1 = routing.replace(`| ${SESSION_NO_ROUTE.trigger} | ${SESSION_NO_ROUTE.route} |\n`, '');
+    assert(
+      withoutRow1 !== routing && routingRowProblems(withoutRow1, ROUTE_CMDS).length > 0,
+      'session routing (MUTATION): deleting the no-route row goes RED — the row assertions cannot pass vacuously on the old two-row table',
+    );
+  }
+  // Row 1 carries NO mutating verb and NO backticked slash-name (Required Assertions #4, #8).
+  // The mutating half of the row was CUT: the danger-surface guard is indexed on file paths in
+  // a diff and this row is evaluated at session start with no file set, so only the phrasing —
+  // the input `dev-plan.md:97` documents as unusable — would have been available to bound it.
+  // The slash-name half is a hard lint constraint: check 8b regexes every `` `/name` `` in this
+  // region against `EMITTED_COMMANDS`, so `` `/none` `` would fail every adopter's gate.
+  {
+    const mutating = (SESSION_NO_ROUTE.trigger.match(/\b(delete|move|rename|revert|regenerate)\b/gi) || []);
+    assert(
+      mutating.length === 0 && !/`\/[a-z0-9-]+`/.test(SESSION_NO_ROUTE.trigger) && !/`\/[a-z0-9-]+`/.test(SESSION_NO_ROUTE.route),
+      `session routing: the no-route row's trigger names no MUTATING verb (delete/move/rename/revert/regenerate) and neither of its cells carries a backticked slash-name${mutating.length ? ` [found: ${mutating.join(', ')}]` : ''}`,
+    );
+  }
   // /dev-loop is NOT a destination (owner decision, 2026-08-01). Asserted in BOTH directions:
   // no table ROW may route there, and the payload must SAY why, because a table that merely
   // omits it leaves the model to guess whether the omission was an oversight.
@@ -3114,6 +3176,48 @@ function assert(cond, desc) {
     'session routing: the payload asks for the fired command AND its provenance (hook-routed vs owner-invoked) to be recorded in the session working notes — /advise is read-only by gate assertion, so a committed attestation record it wrote itself was never an option',
   );
 
+  // --- THE NO-ROUTE ROW's supporting prose (spec Required Assertions #3, #5, #7). Each of
+  //     these is load-bearing, none is decoration:
+  //     • the SEMANTIC-state test, because a bytes-on-disk rule forbids the row's OWN headline
+  //       example — running the suite writes `target/`, caches and snapshots, so "report the
+  //       build results" was simultaneously named as this row and excluded from it. All four
+  //       probes found this independently; the gitignored-byproduct carve-out is the fix.
+  //     • the CAPABILITY test, because grammar alone is gameable: "change 448 to 464",
+  //       "what's the correct figure?" and "does the run print 464?" are one intent that word
+  //       choice alone sends to three different rows.
+  //     • the COMPOUND-message rule, because splitting a mixed message and routing the halves
+  //       separately is a general skip-the-gate lever — any change request can be prefixed
+  //       with a verifiable claim.
+  //     • the ANNOUNCEMENT carve, because `SESSION_ANNOUNCE` fires "when this block is why you
+  //       enter a veriloop command" and this row enters none; without the carve the section
+  //       reads as "you must always be able to name a skill", which is a thumb on the scale
+  //       toward the rows that name one. This row deposits no spec and no history record — the
+  //       announced sentence and the session note are the ONLY trace it ever happened, and
+  //       that is an accepted risk, not a solved one.
+  //     Asserted on the RENDERED payload here and on the COMMITTED one below, for the reason
+  //     the whole doubling exists: a template-only check leaves a never-re-rendered bundle green.
+  const NO_ROUTE_PROSE = [
+    ['the SEMANTIC-state test', /no-route row's test is SEMANTIC state, not bytes/i],
+    ['the gitignored-byproduct carve-out', /Explicitly permitted in the no-route row:\*\* incidental, gitignored, reproducible byproducts/i],
+    ['`target/` named as a permitted byproduct', /build caches, `target\/`, test binaries/],
+    ['the capability test', /if\s+answering requires a tool that WRITES something reviewable, it is the residual row/i],
+    ['the compound-message rule (MOST-SEVERE WINS)', /Compound messages: MOST-SEVERE WINS/],
+    ['the no-route row ANNOUNCEMENT carve', /The no-route row is announced too\.\*\* It enters no command/],
+    ['the no-route row SESSION-NOTES clause', /when the no-route row matched, \*\*that no command fired and\s+what was read\*\*/i],
+    ['the row-1 OVER-claim red flag', /I can just do this one myself/],
+  ];
+  const noRouteProseProblems = (payload) => {
+    const flat = payload.replace(/\n/g, ' ');
+    return NO_ROUTE_PROSE.filter(([, re]) => !re.test(flat)).map(([label]) => label);
+  };
+  {
+    const missing = noRouteProseProblems(routing);
+    assert(
+      missing.length === 0,
+      `session routing: the no-route row carries every clause that makes it decidable and auditable — the semantic-state test, the gitignored-byproduct carve-out, the capability test, the most-severe-wins compound rule, the announcement carve, the session-notes clause and the OVER-claim red flag${missing.length ? ` [missing: ${missing.join('; ')}]` : ''}`,
+    );
+  }
+
   // --- the same properties on the COMMITTED artifacts. The committed/rendered doubling
   //     Phase 2 established: a template edit must not leave this repo's own files green
   //     while every future adopter loses the invariant.
@@ -3131,17 +3235,33 @@ function assert(cond, desc) {
       /<ALREADY-ROUTED>/.test(cr) && /already executing a\s+veriloop command/i.test(cr) && /handoff is not a re-entry/i.test(cr.replace(/\n/g, ' ')),
       'session routing (COMMITTED): session-routing.md carries the <ALREADY-ROUTED> clause, scoped to the command IN FLIGHT so the /dev-plan → /dev-loop handoff stays reachable',
     );
-    assert(/you do not have a choice/i.test(cr) && RATIONALIZATIONS.every((f) => cr.includes(f)), 'session routing (COMMITTED): the no-choice directive and all four rationalizations are present');
+    // The no-choice directive on the COMMITTED payload, SCOPED — same replacement as on the
+    // rendered copy: the unqualified "about routing through them" form is FALSE under the
+    // no-route row, so it is pinned ABSENT and the true scoped form is pinned PRESENT.
+    assert(
+      /\*\*when a row of the table below names a command, you do not have a choice\*\* about routing/i.test(cr.replace(/\n/g, ' '))
+        && !/\*\*you do not have a choice\*\* about routing through them/i.test(cr.replace(/\n/g, ' '))
+        && RATIONALIZATIONS.every((f) => cr.includes(f)),
+      `session routing (COMMITTED): the no-choice directive is scoped to the rows that name a command (the unqualified form the no-route row falsifies is gone) and all ${RATIONALIZATIONS.length} rationalizations are present`,
+    );
     assert(SESSION_ROUTES.every((r) => cr.includes(`\`${r.command}\``)), 'session routing (COMMITTED): both routes are present');
-    // The two-row design on the COMMITTED payload — the file the hook actually injects into
+    // The ASSEMBLED table on the COMMITTED payload — the file the hook actually injects into
     // this repo's own sessions. Template-only assertions leave a never-re-rendered bundle green.
     const crTable = (cr.match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
+    const crRowProblems = routingRowProblems(cr, ROUTE_CMDS);
     assert(
       crTable.split('\n').filter((l) => l.trim().startsWith('|') && l.includes('`/dev-loop`')).length === 0
-        && /row 2 is RESIDUAL/.test(crTable)
+        && crRowProblems.length === 0
         && !/before you spend tokens/.test(cr),
-      'session routing (COMMITTED): this repo\'s own payload has NO direct /dev-loop route, a RESIDUAL row 2, and no "before you spend tokens" claim',
+      `session routing (COMMITTED): this repo's own payload has NO direct /dev-loop route, an assembled table whose no-route row is first and whose LAST row is residual with a DERIVED prose ordinal, and no "before you spend tokens" claim${crRowProblems.length ? ` [${crRowProblems.join('; ')}]` : ''}`,
     );
+    {
+      const missing = noRouteProseProblems(cr);
+      assert(
+        missing.length === 0,
+        `session routing (COMMITTED): this repo's own payload carries the no-route row's semantic-state test, gitignored-byproduct carve-out, capability test, most-severe-wins rule, announcement carve, session-notes clause and OVER-claim red flag${missing.length ? ` [missing: ${missing.join('; ')}]` : ''}`,
+      );
+    }
     assert(
       /## Say that you routed/.test(cr)
         && /routed by veriloop's SessionStart hook, not requested directly/.test(cr)
@@ -3318,6 +3438,28 @@ function assert(cond, desc) {
   );
 
   for (const d of [rustDir, mixDir, nodeDir]) rmSync(d, { recursive: true, force: true });
+}
+
+// --- the PUBLISHED ROUTE-COUNT, pinned to the table this repo actually emits. Same shape as
+//     the gate-figure pin below and for the same reason: README, CHANGELOG and SECURITY each
+//     published "two rows" for a table that is no longer two rows, and three copies of one
+//     number agree perfectly while all three are stale. Every doc must carry the canonical
+//     phrase, and NOT-FOUND is a FAILURE — a pin that silently skips when the sentence is
+//     reworded away is the false-green this whole change exists to remove. ---
+{
+  const renderedSection = (renderSessionRouting().match(/## Where to route\n([\s\S]*?)(?=\n## )/) || [, ''])[1];
+  const renderedRows = renderedSection.split('\n').filter((l) => l.trim().startsWith('|')).length - 2;
+  const ROUTE_COUNT_DOCS = ['README.md', 'CHANGELOG.md', 'SECURITY.md'];
+  const wrong = [];
+  for (const f of ROUTE_COUNT_DOCS) {
+    const m = readFileSync(join(here, '..', f), 'utf8').match(/the routing table has (\d+) rows/);
+    if (!m) wrong.push(`${f}: canonical phrase NOT FOUND`);
+    else if (Number(m[1]) !== renderedRows) wrong.push(`${f}: publishes ${m[1]}`);
+  }
+  assert(
+    renderedRows > 0 && wrong.length === 0,
+    `published docs: every doc that describes the routing table publishes the row count this repo actually emits (${renderedRows})${wrong.length ? ` [${wrong.join('; ')}]` : ''}`,
+  );
 }
 
 // --- the PUBLISHED gate figure, pinned to what this run actually PRINTS. The check in the

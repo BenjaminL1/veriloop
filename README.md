@@ -214,6 +214,15 @@ absolute path is ever baked in.
 **On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
 session to **bias** routing toward `/advise` and `/dev-plan`, and to ask the model to say
 plainly when this block — rather than you — is why it entered a veriloop command.
+**The first row routes nowhere.** As emitted, the routing table has 3 rows, and the first
+names no command at all: a request for information that already exists — report the test
+results, summarize a file, answer a question about git state — is answered directly, because
+running *"show me the test results"* through a spec interview is absurd. The test is
+**semantic state, not bytes**: if carrying the request out changes anything you would review,
+ship, or find in a diff, it is not that row, however small it looks. Gitignored, reproducible
+byproducts (`target/`, build caches, test binaries) explicitly do not count. That row deposits
+no spec and no history record, so it leaves no durable trace beyond the one sentence the
+payload asks the session to write — a known cost, not a solved problem.
 **`/dev-loop` is deliberately NOT a routing destination**: it is reached only through
 `/dev-plan`, which decides how much process a change gets and can hand a genuine one-liner
 straight through with a cited danger surface — the gate runs either way. That table used to
@@ -372,7 +381,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 464 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 469 and `CHANGELOG.md` names every
 removal individually. The one cap the owner later wanted back came back as a **prompt**: a
 re-render of `domain/expert.md` more than 20% longer than the size recorded in
 `veriloop-manifest.json` makes `generate` ask you to re-read the file. It has no ceiling and
@@ -392,8 +401,8 @@ implementing orchestrator rather than the owner and recorded for confirm-or-reve
 only**; `/dev-plan`, `/review` and the gate all still read it, and assertions pin both the
 committed files and the templates they are rendered from. (`/posture` never loaded it — its
 only mention is a write prohibition, and it is guarded as exactly that.) **Phase 3 ships
-too:** a `SessionStart` hook that **biases** the session toward `/advise`, `/dev-plan` and
-`/dev-loop` — three plain files, a `<SUBAGENT-STOP>` guard so no council seat or review lens
+too:** a `SessionStart` hook that **biases** the session toward `/advise` and `/dev-plan` —
+three plain files, a `<SUBAGENT-STOP>` guard so no council seat or review lens
 inherits the routing, and preserve-or-write on `.claude/settings.json` (an existing one is
 never merged; a complete hook-only settings.json is printed for you to merge the
 `SessionStart` entry out of). The payload also **asks** the session to announce a hook-routed

@@ -80,7 +80,10 @@ discovered:
   auto-compaction), and re-injecting "route FIRST, then work" into a session that is already
   executing `/dev-loop` is an instruction to re-enter the command it is running.
 - **What it does to the session.** It injects prose that **biases** the model toward
-  `/advise`, `/dev-plan` and `/dev-loop`. It is a prompt, not a control: it cannot compel a
+  `/advise` and `/dev-plan` — and, on the no-route row, toward answering a read directly with
+  no command at all. `/dev-loop` is **not** a routing destination: it is reached only through
+  `/dev-plan`, and `lint-bundle` fails any payload whose table routes to it. It is a prompt,
+  not a control: it cannot compel a
   route, and the commands are invocable by hand with or without it. The payload opens with a
   `<SUBAGENT-STOP>` guard so subagents — council seats, review lenses, `/dev-loop`
   implementers — do not inherit the routing, and an `<ALREADY-ROUTED>` clause so a main
@@ -264,7 +267,11 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   it is machine-owned and its entire text is injected into every session verbatim, so a hand
   edit there is an injection into every session; a routing payload missing its
   `<SUBAGENT-STOP>` guard, its `<ALREADY-ROUTED>` clause, one of its two routes, its
-  announcement requirement or its session-notes requirement; a
+  announcement requirement or its session-notes requirement; a payload whose route table is
+  malformed — the routing table has 3 rows, the first naming no command and the last being
+  RESIDUAL, and the prose ordinal is checked against the rows actually rendered rather than
+  against a literal, because a table that says the wrong row is residual makes the last route
+  unreachable while every presence check stays green; a
   payload routing the session to a command veriloop does not emit; or a missing hook script.
   **These payload checks run whether or not the hook is wired**, because the payload is
   emitted either way and goes live the moment you merge the entry (or wire it in

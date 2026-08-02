@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — routing redesign: two rows, and `/dev-loop` is no longer a destination
+## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 
 **Motivated by probe evidence, not review taste.** Three routing probes were run against the
 emitted payload on 2026-08-01, each given the payload verbatim plus one owner message. The
@@ -16,9 +16,52 @@ The announcement requirement, added the same day, worked **3/3** and is unchange
 
 **Row 1 swallowed rows 2 and 3.** It was defined as "anything that is not a direct
 implementation request" — also true of a feature request. Two rows matched every message and
-no precedence rule existed, so every probe could defend `/advise`. **The table is now two
-rows and row 2 is RESIDUAL by construction** — defined as the complement of row 1, which
-cannot be swallowed.
+no precedence rule existed, so every probe could defend `/advise`. **The LAST row is now
+RESIDUAL by construction** — defined as the complement of the rows above it, which cannot be
+swallowed.
+
+**A no-route row for reads.** From this change the routing table has 3 rows, and the first one
+names no command: a request for information that ALREADY EXISTS, where nothing the owner would review
+changes, is answered directly. *"Running 'show me the test results' through `/dev-plan` is
+genuinely absurd"* is the whole basis for it. Three things make it decidable rather than a
+vibe. The test is **SEMANTIC state, not bytes** — if carrying the request out changes anything
+the owner would review, ship, or find in a diff, it is never this row, however precisely the
+operation was named; **gitignored, reproducible byproducts are explicitly carved out**
+(`target/`, build caches, test binaries), because a bytes-on-disk rule forbids the row's own
+headline example, running the suite writing `target/`. The **capability test** is the
+anti-rephrasing backstop: *"change 448 to 464"*, *"what's the correct figure?"* and *"does the
+run print 464?"* are one intent in three sentences, so if answering requires a tool that
+WRITES something reviewable it is the residual row whatever the sentence looks like. And
+compound messages take **most-severe-wins**, because any change request can be prefixed with a
+verifiable claim.
+
+**The MUTATING half was cut.** The owner's original framing put `delete a file` in this row.
+The danger-surface guard that would have bounded it is indexed on FILE PATHS in a diff, and
+this row is evaluated at session start with no file set — so only the phrasing would have been
+available, the one input `dev-plan.md:97` documents as unusable. It also fails safe in the
+right direction: a misclassified read costs one extra `/dev-plan` turn the owner can see; a
+misclassified write is silent, ungated and irreversible.
+
+**Two claims the new row falsified.** *"You do not have a choice about routing through them"*
+is now scoped — the obligation attaches to the rows that NAME a command, and the no-route row
+is stated as the explicit exception. And the announcement requirement gets an explicit carve,
+because it fired "when this block is why you enter a veriloop command" and this row enters
+none; without the carve it reads as *"you must always be able to name a skill"*, a thumb on
+the scale toward the rows that do. **Row 1 is still announced and session-noted** — it
+deposits no spec and no history record, so that sentence is the only trace it happened. This
+is an accepted cost, not a solved problem.
+
+**The assertions took the ASSEMBLED table as their subject, not the constants.** The retired
+pair checked `SESSION_ROUTES.length === 2` and grepped the literal `row 2 is RESIDUAL`, and
+the drift lens RAN the mutation they miss: prepending a row without touching the prose passed
+both, every lint predicate and byte-equality, while the payload told each session that
+`/advise` was residual — making `/dev-plan` unreachable and resurrecting the swallow defect.
+Both were **replaced, not bumped**; a bumped literal re-creates the same false-green one row
+later. Ordinals are now DERIVED from the rendered row count in the generator, and both gates
+parse the rendered rows and check the prose ordinal against them — `lint-bundle` from its own
+`ROUTED_COMMANDS`, with no import, so rule 9's two-witness property survives. Two mutation
+proofs run in-memory on every gate: prepend a row without touching the prose (RED), and delete
+the no-route row (RED, non-vacuity).
 
 **`/dev-loop` is no longer a routing destination.** It is reached only through `/dev-plan`.
 There was no proportionality valve anywhere in the old table; there is one now, and it lives
@@ -59,7 +102,7 @@ why it is not a destination.
 commands"; the disable path takes **both**. README additionally published that the hook
 biases routing toward `/dev-loop`, which `lint-bundle` now fails the build for.
 
-Gate: **253 → 464**, +16 assertions this change. `lint` 30 ok / 0 warn / 0 fail.
+Gate: **253 → 469**, +21 assertions this change. `lint` 30 ok / 0 warn / 0 fail.
 
 ## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–3 of `.claude/veriloop/specs/domain-expert-persona.md`)
 
@@ -724,7 +767,7 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 464, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 469, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their

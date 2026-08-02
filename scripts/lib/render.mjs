@@ -775,35 +775,71 @@ export const CLAUDE_SETTINGS = '.claude/settings.json';
 // `EMITTED_COMMANDS` instead of importing this, and FAILS when the two disagree in
 // either direction — a bundle may only be routed to a command veriloop actually emits.
 //
-// TWO rows since 2026-08-01, and row 2 is RESIDUAL by construction (owner decision).
-// The three-row table was probe-tested and row 1 SWALLOWED the other two: "anything that
-// is not a direct implementation request" is also satisfied by a feature request, and the
-// table carried no precedence rule, so every probe could defend `/advise`. A residual row
-// cannot be swallowed — it is defined as the complement of the row above it.
+// The LAST row is RESIDUAL by construction (owner decision, 2026-08-01). The retired table
+// had `/advise` on "anything that is not a direct implementation request", which a feature
+// request ALSO satisfies, and carried no precedence rule, so every probe could defend
+// `/advise`. A residual row cannot be swallowed — it is defined as the complement of the
+// rows above it.
 //
 // `/dev-loop` is deliberately NOT a destination. It used to be, and "fix the typo in
 // README line 40" routed into a full worktree + gate + lens + auto-fix drive with no
 // proportionality valve anywhere. The valve now lives INSIDE `/dev-plan` (judge triviality,
 // cite a danger surface, hand off), which is why routing here can be unconditional.
+//
+// ROW COUNTS AND ORDINALS ARE DERIVED, NEVER TYPED — see `renderSessionRouting()`. The drift
+// probe ran the mutation: prepending a row without touching the prose passed every lint
+// predicate and every route assertion while the payload told each session that `/advise` was
+// residual, making `/dev-plan` unreachable. Anything in this file that says "row N" must be
+// computed from `rows.length`.
 export const SESSION_ROUTES = [
-  { trigger: 'an OPEN-ENDED QUESTION — you are being asked to think, weigh, compare or advise, and nothing is being asked to change', command: '/advise' },
-  { trigger: 'ANYTHING NOT COVERED BY THE ROW ABOVE — a feature request, an implementation request, a bug report, a one-line fix, a typo', command: '/dev-plan' },
+  { trigger: 'an OPEN-ENDED QUESTION — you are asked to think, weigh, compare or advise; the answer does not exist yet and has to be reasoned into being', command: '/advise' },
+  { trigger: 'ANYTHING NOT COVERED BY THE ROWS ABOVE — a feature request, an implementation request, a bug report, a one-line fix, a typo, and anything that changes reviewable state', command: '/dev-plan' },
 ];
 
-// The four rationalizations a model reaches for when it is about to skip the route.
+// Row 1: the NO-ROUTE row (spec `session-routing-redesign.md`, ratified 2026-08-02). It lives
+// in its OWN constant and deliberately NOT in `SESSION_ROUTES`, because `SESSION_ANNOUNCE`
+// reads `routes[0]` / `routes[1]` positionally — folding this row in renders `` `undefined` ``
+// into the payload, which the drift lens verified by executing both variants.
+//
+// Its cell carries NO backticked slash-name: `lint-bundle.mjs` check 8b regexes
+// `` /`\/([a-z0-9-]+)`/g `` over the route region and fails on any name veriloop does not
+// emit, so `` `/none` `` would turn every adopter's gate red.
+//
+// The MUTATING half of the owner's original framing (delete / move / rename / revert /
+// regenerate) was cut: the danger-surface guard that would have bounded it is indexed on
+// FILE PATHS in a diff, and this row is evaluated at session start with no file set, so only
+// the phrasing — the input `dev-plan.md:97` documents as unusable — would have been
+// available. A misclassified read costs one extra `/dev-plan` turn the owner can see; a
+// misclassified write is silent, ungated and irreversible.
+export const SESSION_NO_ROUTE = {
+  trigger: 'a request for INFORMATION THAT ALREADY EXISTS, where nothing the owner would review changes — report test or build results, read or summarize a file, answer a question about git state, run a command whose only effect is its output',
+  route: '**no route — answer directly**',
+};
+
+// The rationalizations a model reaches for when it is about to skip the route.
 // Named verbatim, because a red flag that is not named is not pre-empted.
 //
 // The moves are deliberately split across BOTH routes: the probes showed a payload whose
 // worked examples all name `/advise` biases a pattern-matcher toward `/advise`.
 // "the skill is overkill" no longer answers "you are not the one who decides that" — under
-// the two-row table triviality IS decided, by `/dev-plan`, with a cited danger surface. The
+// this table triviality IS decided, by `/dev-plan`, with a cited danger surface. The
 // old wording foreclosed the exit that now exists, so the model had nowhere to put a correct
 // observation except into skipping the route.
+//
+// The flags name ROUTES, never ORDINALS. An ordinal typed into a flag body is the same
+// silent-rot class the row prose has, and worse: the selftest greps only the flag NAME, so a
+// body can go false with zero failures. Adding a row above one of these used to make
+// "a question is row 1" a lie that nothing caught.
+//
+// The last flag defends the no-route row from the OTHER side. Four of the five push toward
+// more process; without an over-claim flag the payload only ever argues one way, and the
+// no-route row is the one whose misuse is silent and ungated.
 const SESSION_RED_FLAGS = [
-  ['"this is just a simple question"', 'If nothing is being asked to CHANGE, a question is row 1 — route to `/advise`. If something is, it is row 2 and the question framing is not a reason to skip it.'],
+  ['"this is just a simple question"', 'A question that asks you to THINK — weigh, compare, advise, reason an answer into being — is the `/advise` row. A question whose answer ALREADY EXISTS, and answering it changes nothing, is the no-route row: answer it. If something is being asked to CHANGE, it is the residual row and the question framing is not a reason to skip it.'],
   ['"let me explore the codebase first"', 'Both routes open with their own recon — `/advise` with the repo\'s domain expert seated, `/dev-plan` with a deep-scan-grounded pass. Exploring first is doing the command\'s first step badly.'],
   ['"the skill is overkill"', 'It may well be, and `/dev-plan` is where that gets DECIDED. Route there and say why you think so; if the change really is a one-liner clear of every danger surface, `/dev-plan` cites that and hands it straight to `/dev-loop` with no interview and no spec.'],
   ['"I need more context first"', 'Getting context is what the route is for — `/advise`\'s dialogue and `/dev-plan`\'s interview both ask the owner. Ask inside the command, not instead of it.'],
+  ['"I can just do this one myself"', 'That is the no-route row\'s OVER-claim, and it is the one mistake here that is silent. The no-route row is for requests that only READ. If carrying this out changes anything the owner would review, ship, or find in a diff, it is not that row — route it, however small it looks.'],
 ];
 
 // The ANNOUNCEMENT + SESSION-NOTES clauses (owner decisions, 2026-08-01), modelled on
@@ -825,12 +861,15 @@ const SESSION_RED_FLAGS = [
 // write a history record of its own invocation, and giving it write access to do so would
 // trade a real covenant for a bookkeeping entry.
 // The worked example names the RESIDUAL route, and the owner-typed example names the other
-// one, so the section demonstrates both rows. Every example naming `/advise` was one of the
-// four places the probes found biasing a pattern-matcher toward it.
-// "or decline to route at all" is GONE: with the proportionality valve inside `/dev-plan`
-// there is no case the table cannot serve, and an escape hatch beside "you do not have a
-// choice" is a contradiction the reader gets to resolve either way. What remains is the
-// truth-telling half — if you route somewhere else anyway, SAY so.
+// COMMAND-BEARING one, so the section demonstrates both routes without leaning on either.
+// Every example naming `/advise` was one of the four places the probes found biasing a
+// pattern-matcher toward it. The NO-ROUTE row gets its own carve-out below, because a
+// section that only ever demonstrates naming a command reads as "always name a command".
+// "or decline to route at all" is GONE: the proportionality valve lives inside `/dev-plan`,
+// so no case is unservable. What remains is the truth-telling half — if you route somewhere
+// else anyway, SAY so. That is NOT the deleted hatch: the no-route row is the table
+// deciding, not the reader opting out, which is why the mandate is scoped to rows that
+// NAME a command rather than stated unconditionally.
 const SESSION_ANNOUNCE = (routes) =>
   `## Say that you routed, and say who routed you\n\n` +
   `When this block is why you enter a veriloop command, **announce it in your reply before you\n` +
@@ -843,13 +882,30 @@ const SESSION_ANNOUNCE = (routes) =>
   `this block and route somewhere OTHER than the table sends you, say that and say why.\n` +
   `The owner never sees this payload. An unannounced route is a reply shaped by an instruction\n` +
   `they did not write and cannot audit.\n\n` +
+  `**The no-route row is announced too.** It enters no command, so there is nothing to name —\n` +
+  `announce it anyway, in one sentence: *the no-route row matched, and here is what I read to\n` +
+  `answer.* This is the ONE carve-out in the requirement above, and it is stated because without\n` +
+  `it the instruction reads as "you must always be able to name a skill" — a thumb on the scale\n` +
+  `toward the rows that name one. The no-route row leaves no spec and no history record behind;\n` +
+  `this sentence is the only trace it ever happened.\n\n` +
   `Then note it in the session's working notes / summary — the running record of what this\n` +
   `session did — recording **which veriloop command fired** and **whether this block routed it or\n` +
-  `the owner invoked it directly**. One line is enough. \`/advise\` is read-only and cannot write a\n` +
+  `the owner invoked it directly**, or, when the no-route row matched, **that no command fired and\n` +
+  `what was read**. One line is enough. \`/advise\` is read-only and cannot write a\n` +
   `record of its own invocation, so the session notes are the only place this is kept.\n\n`;
 
 export function renderSessionRouting() {
-  const routes = SESSION_ROUTES.map((r) => `| ${r.trigger} | \`${r.command}\` |`).join('\n');
+  // The ASSEMBLED table, built once and rendered from — the no-route row first, then every
+  // `SESSION_ROUTES` entry in order. Every ordinal below is DERIVED from `rows.length`; none
+  // is typed. See the note on `SESSION_ROUTES`: the mutation that prepends a row without
+  // touching the prose is the defect this shape exists to make impossible.
+  const rows = [
+    { trigger: SESSION_NO_ROUTE.trigger, cell: SESSION_NO_ROUTE.route },
+    ...SESSION_ROUTES.map((r) => ({ trigger: r.trigger, cell: `\`${r.command}\`` })),
+  ];
+  const n = rows.length;
+  const routes = rows.map((r) => `| ${r.trigger} | ${r.cell} |`).join('\n');
+  const routeWord = SESSION_ROUTES.length === 2 ? 'both' : `all ${SESSION_ROUTES.length}`;
   const flags = SESSION_RED_FLAGS.map(([thought, move]) => `| ${thought} | ${move} |`).join('\n');
   return (
     `# veriloop session routing\n\n` +
@@ -870,16 +926,38 @@ export function renderSessionRouting() {
     `</ALREADY-ROUTED>\n\n` +
     `<EXTREMELY-IMPORTANT>\n` +
     `This repo has veriloop installed. Its commands are the entry points for real work here, and\n` +
-    `**you do not have a choice** about routing through them. Route FIRST, then work. Name the\n` +
-    `route you took in your first sentence: neither route writes code — \`/advise\` is read-only and\n` +
-    `\`/dev-plan\` writes only a spec the owner ratifies — so saying it gives the owner a turn to\n` +
+    `**when a row of the table below names a command, you do not have a choice** about routing\n` +
+    `through it. Route FIRST, then work. The one exception is the **no-route row**, which names no\n` +
+    `command: a request that only READS is answered directly. That is the table deciding, not you\n` +
+    `deciding to skip it — you still have to match a row, and you still have to say which one.\n` +
+    `Name what you did in your first sentence: neither route writes code — \`/advise\` is read-only\n` +
+    `and \`/dev-plan\` writes only a spec the owner ratifies — so saying it gives the owner a turn to\n` +
     `send you elsewhere before anything is built.\n` +
     `</EXTREMELY-IMPORTANT>\n\n` +
     `## Where to route\n\n` +
     `| When the owner's message is | Route to |\n|---|---|\n${routes}\n\n` +
-    `**Two rows, read IN ORDER, and row 2 is RESIDUAL** — it takes everything row 1 does not, so\n` +
-    `there is always exactly one answer and never a judgment call about which row wins. A message\n` +
-    `that is both a question and a request to change something is a request: row 2.\n\n` +
+    `**${n} rows, read IN ORDER, and row ${n} is RESIDUAL** — it takes everything rows 1–${n - 1}\n` +
+    `do not, so there is always exactly one answer and never a judgment call about which row wins.\n\n` +
+    `**The no-route row's test is SEMANTIC state, not bytes.** If carrying out the request changes\n` +
+    `anything the owner would review, ship, or find in a diff — a tracked file, the index, a ref, a\n` +
+    `worktree, a deliverable — it is NEVER the no-route row, however precisely the operation was\n` +
+    `named. Mutating operations — delete, move, rename, revert, regenerate — take the residual row,\n` +
+    `where triviality gets decided with a cited danger surface and the gate still runs.\n` +
+    `**Explicitly permitted in the no-route row:** incidental, gitignored, reproducible byproducts\n` +
+    `of a read-only command — build caches, \`target/\`, test binaries, coverage output, temp files.\n` +
+    `Running the suite writes them, and *"report the build results"* is this row's own headline\n` +
+    `example; delete them and re-run and the state is identical, and none of it appears in a diff,\n` +
+    `so there is nothing there to gate.\n\n` +
+    `**The capability test — the anti-rephrasing backstop.** Grammar alone is gameable: *"change\n` +
+    `448 to 464"*, *"what's the correct figure?"* and *"does the run print 464?"* are one intent in\n` +
+    `three sentences, and word choice alone would send them to three different rows. So: **if\n` +
+    `answering requires a tool that WRITES something reviewable, it is the residual row — whatever\n` +
+    `the sentence looks like.** Capability governs; grammar does not.\n\n` +
+    `**Compound messages: MOST-SEVERE WINS.** A message spanning rows takes the highest row any\n` +
+    `part of it needs. *"Show me the test results and fix the failures"* is the residual row,\n` +
+    `entire. Splitting a mixed message and routing the halves separately is a general\n` +
+    `skip-the-gate lever, because any change request can be prefixed with a verifiable claim. The\n` +
+    `read still happens, inside the routed command's own recon.\n\n` +
     `**\`/dev-loop\` is NOT a routing destination** — you never send a session there from this\n` +
     `table. It is reached only through \`/dev-plan\`, which decides how much process a change gets:\n` +
     `the full spec for anything real, and for a genuine one-liner clear of every danger surface a\n` +
@@ -890,12 +968,12 @@ export function renderSessionRouting() {
     `## Red flags — thoughts that mean you are about to skip the route\n\n` +
     `| If you catch yourself thinking | The correct move |\n|---|---|\n${flags}\n\n` +
     `## Turning this off\n\n` +
-    `Delete the \`SessionStart\` entry from \`.claude/settings.json\`. That removes **both**\n` +
+    `Delete the \`SessionStart\` entry from \`.claude/settings.json\`. That removes **${routeWord}**\n` +
     `routes at once — there is no partial disable — and the commands remain invocable by hand.\n` +
     `Deleting THIS file is not a disable: it is **machine-owned** and rewritten on the next\n` +
     `\`/veriloop\` run, so routing would silently resume. Hand edits here are overwritten for the\n` +
-    `same reason — change \`SESSION_ROUTES\` / \`SESSION_RED_FLAGS\` / \`SESSION_ANNOUNCE\` in the\n` +
-    `generator instead.\n`
+    `same reason — change \`SESSION_ROUTES\` / \`SESSION_NO_ROUTE\` / \`SESSION_RED_FLAGS\` /\n` +
+    `\`SESSION_ANNOUNCE\` in the generator instead.\n`
   );
 }
 
@@ -927,7 +1005,7 @@ export function renderSessionStartHook() {
 // flight. Claude Code documents four; `resume` and `compact` are DELIBERATELY excluded.
 // Both fire in the middle of live work: `compact` on an auto-compaction and `resume` on
 // `claude --continue` / `--resume`. A `/dev-loop` that auto-compacts mid-run would be handed
-// "you do not have a choice about routing through them. Route FIRST, then work" — an
+// the routing mandate plus "Route FIRST, then work" — an
 // instruction to re-enter the command it is currently executing, and a contradiction of the
 // post-compaction rule that a resumed session continues the task in flight. `<SUBAGENT-STOP>`
 // does not cover it: the re-entrant session is the MAIN one. The payload's `<ALREADY-ROUTED>`
