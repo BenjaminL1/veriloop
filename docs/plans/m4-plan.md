@@ -211,3 +211,14 @@ validation) and catan dual-stack validation remain deferred as planned.
 - **§7 guardrail.** `reconcile()`, `matchesCategory`, `isCleanInvocation`, and step 3
   (detectors.mjs:467-483) are unchanged — verified in the final diff. All cargo CI-only
   adoption flows through step 0.
+
+---
+
+## Corrections — doc audit, 2026-08-02
+
+- **The version-stamp count is now SEVEN, not six (`:14`).** `veriloop_version` in
+  `.claude/veriloop/veriloop-manifest.json` joined the self-test's lockstep assertion after
+  this plan was written. Following the instruction as written bumps six files and leaves the
+  seventh behind, which fails the gate. SECURITY.md carries the current list.
+- **The Rust core slice shipped in v0.3.4, not v0.3.3 (`:176`).** v0.3.3 was the attestation
+  auto-emission release. `m5-plan.md:762` records the correct version.

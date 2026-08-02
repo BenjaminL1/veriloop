@@ -389,12 +389,14 @@ function makeWriter(outRoot, force) {
 // file cannot change without a regenerate. Growth therefore only ever happens HERE, when
 // a changed `domain.json` renders a longer artifact over the one it replaces.
 const EXPERT_GROWTH_MARGIN = 0.2;
-// 20%, and the number is a judgment about NOISE, not about a safe size. At this repo's
-// ~680-word `expert.md` a reference entry renders as one ~15-word bullet, so ordinary
-// curation of `domain.json` — add a source, add a vocabulary term — moves the render by
-// 1-3%. 20% is ~135 words: a whole new section, or a batch of eight-plus entries landing
-// at once. That is an accretion event, which is what the prompt is for. 15% (~100 words)
-// sits close enough to a routine multi-entry batch to fire on normal work, and a prompt
+// 20%, and the number is a judgment about NOISE, not about a safe size. A reference entry
+// renders as one ~15-word bullet, so ordinary curation of `domain.json` — add a source, add
+// a vocabulary term — moves the render by a percent or two whatever the persona's size.
+// 20% is a whole new section, or a batch of eight-plus entries landing at once: an
+// accretion event, which is what the prompt is for. (Deliberately stated as a RATIO with
+// no absolute word figure. This comment used to say "~680-word expert.md ⇒ 20% is ~135
+// words"; the very next commit took it to 1448 and the arithmetic silently went false.)
+// 15% sits close enough to a routine multi-entry batch to fire on normal work, and a prompt
 // that fires on normal work is one the owner learns to scroll past — the failure mode a
 // prompt has no defense against, unlike a cap, which is obeyed whether or not it is read.
 const measureExpert = (text) => ({ words: (text.match(/\S+/g) || []).length, bytes: Buffer.byteLength(text, 'utf8') });
@@ -507,7 +509,9 @@ function main() {
   // SessionStart routing hook (v0.5.0, Phase 3). Three plain files: the markdown
   // payload, a dependency-free node script that prints the documented SessionStart
   // envelope, and the settings entry that registers it. It BIASES the model toward
-  // /advise, /dev-plan and /dev-loop; it cannot compel one.
+  // /advise and /dev-plan — and, on the no-route row, toward answering a read directly
+  // with no command at all. /dev-loop is NOT a destination: lint-bundle fails any table
+  // row pointing at it. It cannot compel any of this.
   //
   // `.claude/settings.json` is handOnce/'starter' — PRESERVE-OR-WRITE. Absent → written.
   // Present → veriloop does NOT merge and does NOT edit (absent `--force`, which replaces

@@ -208,8 +208,9 @@ blaming your change.
 ```
 
 Emitted artifacts are **portable** — they resolve the repo root at run time via
-`$CLAUDE_PROJECT_DIR` (falling back to `git rev-parse --show-toplevel`); no
-absolute path is ever baked in.
+`$CLAUDE_PROJECT_DIR` — the emitted workflow falls back to
+`git rev-parse --show-toplevel`, and the emitted `.mjs` hook script falls back to its own
+module location; no absolute path is ever baked in.
 
 **On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
 session to **bias** routing toward `/advise` and `/dev-plan`, and to ask the model to say
@@ -459,8 +460,9 @@ guarantees worth stating up front:
   screenshot) dies or is skipped, the loop FAILS closed — a verification that
   did not run cannot vouch for anything. Only a human waiver can downgrade it.
 - **It asks before it builds — but only what it can't work out itself.** `/dev-plan`
-  recons the code first, then conducts an interleaved spec interview (≤5 questions,
-  skipped entirely when nothing is genuinely ambiguous) about scope, design forks, and
+  recons the code first, then conducts an interleaved spec interview (no fixed cap by
+  default — a repo may bake one via `interview.question_cap`, and `questions=<N>` caps a
+  single run; skipped entirely when nothing is genuinely ambiguous) about scope, design forks, and
   acceptance criteria, convenes an expert council that pressure-tests the design, and
   leaves a spec you ratify as BINDING. The reviewers treat a silent deviation from an
   explicit decision as a blocker. `/dev-loop` detects or confirms the spec; the spec

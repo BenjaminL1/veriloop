@@ -73,7 +73,7 @@ dev-loop). It emits **plain files** into the target repo:
 - **Portable output only.** Emitted artifacts use `$CLAUDE_PROJECT_DIR` (falling
   back to `git rev-parse --show-toplevel`) — NEVER an absolute path.
 - **Your edits win (asymmetric updates).** On re-run, machine sections regenerate;
-  hand-owned files (`*.overrides.md`, `constitution.md`) are preserved / merged,
+  hand-owned files (`*.overrides.md`, `constitution.md`, `.claude/settings.json`) are preserved untouched — never clobbered and never MERGED (nothing in the generator merges; `handOnce` returns early on an existing file),
   never clobbered.
 - **Never grade your own homework.** Validation runs the real commands and, in the
   full pipeline, uses a fresh-context agent — not the generator's self-report.
@@ -116,7 +116,7 @@ node SKILL_DIR/../../scripts/verify.mjs --repo "$REPO" --commands "$REPO/.claude
 ```
 - `safety=safe` → auto-run. `safety=ask` (test/build/install) → **ask the user
   first**, then re-run with `--include test,build`. `safety=never`
-  (dev/e2e/integration/deploy) → never auto-run (real side effects, e.g. e2e may
+  (dev/e2e/bench) → never auto-run (real side effects, e.g. e2e may
   hit a live DB). Commands flagged `mutates` are never run.
 - Verified commands get hard-wired into the gate; unverified ones are flagged (the
   gate still runs them for real, but with a "baseline may be red" note).
@@ -230,7 +230,7 @@ DB-touching changes:
    `SessionStart` entry into their own file — it is a whole document, so pasting it verbatim
    into a settings.json that already has a `hooks` key would give them two `hooks` keys and
    silently drop their existing hooks. Do not edit their `settings.json` for them. The hook *biases* the session
-   toward `/advise` / `/dev-plan` / `/dev-loop` — it cannot force an invocation, so do not
+   toward `/advise` / `/dev-plan` (and a no-route row that answers reads directly; `/dev-loop` is NOT a destination — it is reached only through `/dev-plan`) — it cannot force an invocation, so do not
    describe it that way.
 3. **(Full pipeline) Enrich** the machine persona `.md` files with the bespoke,
    code-cited content from your scan (phase 3) so each reviewer knows this repo's
@@ -374,7 +374,7 @@ never waive its own finding.
 
 **Why the interview lives in a command, not the workflow:** the workflow's agents are
 background subagents with **no channel to ask the owner anything**. So `/dev-plan` (main
-session) does the recon, asks only the questions it cannot derive (≤5, skipped entirely
+session) does the recon, asks only the questions it cannot derive (NO fixed cap by default; a repo may bake one via `interview.question_cap` and `questions=<N>` overrides per run — skipped entirely
 when nothing is ambiguous), convenes the expert council, and writes
 `.claude/veriloop/specs/<slug>.md`, which the owner ratifies as BINDING. `/dev-loop`
 detects or confirms that spec (a trivial change gets a confirm-and-go, not a second
@@ -385,7 +385,7 @@ BLOCKER.
 ## Guardrails
 - The domain phase is the only one that reaches the network, and only through a
   `WebFetch`-only subagent. Never fetch from the context that holds `Write`.
-- Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`,
+- Only touch the veriloop scripts and the target repo's `.claude/veriloop/**`, `.claude/settings.json` (written ONLY if absent — an existing one is never edited),
   `.claude/workflows/<repo>-dev-loop.js`, the five emitted commands
   `.claude/commands/{dev-plan,dev-loop,advise,review,posture}.md`, and the marked
   veriloop block in `.gitignore` / `.prettierignore` (owner lines outside the

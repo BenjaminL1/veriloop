@@ -6,8 +6,9 @@ violates one is a **BLOCKER**. Keep this list short and true.
 
 > Mined 2026-07-13 (self-install) from the repo's own written principles
 > (`skills/veriloop/SKILL.md` non-negotiables + guardrails) and the code that enforces
-> them — every rule cites the enforcing line. Hand-owned: three-way-merged on re-run;
-> owner edits win.
+> them — every rule cites the enforcing line. Hand-owned: once this file exists a re-run
+> never rewrites it — your edits are preserved untouched, not merged. (`--force` replaces
+> it wholesale, backing the original up to `.claude/veriloop/.backups/` first.)
 
 ## Build & correctness
 

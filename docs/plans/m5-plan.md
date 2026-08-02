@@ -777,3 +777,12 @@ checks 56 citations across the constitution, the hand-owned overrides, the emitt
    deliberately left so: it is an unratified draft recommended for send-back.
 7. **`dev-loop.md` and `review.md` carry no `allowed-tools` fence**, while `advise.md`,
    `dev-plan.md` and `posture.md` do.
+
+---
+
+## Corrections — doc audit, 2026-08-02
+
+- **The five root research reports are tracked now (`:772`).** `bakeoff-results.md`,
+  `council-research.md`, `prior-art-research.md`, `constitution-enforcement-experiment.md` and
+  `persona-debate-verdict.md` were committed in `fc378f1`. The governance question this item
+  raised is settled; the item is resolved, not outstanding.

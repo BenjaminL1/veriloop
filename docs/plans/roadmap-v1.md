@@ -414,3 +414,23 @@ notes). Actual vs planned:
 
 - **v0.3.0** — `/advise` + `/review` (the experts' second mandate: consult / lens-review, read-only, no gate authority).
 - **v0.3.5** — `/posture` — change a repo's **default** budget posture from a slash command: validates the level, edits only `budget_posture` in `interview.json` (all other keys preserved), regenerates via the sanctioned compiler (skill-relative, graceful-fail). First emitted command that writes config; `allowed-tools` scoped to `Read, Edit, Bash(node:*)`, no `model:` line. Per-run overrides remain `args.posture` on `/dev-loop`.
+
+---
+
+## Corrections — doc audit, 2026-08-02
+
+This roadmap is a historical planning document. The prose above is left as written; these
+are the places it no longer matches the shipped code, found by audit and verified against it.
+
+- **"tier × budget posture" routing (`:108`, `:309`) never shipped that way.** The emitted
+  loop routes model and effort by **phase group × posture** — `routeFor` takes a `group` and
+  has no tier parameter. Tier selects which *jobs* run (e.g. the cross-model second opinion
+  at `high`), not which model runs them. `:309`'s "from v0.4 on" is also wrong: per-phase
+  routing and `BUDGET_PRESETS` predate v0.4.
+- **The referee constraint and the held-out gold benchmark (`:63`, `:105`, `:289`) are gone.**
+  The deterministic mining line — witness-or-drop, deterministic re-verification, diversity
+  ranking, and the gold-validated scorer — was deleted wholesale in `c88f130` (v0.3.22).
+  `lint-bundle` performs no rule-ownership check; its only constitution check is existence.
+  Anything in this roadmap describing that line as a moat or a mitigation describes deleted code.
+- **`/posture` shipped in v0.3.6, not v0.3.5 (`:416`).** v0.3.5 was `/dev-plan`. This section
+  is the repo's own emitted-command ledger, so the wrong attribution propagates.

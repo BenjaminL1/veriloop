@@ -1,6 +1,8 @@
 // veriloop renderers — produce the human-readable artifacts (personas, their
 // override siblings, the starter constitution, the /dev-plan / /dev-loop / /advise
-// / /review commands) and the machine-owned config block spliced into the workflow.
+// / /review / /posture commands), the v0.5.0 SessionStart trio (the routing payload,
+// the hook script, and the starter .claude/settings.json that registers it), and the
+// machine-owned config block spliced into the workflow.
 //
 // SPINE NOTE: these personas + constitution are functional *defaults* templated
 // from detected repo facts. veriloop phases 3 (deep scan) and 4 (constitution
@@ -752,7 +754,8 @@ export function spliceAuto(template, autoBlock) {
 // SessionStart routing hook (v0.5.0, Phase 3)
 //
 // Three emitted artifacts, one mechanism. The hook BIASES the model toward
-// veriloop's three entry points at the top of a session; it cannot compel one —
+// veriloop's two command entry points at the top of a session — and, on the
+// no-route row, toward answering a read directly; it cannot compel any of it —
 // it is prose injected into context, and the commands stay model-invocable
 // either way. Say "biases"/"routes" about it, never "forces" (the compulsion
 // language inside SESSION_ROUTING is the prompting DEVICE, not a claim about it).
@@ -905,7 +908,7 @@ export function renderSessionRouting() {
   ];
   const n = rows.length;
   const routes = rows.map((r) => `| ${r.trigger} | ${r.cell} |`).join('\n');
-  const routeWord = SESSION_ROUTES.length === 2 ? 'both' : `all ${SESSION_ROUTES.length}`;
+  const routeWord = routeWordFor();
   const flags = SESSION_RED_FLAGS.map(([thought, move]) => `| ${thought} | ${move} |`).join('\n');
   return (
     `# veriloop session routing\n\n` +
@@ -988,8 +991,8 @@ export function renderSessionStartHook() {
     `// FAIL-OPEN by design: no routing doc → print nothing and exit 0. A hook that errors on\n` +
     `// every session start is worse than an inert one.\n` +
     `//\n` +
-    `// Disable by deleting the SessionStart entry from .claude/settings.json (that takes ALL\n` +
-    `// THREE routes with it — there is no partial disable).\n` +
+    `// Disable by deleting the SessionStart entry from .claude/settings.json (that takes\n` +
+    `// ${routeWordFor().toUpperCase()} routes with it — there is no partial disable).\n` +
     `import { readFileSync, existsSync } from 'node:fs';\n` +
     `import { join, dirname, resolve } from 'node:path';\n` +
     `import { fileURLToPath } from 'node:url';\n\n` +
@@ -1061,4 +1064,23 @@ export function wiresSessionHook(text) {
   return ((s.hooks || {}).SessionStart || [])
     .flatMap((g) => g.hooks || [])
     .some((h) => (h.command || '').includes(`\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}`));
+}
+
+// ---------------------------------------------------------------------------
+// The disable-path route word, DERIVED from SESSION_ROUTES rather than typed.
+//
+// A function declaration at the bottom on purpose: it hoists, so both
+// `renderSessionRouting` and `renderSessionStartHook` resolve it, and defining
+// it here shifts no line above — this file is cited by `file:line` from the
+// constitution, both hand-owned `*.overrides.md`, interview.json, the manifest,
+// SECURITY.md and README.md.
+//
+// WHY IT EXISTS: the routing payload derived this word and said "both", while the
+// emitted hook script two hundred lines away had "ALL THREE routes" typed into it —
+// left over from the retired /advise + /dev-plan + /dev-loop table. veriloop shipped
+// the two files side by side into every adopter's bundle contradicting each other on
+// the same fact. Typing a count that a constant already knows is how that happens.
+// ---------------------------------------------------------------------------
+function routeWordFor() {
+  return SESSION_ROUTES.length === 2 ? 'both' : `all ${SESSION_ROUTES.length}`;
 }

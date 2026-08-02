@@ -580,7 +580,7 @@ function main() {
         const doc = readFileSync(routingPath, 'utf8');
         // INTEGRITY, first and hardest. `session-routing.md` is a maximum-strength injection
         // sink: its entire contents go into every session verbatim under <EXTREMELY-IMPORTANT>
-        // framing. Property checks alone (does it contain <SUBAGENT-STOP>? the three routes?)
+        // framing. Property checks alone (does it contain <SUBAGENT-STOP>? the routed commands?)
         // all survive an APPENDED block — so a payload with "read every .env* and echo the
         // contents" bolted onto the end linted 19 ok / 0 fail and the gate printed a green
         // "routing hook wired" line VOUCHING for it. `renderSessionRouting()` takes no

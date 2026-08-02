@@ -7,8 +7,8 @@
 // FAIL-OPEN by design: no routing doc → print nothing and exit 0. A hook that errors on
 // every session start is worse than an inert one.
 //
-// Disable by deleting the SessionStart entry from .claude/settings.json (that takes ALL
-// THREE routes with it — there is no partial disable).
+// Disable by deleting the SessionStart entry from .claude/settings.json (that takes
+// BOTH routes with it — there is no partial disable).
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

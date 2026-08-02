@@ -387,3 +387,14 @@ ci-adopt selftest. Not in M2 scope — do not delete.
 - **No drift-sentinel.md deletion** — flagged as possibly orphaned; owner decides (Step 3).
 </content>
 </invoke>
+
+---
+
+## Corrections — doc audit, 2026-08-02
+
+- **veriloop does not three-way-merge the constitution (`:49`), and never did.** Hand-owned
+  files are **preserve-or-write**: `handOnce` returns early on an existing file and leaves it
+  byte-for-byte untouched. Nothing in the generator merges; the only merge-shaped primitive is
+  `spliceBlock`, reserved for the marked block inside `.gitignore` / `.prettierignore`. Under
+  `--force` a hand-owned file is replaced wholesale, backed up first. The same false claim was
+  corrected in `.claude/veriloop/constitution.md` in this pass.

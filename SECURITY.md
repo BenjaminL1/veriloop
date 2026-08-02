@@ -39,8 +39,14 @@ command fills uses word-boundary tool-name patterns, and `isCleanInvocation` acc
 `eslint`-adjacent typosquat) can therefore be adopted as that repo's `lint` command. veriloop
 would then run it during Phase 2 for a `safe`-tier category. **Read the generated
 `.claude/veriloop/commands.json` before trusting a bundle generated against a repo whose CI
-you do not control.** Every command carries a `source` citation naming the file and line it
-came from, precisely so this is auditable.
+you do not control.** Every command carries a `source` citation, precisely so this is
+auditable — but the citations are not uniformly `file:line`. A command **adopted from CI**
+carries `file:line (CI)` (`scripts/lib/detectors.mjs:551`). A command detected **locally**
+carries a provenance token naming the artifact that implied it — `lockfile → npm`,
+`test runner: vitest`, `tests/ directory`, `uv.lock` — which identifies the evidence but not
+always a line. veriloop's own bundle shows both forms. Stated exactly, because this sentence
+is the mitigation offered for the look-alike limitation above and it should not read stronger
+than it is.
 
 ### 2. What veriloop will and will not run
 
@@ -237,8 +243,13 @@ Subprocess use in the scripts is limited to three things:
    - Verification is **existence-level, not claim-level**: a `VERIFIED` entry resolved over
      the network; it is not evidence that the source says what the rationale says.
    - The status recomputation is narrower than "the entry's claim is never trusted" sounds.
-     The claimed `status` is discarded and recomputed as `host_allowed && http_status ===
-     200` — but `http_status` and `attempted_at` are **reported by the verification
+     The claimed `status` is discarded and recomputed (`scripts/lib/domain.mjs:532`) as the
+     conjunction of seven conditions — the run must not be `staged`, the network must have
+     been `reachable`, the URL must **not have been rewritten by sanitizing** (`!rewritten`,
+     fail-closed: a URL that changed under normalization would have its status describe a
+     different resource), the host probe must exist and admit the host, and the entry's own
+     `reachable` must not be `false` with `http_status === 200`
+     — but `http_status` and `attempted_at` are **reported by the verification
      subagent**, and since nothing in `scripts/` fetches, no deterministic component can
      re-check them. An entry on an allowlisted host reporting 200 is verified on that
      report. `references.json` carries an `attempted_at_note` saying exactly this, so the
@@ -327,7 +338,9 @@ never changes an exit code.
 
 Machine-owned files regenerate on every run. **Hand-owned files are preserved untouched** —
 `scripts/generate.mjs:351 handOnce` — which covers `constitution.md`, every
-`*.overrides.md`, `specs/*`, and (new in 0.5.0) `.claude/settings.json`. With `--force` they are
+`*.overrides.md`, and (new in 0.5.0) `.claude/settings.json`. `specs/*` is **not** in that
+list and is not written by the generator at all, at any flag: it is session-authored, and
+`--force` does not touch it. With `--force` the handOnce files are
 overwritten, backed up first (`scripts/generate.mjs:303 backup`) — including `settings.json`,
 which is why §2's preserve-or-write guarantee is stated as holding absent `--force`. Inside shared files like `.gitignore`, only the marked block
 is rewritten; your lines outside it are preserved byte for byte.
@@ -340,8 +353,11 @@ deliberate — your edits win — but it means there is no merge.
 
 Releases are tagged **`veriloop-vX.Y.Z`**. The version in `.claude-plugin/plugin.json` is
 canonical; `package.json`, both `.claude-plugin/marketplace.json` fields, the
-`VERILOOP_VERSION` constant in `scripts/generate.mjs`, and the top `CHANGELOG.md` heading
-are kept in lockstep and their agreement is machine-enforced by the self-test.
+`VERILOOP_VERSION` constant in `scripts/generate.mjs`, `veriloop_version` in
+`.claude/veriloop/veriloop-manifest.json`, and the topmost **versioned** `CHANGELOG.md`
+heading — seven stamps in all — are kept in lockstep and their agreement is
+machine-enforced by the self-test. The check matches the first `## X.Y.Z` heading, so a
+leading `## Unreleased` section is skipped rather than compared.
 
 For a reproducible install, pin by tag or by commit SHA rather than tracking a branch:
 

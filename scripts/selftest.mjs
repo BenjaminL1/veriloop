@@ -495,7 +495,7 @@ function assert(cond, desc) {
   assert(after.status !== 0, 'lint-bundle: FAILS when advise.md is deleted after generation (guards the new command surface)');
 }
 
-// --- v0.3.5: /posture — the emitted command that changes a repo's DEFAULT budget
+// --- v0.3.6: /posture — the emitted command that changes a repo's DEFAULT budget
 //     posture. Asserts the surface is emitted, its frontmatter is scoped + model-less,
 //     the linter guards it, the emitted valid-level list can't drift from BUDGET_PRESETS,
 //     the write-covenant instructions are present in emitted text (not narration), and
@@ -1147,7 +1147,7 @@ function assert(cond, desc) {
   // bench — the NEW never-tier category: detected + cited from the CI `cargo bench`
   // line, safety:never, adopted at reconcile STEP 0 (`localSame || {…from:'ci'}`) —
   // there is NO local bench candidate. §7 guardrail: this must NOT come from the
-  // documented-dead step 3 (detectors.mjs:467-483). It never enters a gate
+  // documented-dead step 3 (detectors.mjs:572 isCleanInvocation). It never enters a gate
   // (generate.mjs gateOrder allowlist) and is never auto-run (verify.mjs safety=never).
   assert(
     C.bench && C.bench.cmd === 'cargo bench' && C.bench.safety === 'never' && C.bench.from === 'ci',
@@ -1447,7 +1447,7 @@ function assert(cond, desc) {
   rmSync(tmp, { recursive: true, force: true });
 }
 
-// --- v0.3.3: /dev-plan — the fourth emitted command (recon + interleaved spec
+// --- v0.3.5: /dev-plan — the fourth emitted command (recon + interleaved spec
 //     interview + expert council → an owner-ratified BINDING spec). Companion edits
 //     shrink the other two on-ramps: /dev-loop Step 1 → spec DETECTION (spec-present
 //     / trivial confirm-and-go / non-trivial → point to /dev-plan); /advise off-ramp
@@ -2481,7 +2481,7 @@ function assert(cond, desc) {
 // this assertion was written for. Requiring the token is what makes it a guard.
 {
   // Both the SOURCES and the EMITTED ARTIFACTS are checked. Fixing a source is not
-  // enough: `generate.mjs:369-373` reads interview answers from the PRIOR MANIFEST and
+  // enough: `generate.mjs:423 interview_answers` reads them from the PRIOR MANIFEST and
   // merges `interview.json` only when `--interview` is passed, so a repair to
   // `interview.json` alone leaves the rendered personas — the files a lens actually
   // reads — still citing dead lines. That happened during this milestone.
@@ -2516,7 +2516,7 @@ function assert(cond, desc) {
   };
 
   const blobs = CITED.filter((f) => existsSync(join(here, '..', f))).map((f) => [f, readFileSync(join(here, '..', f), 'utf8')]);
-  // the roster evidence is the SOURCE the personas render from (generate.mjs:407) —
+  // the roster evidence is the SOURCE the personas render from (generate.mjs:430 applyRosterAdd) —
   // a dead citation here is re-emitted into every persona on the next regenerate
   const ivPath = join(here, '..', '.claude/veriloop/interview.json');
   if (existsSync(ivPath)) {
@@ -2525,7 +2525,7 @@ function assert(cond, desc) {
     blobs.push(['.claude/veriloop/interview.json (roster_add evidence)', ev]);
   }
   // the manifest's persisted interview_answers are the ACTUAL source a bare re-run
-  // renders from (generate.mjs:369-371) — stale evidence here is re-emitted forever
+  // renders from (generate.mjs:423 interview_answers) — stale evidence here is re-emitted forever
   const mfPath = join(here, '..', '.claude/veriloop/veriloop-manifest.json');
   if (existsSync(mfPath)) {
     const mf = JSON.parse(readFileSync(mfPath, 'utf8'));
@@ -2916,7 +2916,7 @@ function assert(cond, desc) {
 
   // --- PAYLOAD INTEGRITY. `session-routing.md` is a maximum-strength injection sink: its
   //     entire text goes into every session verbatim under <EXTREMELY-IMPORTANT> framing.
-  //     Property checks alone (is <SUBAGENT-STOP> present? the three routes?) ALL survive an
+  //     Property checks alone (is <SUBAGENT-STOP> present? the routed commands?) ALL survive an
   //     APPENDED block, so a payload with an exfiltration instruction bolted onto the end
   //     linted 19 ok / 1 warn / 0 fail, exit 0, with the gate printing a green "routing hook
   //     wired" line VOUCHING for it. `renderSessionRouting()` takes no arguments, so its
