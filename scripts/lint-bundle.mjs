@@ -470,10 +470,31 @@ function main() {
   //
   //    TWO INDEPENDENT HALVES, and the split is the whole design:
   //
-  //    8a WIRING — is the hook registered in the adopter's settings.json? ok or WARN,
-  //       NEVER fail. Preserve-or-write means an adopter who already had a settings.json
-  //       never gets it merged, and a supported degradation must not break their gate
-  //       (the same rule as check 7).
+  //    8a WIRING — is the hook registered in the adopter's settings.json, and on WHICH
+  //       sources? Two verdicts with deliberately different force:
+  //         PRESENCE  — ok or WARN, NEVER fail. Preserve-or-write means an adopter who
+  //                     already had a settings.json never gets it merged, and a supported
+  //                     degradation must not break their gate (the same rule as check 7).
+  //                     An UNCOVERED source (veriloop wires it, their matcher omits it) is
+  //                     the same class: settings.json is hand-owned, so a narrower matcher
+  //                     is their choice. WARN, never FAIL.
+  //         OVERREACH — a matcher token veriloop does NOT wire FAILs, and so does an EMPTY
+  //                     or ABSENT matcher, which is read separately because `.filter(Boolean)`
+  //                     erases it into zero tokens and the comparison then has nothing to
+  //                     object to. It is not a narrow matcher, it is an unconstrained one:
+  //                     match-all re-injects into `resume`/`fork`, match-none can never fire,
+  //                     and both are red. Not re-injecting the routing block into mid-work
+  //                     sources is veriloop's OWN safety property, not the adopter's dial, and
+  //                     the check that owns a safety property must be able to go red.
+  //       The matcher read is not decorative: `wiresSessionHook` tested `h.command` alone and
+  //       never looked at `matcher`, so this check printed "SessionStart routing hook wired"
+  //       for matcher `PreToolUse`, `""` and `banana` alike — a green vouch for a hook that
+  //       CAN NEVER FIRE. Combined with `handOnce` preservation, an installed adopter never
+  //       receives a matcher change and nothing told them. Same false-green class as the
+  //       byte-equality check below, one layer out. The ok line therefore prints the ACTUAL
+  //       matcher tokens rather than asserting a list nobody read.
+  //       Written from `SESSION_START_SOURCES` and lint's own comparison, MIRRORING — never
+  //       importing — the selftest's, so rule 9's two independent witnesses survive.
   //    8b PAYLOAD — is what the hook would inject intact? Runs whenever `session-routing.md`
   //       EXISTS, wired or not, and FAILs. Nesting it inside 8a (the first version) skipped
   //       every payload check on the DEFAULT adopter path: an unwired settings.json plus a
@@ -522,14 +543,29 @@ function main() {
     const settingsPath = join(args.bundle, CLAUDE_SETTINGS);
     let wired = false;
     let unreadable = null;
+    let tokens = [];
+    let unconstrained = false;
     if (registered && existsSync(settingsPath)) {
       const raw = readFileSync(settingsPath, 'utf8');
-      try { wired = wiresSessionHook(raw); } catch (e) { unreadable = e.message; }
+      try {
+        wired = wiresSessionHook(raw);
+        // Only veriloop's OWN groups (`sessionHookMatchers` scopes it), `|`-split and deduped.
+        const matchers = sessionHookMatchers(raw);
+        tokens = [...new Set(matchers.flatMap((m) => m.split('|')))].filter(Boolean);
+        // An EMPTY or ABSENT matcher is not a narrow matcher, it is an UNCONSTRAINED one, and
+        // it has to be read separately: `.filter(Boolean)` erases it into zero tokens, so the
+        // overreach comparison below sees nothing to complain about and the ok line printed
+        // `(matcher: )` — the widest possible false green, reachable by deleting six characters
+        // from a hand-owned file `handOnce` will never correct.
+        unconstrained = matchers.some((m) => !m.trim());
+      } catch (e) { unreadable = e.message; }
     }
     if (!registered) {
       ok('SessionStart routing hook not in emitted_files — pre-0.5.0 bundle, check skipped');
     } else {
-      // --- 8a. WIRING. ok/warn only.
+      // --- 8a. WIRING. PRESENCE is ok/warn only; MATCHER OVERREACH can and must FAIL
+      //     (see the OVERREACH paragraph above — the check that owns a safety property
+      //     must be able to go red).
       if (!existsSync(settingsPath)) {
         // `.claude/settings.json` is starter/hand-owned: an owner who deletes it is exercising
         // a right the ownership model grants, and "remove the file veriloop added" is the most
@@ -543,7 +579,26 @@ function main() {
       } else if (!wired) {
         warn(`${CLAUDE_SETTINGS} carries no SessionStart entry for ${SESSION_HOOK_SCRIPT} — preserve-or-write means an existing settings file is never merged, so routing is NOT wired (merge the SessionStart entry generate printed into your own file)`);
       } else {
-        ok(`SessionStart routing hook wired: settings.json → ${SESSION_HOOK_SCRIPT}`);
+        // The MATCHER, finally read. Overreach FAILs; an uncovered source WARNs and the hook
+        // is still vouched for, because it IS wired — just narrower than veriloop wires it.
+        const overreach = tokens.filter((t) => !SESSION_START_SOURCES.includes(t));
+        const uncovered = SESSION_START_SOURCES.filter((s) => !tokens.includes(s));
+        if (unconstrained) {
+          // Both readings of an empty/omitted SessionStart matcher are red, which is why this
+          // is a FAIL and not a WARN: if it matches ALL sources the hook re-injects the
+          // full-strength routing block on `resume` and `fork` — maximal overreach, and the
+          // uncovered WARN below would be affirmatively FALSE about sessions the hook is
+          // firing on; if it matches nothing the hook CAN NEVER FIRE, the same false-green
+          // this check exists to kill. The uncovered WARN is suppressed either way.
+          fail(`${CLAUDE_SETTINGS} wires the SessionStart routing hook on an EMPTY (or absent) matcher — ${SESSION_HOOK_SCRIPT} is wired ONLY to ${SESSION_START_SOURCES.join('|')}, the sources that begin a session with the routing payload absent. An unset matcher is not a narrower matcher: it either matches every source (re-injecting the full-strength routing block into resume and fork, sessions that are mid-work) or matches none (a hook that can never fire). Not re-injecting mid-work is veriloop's own safety property, not a setting: spell the matcher out in ${CLAUDE_SETTINGS} (it is hand-owned, so re-running generate will NOT correct it)`);
+        } else if (overreach.length) {
+          fail(`${CLAUDE_SETTINGS} wires the SessionStart routing hook on ${overreach.join(', ')} — ${SESSION_HOOK_SCRIPT} is wired ONLY to ${SESSION_START_SOURCES.join('|')}, the sources that begin a session with the routing payload absent. Anything else either never fires at all (a matcher that is not a SessionStart source) or re-injects the full-strength routing block into a session that is mid-work. Not doing that is veriloop's own safety property, not a setting: fix the matcher in ${CLAUDE_SETTINGS} (it is hand-owned, so re-running generate will NOT correct it)`);
+        } else {
+          ok(`SessionStart routing hook wired: settings.json → ${SESSION_HOOK_SCRIPT} (matcher: ${tokens.join('|')})`);
+        }
+        if (uncovered.length && !unconstrained) {
+          warn(`${CLAUDE_SETTINGS}'s SessionStart matcher omits ${uncovered.join(', ')} — veriloop wires ${SESSION_START_SOURCES.join('|')}, so those sessions start with no routing table. settings.json is hand-owned and a narrower matcher is a supported choice, so this is a WARN, never a failure (widen the matcher yourself if you want it; generate will not touch your file)`);
+        }
       }
 
       // --- 8b. PAYLOAD. Independent of 8a, and FAILs.
@@ -694,7 +749,7 @@ function main() {
 // `constitution.md` and the manifest all cite checks in this file BY LINE NUMBER, and an
 // import at the top would silently move every one of them. ESM hoists the binding, so both
 // `lintable` and check 8 see it.
-import { SESSION_HOOK_SCRIPT, SESSION_ROUTING_DOC, CLAUDE_SETTINGS, renderClaudeSettings, renderSessionRouting, renderSessionStartHook, wiresSessionHook } from './lib/render.mjs';
+import { SESSION_HOOK_SCRIPT, SESSION_ROUTING_DOC, CLAUDE_SETTINGS, SESSION_START_SOURCES, renderClaudeSettings, renderSessionRouting, renderSessionStartHook, wiresSessionHook, sessionHookMatchers } from './lib/render.mjs';
 // Check 7b's two renderers, imported for the same reason and placed with them. Re-rendering
 // `audit.md` / `expert.md` from `domain.json` + the manifest's `domain_facts` is the only way
 // to decide whether the committed files are veriloop's; `SECRET_TRIGGER` above already comes

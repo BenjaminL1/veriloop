@@ -233,6 +233,14 @@ Gate = `npm run test` + `node scripts/lint-bundle.mjs --bundle .`, both green.
 ## Non-goals
 
 - No `PreToolUse` hook. The `SessionStart` matcher list stays pinned in both directions.
+  **AMENDED 2026-08-04** — the *pin* stands and is not weakened; its *membership* is no longer
+  frozen. `compact` is added by
+  [`session-hook-compact-delivery.md`](./session-hook-compact-delivery.md) after an observed
+  incident: compaction evicts the payload, nothing re-injects it, and routing stays dead for
+  the session's remaining life. `<ALREADY-ROUTED>` does not cover it — that clause can only
+  mute text still in context, and compaction removes the clause along with the table. The
+  `PreToolUse` and no-`UserPromptSubmit` non-goals are unaffected and carried forward.
+  `resume` and `fork` stay out.
 - No assertion on `/dev-plan`'s write covenant (owner decision, recorded 2026-08-01).
 - `/review` and `/posture` stay owner-invoked and out of the table. **Noted for the record:**
   a probe observed that "regenerate the bundle" is literally what `/posture` does, so the

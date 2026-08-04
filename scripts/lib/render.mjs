@@ -1004,19 +1004,30 @@ export function renderSessionStartHook() {
   );
 }
 
-// The SessionStart sources veriloop wires — the two that begin a session with NO task in
-// flight. Claude Code documents four; `resume` and `compact` are DELIBERATELY excluded.
-// Both fire in the middle of live work: `compact` on an auto-compaction and `resume` on
-// `claude --continue` / `--resume`. A `/dev-loop` that auto-compacts mid-run would be handed
-// the routing mandate plus "Route FIRST, then work" — an
-// instruction to re-enter the command it is currently executing, and a contradiction of the
-// post-compaction rule that a resumed session continues the task in flight. `<SUBAGENT-STOP>`
-// does not cover it: the re-entrant session is the MAIN one. The payload's `<ALREADY-ROUTED>`
-// clause covers the residue (a `clear` mid-command, or any harness path this list does not
-// control); this list keeps the full-strength block off the two paths that are re-entry by
-// construction. The EXACT list is asserted in `selftest.mjs`, in both directions — narrowing
-// it un-wires a session type silently, widening it re-opens the re-injection.
-export const SESSION_START_SOURCES = ['startup', 'clear'];
+// The SessionStart sources veriloop wires — the ones that begin a session with the routing
+// payload ABSENT from context. `resume` and `fork` are DELIBERATELY excluded: both replay or
+// copy an existing transcript, so the payload the earlier session received is still there and
+// re-injecting it buys nothing.
+//
+// `compact` is wired, and that is a WIDENING made on observed evidence rather than a
+// prediction. A session compacted mid-work; compaction EVICTED the injected payload; the
+// matcher did not include `compact`, so nothing re-injected it; the next request was an
+// open-ended question that was answered directly, unrouted and unannounced, and routing
+// stayed dead for the rest of the session. `<ALREADY-ROUTED>` does not cover that gap — it is
+// a SUPPRESSOR, not a SUPPLIER: it can only mute a table that is in context, and compaction
+// evicts the table together with the clause itself. For the command in flight when the
+// compaction fires, wiring `compact` buys nothing; for the owner's NEXT request after that
+// work finishes, it is the difference between a live routing table and a dead one.
+//
+// The cost is carried, not solved: `compact` cannot distinguish a manual `/compact` from an
+// auto-compaction, so the payload WILL sometimes land inside running work, and only the
+// payload's `<ALREADY-ROUTED>` prose mitigates it. Prose biases; it cannot compel.
+//
+// CAVEAT, stated because nothing here grounds it: the claim that `resume`/`fork` still carry
+// the payload is a claim about HARNESS behaviour. This repo asserts it and no test verifies
+// it. The EXACT list is asserted in `selftest.mjs`, in both directions — narrowing it un-wires
+// a session type silently, widening it re-opens the mid-work re-injection.
+export const SESSION_START_SOURCES = ['startup', 'clear', 'compact'];
 
 // The settings entry, and NOTHING else — `type`/`command` only, the two keys the command
 // hook item documents. veriloop wires its own hook; it does not impose the owner's personal
@@ -1060,10 +1071,35 @@ export function renderClaudeSettings() {
  * Throws the JSON error for an unparseable file; the callers decide what that means.
  */
 export function wiresSessionHook(text) {
+  return veriloopSessionGroups(text).length > 0;
+}
+
+/**
+ * The `matcher` strings of VERILOOP's own SessionStart groups — the sources the hook would
+ * actually fire on. `wiresSessionHook` answers "is it wired at all" and never read the
+ * matcher, so both gates printed "routing hook wired" for a group whose matcher was
+ * `PreToolUse` — a hook that CAN NEVER FIRE, vouched for green.
+ * Scoped to veriloop's OWN groups for the same reason the command predicate is: an adopter
+ * whose separate SessionStart hook matches `resume` has made a choice about THEIR hook, and
+ * veriloop must not fail their gate over a matcher on a script it never wrote.
+ * A group with NO `matcher` key comes back as `''` — carried, not dropped, because an unset
+ * matcher is an UNCONSTRAINED one (match-all or match-none, depending on the harness), not a
+ * narrow one. A caller that splits on `|` and filters empties erases it into zero tokens and
+ * then has nothing left to object to, which is exactly how it stayed green; the empty string
+ * is its own verdict and callers must read it as one.
+ * Same throw-on-unparseable contract as `wiresSessionHook`; the callers decide what that means.
+ */
+export function sessionHookMatchers(text) {
+  return veriloopSessionGroups(text).map((g) => g.matcher || '');
+}
+
+// Which SessionStart groups are veriloop's — ONE home for that question (rule 9), so the
+// wired verdict and the matcher read can never disagree about which group they describe.
+function veriloopSessionGroups(text) {
   const s = JSON.parse(text);
-  return ((s.hooks || {}).SessionStart || [])
-    .flatMap((g) => g.hooks || [])
-    .some((h) => (h.command || '').includes(`\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}`));
+  return ((s.hooks || {}).SessionStart || []).filter((g) =>
+    (g.hooks || []).some((h) => (h.command || '').includes(`\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}`)),
+  );
 }
 
 // ---------------------------------------------------------------------------

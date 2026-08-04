@@ -958,6 +958,12 @@ after 4b, each item a defect this implementer shipped and review caught:
   exactly (narrowing *and* widening fail), and the payload carries a new `<ALREADY-ROUTED>`
   clause for the residue. **The cost 4b named is real and is now accepted, not solved:** an
   owner re-entering with `--continue` does not get the routing block.
+  **AMENDED 2026-08-04** by [`session-hook-compact-delivery.md`](./session-hook-compact-delivery.md)
+  (RATIFIED — BINDING): `compact` came back IN — the list is now
+  `['startup', 'clear', 'compact']`. The record above stands as written; what it missed is
+  that compaction EVICTS the payload, `<ALREADY-ROUTED>` included, so what it hands to that
+  clause is not residue the clause can cover. `resume` stays out and `fork` joins it: both
+  replay or copy a transcript that still carries the payload.
 - **T5 dropped "portable" silently.** The retired text was "portable **and** inspectable";
   the rewrite re-stated only inspectability and called it "the half that was load-bearing".
   Portability is still true — check 1 now enforces it on `.mjs` — so it is restored to

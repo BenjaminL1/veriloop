@@ -80,11 +80,16 @@ discovered:
   contents to stdout inside the documented `SessionStart` envelope. It makes **no network
   call**, spawns no subprocess, writes no file, and reads no environment variable other than
   `CLAUDE_PROJECT_DIR`. With the payload absent it prints nothing and exits 0.
-- **When it runs.** On `startup` and `clear` only — the two `SessionStart` sources that begin
-  a session with no task in flight. `resume` and `compact` are deliberately **not** wired:
-  both fire in the middle of live work (`claude --continue`/`--resume`, and an
-  auto-compaction), and re-injecting "route FIRST, then work" into a session that is already
-  executing `/dev-loop` is an instruction to re-enter the command it is running.
+- **When it runs.** On `startup`, `clear` and `compact` — the `SessionStart` sources that
+  begin a session with the routing payload **absent** from context. `resume` and `fork` are
+  deliberately **not** wired: both replay or copy an existing transcript, so the payload is
+  still there and re-injecting it buys nothing. `compact` is wired because compaction
+  **evicts** the payload, and the cost of that is stated rather than smoothed over: `compact`
+  cannot distinguish a manual `/compact` from an auto-compaction, so a firing **can** land
+  inside live work — inside a running `/dev-loop`, for instance. Nothing structural prevents
+  that; the only mitigation is the payload's own `<ALREADY-ROUTED>` clause, which tells a
+  session already executing a veriloop command to continue the task in flight. That is prose:
+  it biases, it cannot compel.
 - **What it does to the session.** It injects prose that **biases** the model toward
   `/advise` and `/dev-plan` — and, on the no-route row, toward answering a read directly with
   no command at all. `/dev-loop` is **not** a routing destination: it is reached only through

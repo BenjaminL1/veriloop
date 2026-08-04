@@ -2726,22 +2726,45 @@ function assert(cond, desc) {
   // The MATCHER, read out of the emitted file. Nothing else in either gate looked at it, so
   // `renderClaudeSettings` could have emitted `matcher: 'PreToolUse'` — 374 selftests and 27
   // lint checks green and the hook never firing at all.
-  // The list is pinned EXACTLY, in both directions, and the exclusions are the point:
+  // The list is pinned EXACTLY, in both directions — the PIN does not move, only its
+  // membership does:
   //   narrowing  → a session type silently stops being routed;
-  //   WIDENING   → the failure that put this assertion in its current form. `resume` and
-  //                `compact` fire in the MIDDLE of live work (`claude --continue`/`--resume`,
-  //                and an auto-compaction), so wiring them re-injects "you do not have a
-  //                choice about routing through them. Route FIRST, then work" into a session
-  //                that is already executing `/dev-loop` — an instruction to re-enter the
-  //                command in flight, which `<SUBAGENT-STOP>` does not cover (the re-entrant
-  //                session is the MAIN one) and which contradicts the post-compaction rule
-  //                that a resumed session continues its task.
+  //   WIDENING   → re-injects "you do not have a choice about routing through them. Route
+  //                FIRST, then work" into a session that may be mid-command.
+  // `compact` was widened IN on 2026-08-04, on an observed incident: compaction EVICTS the
+  // injected payload, so the session that resumes has no routing table and no `<ALREADY-ROUTED>`
+  // clause either — that clause is a SUPPRESSOR, not a SUPPLIER, and cannot cover a gap where
+  // the whole payload is gone. `resume` and `fork` stay OUT: both replay or copy an existing
+  // transcript, so the payload is still in context and re-injection buys nothing. The cost of
+  // the widening is carried, not solved — `compact` cannot tell a manual `/compact` from an
+  // auto-compaction, so the payload will sometimes land inside running work.
   const freshMatchers = ((JSON.parse(readFileSync(settingsFresh, 'utf8')).hooks || {}).SessionStart || []).map((g) => g.matcher || '');
   const uncovered = SESSION_START_SOURCES.filter((s) => !freshMatchers.some((m) => m.split('|').includes(s)));
   const overreach = [...new Set(freshMatchers.flatMap((m) => m.split('|')))].filter((s) => s && !SESSION_START_SOURCES.includes(s));
   assert(
-    SESSION_START_SOURCES.join('|') === 'startup|clear' && uncovered.length === 0 && overreach.length === 0,
-    `session hook: the emitted SessionStart matcher is EXACTLY the two no-task-in-flight sources (startup|clear), got ${SESSION_START_SOURCES.join('|')}${uncovered.length ? ` [uncovered: ${uncovered.join(', ')}]` : ''}${overreach.length ? ` [wires mid-work sources: ${overreach.join(', ')}]` : ''}`,
+    SESSION_START_SOURCES.join('|') === 'startup|clear|compact' && uncovered.length === 0 && overreach.length === 0,
+    `session hook: the emitted SessionStart matcher is EXACTLY startup|clear|compact — the sources that begin a session with the routing payload ABSENT, got ${SESSION_START_SOURCES.join('|')}${uncovered.length ? ` [uncovered: ${uncovered.join(', ')}]` : ''}${overreach.length ? ` [wires unlisted sources: ${overreach.join(', ')}]` : ''}`,
+  );
+  // CRITERION 2, asserted rather than merely true: ONE payload, unparameterized. Byte-equality
+  // (check 8b, and the COMMITTED assertions below) is only decidable because the renderers take
+  // no arguments — a `source`-branched payload could not be canonicalized at build time, and a
+  // stdin read in the hook script would trade its structural fail-open property (one existsSync
+  // guard, no throw path) for hang/EOF/malformed-input paths on every session start.
+  // `Function.length` alone does NOT pin this: it counts only the parameters before the first
+  // default or rest, so `renderSessionRouting(source = 'startup')` — the single most likely way
+  // the forbidden parameter arrives — reports 0 and sails through, and the byte-equality gates
+  // cannot catch it either because lint check 8b calls the renderer with no arguments and a
+  // source-branched renderer still emits its default output. So the SIGNATURE TEXT is read too:
+  // the parameter list has to be literally empty.
+  const emptyParams = (f) => /^(?:async\s+)?function\s*\*?\s*[A-Za-z0-9_$]*\s*\(\s*\)/.test(String(f));
+  assert(
+    renderSessionRouting.length === 0 && renderSessionStartHook.length === 0
+      && emptyParams(renderSessionRouting) && emptyParams(renderSessionStartHook),
+    `session hook: renderSessionRouting() and renderSessionStartHook() take NO arguments — declared with an EMPTY parameter list, not merely a zero \`.length\` (a defaulted \`source =\` parameter reports 0) — one payload, unparameterized, which is what makes the byte-equality gates decidable (got ${renderSessionRouting.length} / ${renderSessionStartHook.length}, empty-parens ${emptyParams(renderSessionRouting)} / ${emptyParams(renderSessionStartHook)})`,
+  );
+  assert(
+    !/process\.stdin|readFileSync\(0|\/dev\/stdin/.test(renderSessionStartHook()),
+    'session hook: the emitted session-start.mjs reads NO stdin — it never branches on the hook `source`, and its fail-open property stays structural (one existsSync guard, no throw path)',
   );
   // Only the two documented `command` hook-item keys. `shell` is not in the schema and
   // `async: false` is the default: unverified config in the one file whose corruption breaks
@@ -2756,6 +2779,89 @@ function assert(cond, desc) {
     existsSync(join(fresh.dir, SESSION_HOOK_SCRIPT)) && existsSync(join(fresh.dir, SESSION_ROUTING_DOC)),
     'session hook: the hook script and its routing payload are both emitted as plain files',
   );
+
+  // --- lint check 8a READS THE MATCHER. Until 2026-08-04 it did not: `wiresSessionHook`
+  //     tested `h.command` alone, so the gate printed "SessionStart routing hook wired" for
+  //     matcher `PreToolUse` — a green vouch for a hook that CAN NEVER FIRE, the same
+  //     false-green class the byte-equality checks exist to kill, one layer out. These five
+  //     are the mutation test: (1), (2) and (5) are RED on the pre-change tree by construction.
+  {
+    const settingsWith = (matcher, extraGroups = []) => JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { matcher, hooks: [{ type: 'command', command: `node "\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}"` }] },
+          ...extraGroups,
+        ],
+      },
+    }, null, 2) + '\n';
+    const lintWith = (settings) => {
+      writeFileSync(settingsFresh, settings);
+      const r = spawnSync(process.execPath, [lintPath, '--bundle', fresh.dir], { encoding: 'utf8' });
+      return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+    };
+    const canonicalSettings = readFileSync(settingsFresh, 'utf8');
+
+    // (1) the ok line prints the ACTUAL matcher tokens, not a list nobody read.
+    const asGenerated = lintWith(canonicalSettings);
+    assert(
+      /SessionStart routing hook wired:.*matcher: startup\|clear\|compact/.test(asGenerated.out),
+      "lint 8a: the wired line prints the ACTUAL matcher tokens (startup|clear|compact) — a check that vouches for a hook must say what it read",
+    );
+
+    // (2) OVERREACH → FAIL. `PreToolUse` is not a SessionStart source at all, so this hook can
+    //     never fire; the pre-change check called it `wired`. Not re-injecting into sources
+    //     veriloop does not wire is veriloop's OWN safety property, so it goes red.
+    const overreached = lintWith(settingsWith('PreToolUse'));
+    assert(overreached.status !== 0, 'lint 8a: a settings.json wiring veriloop\'s hook on matcher PreToolUse FAILS the gate — the check that vouches "wired" must be able to go red');
+    assert(
+      /PreToolUse/.test(overreached.out) && !/routing hook wired: settings\.json/.test(overreached.out),
+      'lint 8a: the overreach failure NAMES the offending matcher token and withdraws the green "routing hook wired" vouch',
+    );
+
+    // (3) UNCOVERED → WARN, never FAIL. settings.json is hand-owned; an adopter running the
+    //     narrower pre-0.5.0 matcher has made a supported choice, and veriloop must not turn
+    //     their gate red for it. This assertion cannot pass on the pre-change tree either:
+    //     `compact` was not yet a wired source, so nothing was uncovered.
+    const narrowed = lintWith(settingsWith('startup|clear'));
+    assert(narrowed.status === 0, 'lint 8a: a narrower hand-owned matcher (startup|clear) WARNs but never FAILs — settings.json is the adopter\'s file');
+    assert(
+      /matcher omits compact/.test(narrowed.out),
+      'lint 8a: the uncovered-source warning NAMES compact — the source veriloop wires that the adopter\'s file omits',
+    );
+
+    // (4) SCOPING. An adopter's OWN SessionStart hook, under a matcher veriloop does not wire,
+    //     is none of veriloop's business — the same rule the command predicate already follows.
+    //     Failing their gate over a matcher on a script veriloop never wrote is the exact
+    //     over-reach preserve-or-write exists to avoid.
+    const alongside = lintWith(settingsWith('startup|clear|compact', [
+      { matcher: 'resume', hooks: [{ type: 'command', command: 'node "${CLAUDE_PROJECT_DIR}/scripts/their-own-hook.mjs"' }] },
+    ]));
+    assert(
+      alongside.status === 0 && /routing hook wired:.*matcher: startup\|clear\|compact/.test(alongside.out),
+      "lint 8a: an adopter's SEPARATE SessionStart hook on matcher `resume` is not read as veriloop's — their gate stays green and only veriloop's own group's matcher is reported",
+    );
+
+    // (5) UNCONSTRAINED → FAIL, in both spellings. An empty `matcher` (and an absent `matcher`
+    //     key, which JSON.stringify drops for `undefined`) is the case `.filter(Boolean)`
+    //     silently erases: zero tokens, nothing to compare, and the check printed
+    //     `✓ SessionStart routing hook wired: ... (matcher: )` and exited 0 — the widest
+    //     possible false green, and the one reachable by deleting six characters from a
+    //     hand-owned file `handOnce` will never correct. Red under BOTH readings of the
+    //     harness: match-all re-injects into `resume`/`fork`, match-none can never fire.
+    for (const [label, settings] of [['empty', settingsWith('')], ['absent', settingsWith(undefined)]]) {
+      const loose = lintWith(settings);
+      assert(
+        loose.status !== 0 && !/routing hook wired: settings\.json/.test(loose.out),
+        `lint 8a: an ${label} SessionStart matcher on veriloop's own hook FAILS the gate and withdraws the green "routing hook wired" vouch — an unset matcher is unconstrained, not narrow`,
+      );
+      assert(
+        !/matcher omits/.test(loose.out),
+        `lint 8a: the uncovered-source WARN is suppressed for an ${label} matcher — "those sessions start with no routing table" is affirmatively false about sessions a match-all hook fires on`,
+      );
+    }
+
+    writeFileSync(settingsFresh, canonicalSettings);
+  }
 
   // --- PRESERVE-OR-WRITE, the other direction. These three are the mutation test:
   //     swapping handOnce→machine fails the byte-for-byte check, dropping the writer
@@ -3292,12 +3398,24 @@ function assert(cond, desc) {
       existsSync(join(here, '..', SESSION_HOOK_SCRIPT)) && readFileSync(join(here, '..', SESSION_HOOK_SCRIPT), 'utf8') === renderSessionStartHook(),
       `session hook (COMMITTED): this repo's own ${SESSION_HOOK_SCRIPT} is byte-identical to \`renderSessionStartHook()\` — it is machine-owned and EXECUTED at every session start, so a hand edit does not survive the gate`,
     );
+    // Scoped to VERILOOP's own SessionStart groups, the same scope lint 8a reads — mirrored
+    // here with its own expression, never imported (rule 9's two witnesses). Unscoped, this
+    // read blamed veriloop's matcher for any UNRELATED SessionStart hook the owner adds to
+    // this hand-owned file: `npm test` red on `resume` while lint-bundle stayed green — two
+    // witnesses DISAGREEING about the same file, which is the failure this doubling exists
+    // to prevent, not to cause.
     let committedMatchers = [];
-    try { committedMatchers = ((JSON.parse(readFileSync(committedSettings, 'utf8')).hooks || {}).SessionStart || []).map((g) => g.matcher || ''); } catch { /* stays [] → the assertion below fails */ }
+    try {
+      committedMatchers = (((JSON.parse(readFileSync(committedSettings, 'utf8')).hooks || {}).SessionStart) || [])
+        .filter((g) => (g.hooks || []).some((h) => (h.command || '').includes(`\${CLAUDE_PROJECT_DIR}/${SESSION_HOOK_SCRIPT}`)))
+        .map((g) => g.matcher || '');
+    } catch { /* stays [] → the assertion below fails */ }
     const committedOverreach = [...new Set(committedMatchers.flatMap((m) => m.split('|')))].filter((s) => s && !SESSION_START_SOURCES.includes(s));
+    // An empty/absent matcher is pinned red here too: it is unconstrained, not narrow.
+    const committedUnset = committedMatchers.length === 0 || committedMatchers.some((m) => !m.trim());
     assert(
-      SESSION_START_SOURCES.every((s) => committedMatchers.some((m) => m.split('|').includes(s))) && committedOverreach.length === 0,
-      `session hook (COMMITTED): this repo's own matcher is EXACTLY ${SESSION_START_SOURCES.join('|')} — a template fix that leaves the committed file behind is the split this doubling exists to catch, and settings.json is hand-owned so a re-run will NOT correct it${committedOverreach.length ? ` [wires mid-work sources: ${committedOverreach.join(', ')}]` : ''}`,
+      !committedUnset && SESSION_START_SOURCES.every((s) => committedMatchers.some((m) => m.split('|').includes(s))) && committedOverreach.length === 0,
+      `session hook (COMMITTED): this repo's own matcher is EXACTLY ${SESSION_START_SOURCES.join('|')} — the sources that begin a session with the routing payload absent, both directions pinned, and never left empty. A template fix that leaves the committed file behind is the split this doubling exists to catch, and settings.json is hand-owned so a re-run will NOT correct it${committedOverreach.length ? ` [wires unlisted sources: ${committedOverreach.join(', ')}]` : ''}`,
     );
   }
 

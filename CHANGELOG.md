@@ -102,7 +102,39 @@ why it is not a destination.
 commands"; the disable path takes **both**. README additionally published that the hook
 biases routing toward `/dev-loop`, which `lint-bundle` now fails the build for.
 
-Gate: **253 → 469**, +21 assertions this change. `lint` 30 ok / 0 warn / 0 fail.
+**The routing payload survives a compaction, and matcher drift stops being invisible.**
+`compact` joins `startup` and `clear` as a wired `SessionStart` source. The trigger was an
+observed incident, not a prediction: a session compacted mid-work, compaction evicted the
+injected payload, the matcher did not cover `compact` so nothing re-injected it, and the next
+request — an open-ended question, row 2 — was answered directly, unrouted and unannounced,
+with routing dead for the rest of the session. `<ALREADY-ROUTED>` could not have helped; it is
+a suppressor, not a supplier, and compaction evicts it along with the table. `resume` and
+`fork` stay unwired, both replaying or copying a transcript that still carries the payload.
+Carried, not solved: `compact` cannot distinguish a manual `/compact` from an auto-compaction,
+so the payload can land inside a running command, where the only mitigation is prose that
+biases and cannot compel. **ONE payload, unparameterized** — `renderSessionRouting()` still
+takes no arguments and the hook script still reads no stdin, now asserted rather than merely
+true, because byte-equality is only decidable while that holds.
+
+**`lint-bundle` check 8a now reads the matcher it was vouching for.** The wiring predicate
+tested the hook `command` alone, so the gate printed "SessionStart routing hook wired" for a
+group whose matcher was `PreToolUse` — a green line for a hook that can never fire, and with
+`settings.json` preserved on re-generate an installed adopter would never have been told. 8a
+now splits the two verdicts apart: a matcher token veriloop does not wire **FAILS** (not re-injecting into
+sources veriloop does not wire is veriloop's own safety property), while a source the adopter's
+narrower matcher omits **WARNs and never fails** (`settings.json` is hand-owned). An **empty or
+absent** matcher fails too, and is read separately because splitting on `|` and dropping empties
+erases it into zero tokens — nothing for the comparison to object to, so the old line printed
+`(matcher: )` and exited 0. An unset matcher is not a narrow matcher but an unconstrained one:
+it either matches every source (re-injecting into `resume` and `fork`, sessions that are
+mid-work) or matches none (a hook that can never fire), and both are red. The `wired` line
+prints the actual tokens. Mutation-verified: a bundle wiring `PreToolUse`, `""`, or no matcher
+key at all goes red and loses the vouch.
+
+Built to `.claude/veriloop/specs/session-hook-compact-delivery.md` (RATIFIED — BINDING,
+2026-08-04), which amends the matcher non-goal in `session-routing-redesign.md`.
+
+Gate: **253 → 481**, +12 assertions this change (the routing redesign above added 21). `lint` 30 ok / 0 warn / 0 fail.
 
 ## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–3 of `.claude/veriloop/specs/domain-expert-persona.md`)
 
@@ -234,16 +266,19 @@ covers the dispatched subagent — without it every council seat, `/review` lens
 already executing a veriloop command is told to continue the task in flight rather than
 re-enter the command it is running.
 
-**The hook fires on `startup` and `clear` only.** Claude Code documents four `SessionStart`
-sources; `resume` and `compact` are deliberately left unwired, and the exact list is asserted
-in both directions so narrowing *and* widening it fail the gate. Both of the excluded two fire
-in the middle of live work — `claude --continue` / `--resume`, and an auto-compaction — so
-wiring them hands "you do not have a choice about routing through them. Route FIRST, then
-work" to a `/dev-loop` or `/advise` run that is already in flight. That is an instruction to
-re-enter the command currently executing, through the one door `<SUBAGENT-STOP>` does not
-cover (the re-entrant session is the main one), and it contradicts the rule that a resumed
-session continues its in-progress task rather than pivoting. The cost is stated: an owner who
-re-enters a repo with `--continue` does not get the routing block on that entry, by design.
+**The hook fires on `startup`, `clear` and `compact`** — the `SessionStart` sources that begin
+a session with the routing payload ABSENT from context — and the exact list is asserted in both
+directions, so narrowing *and* widening it fail the gate. `resume` and `fork` are deliberately
+left unwired: both replay or copy an existing transcript, so the payload is still in context and
+re-injecting it buys nothing. `compact` is wired on OBSERVED evidence, not a prediction — a
+session compacted mid-work, compaction evicted the payload, nothing re-injected it, and the next
+request was answered unrouted and unannounced with routing dead for the rest of the session.
+`<ALREADY-ROUTED>` cannot cover that: it is a SUPPRESSOR, not a SUPPLIER, and compaction evicts
+the clause along with the table it was meant to mute. The cost is stated rather than solved:
+`compact` cannot tell a manual `/compact` from an auto-compaction, so the payload can land inside
+a `/dev-loop` already in flight, where only `<ALREADY-ROUTED>` — prose that biases and cannot
+compel — tells the session to continue the task it is on. An owner who re-enters a repo with
+`--continue` still gets no routing block on that entry, by design.
 
 Two boundaries, both structural rather than promissory. **Preserve-or-write on
 `settings.json`:** absent → written; present → veriloop does **not** merge, does not edit,
@@ -767,7 +802,7 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 469, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 481, deliberately.** Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their
@@ -798,8 +833,8 @@ merged rather than an entry to paste (a literal paste into a file that already h
 key silently discards the adopter's own hooks); **the report's CONTENT key in both
 directions** — a re-generate over veriloop's own settings.json prints no paste block, while an
 adopter's unmerged one still does; the emitted `SessionStart` **matcher**, pinned EXACTLY
-and checked for over-reach as well as under-reach, since wiring `resume`/`compact` re-injects
-the block into a session already mid-command; the hook item's key set, which must be
+and checked for over-reach as well as under-reach, since wiring `resume`/`fork` re-injects
+the block into a session that already carries it; the hook item's key set, which must be
 `type`/`command` and nothing else;
 the mechanism proved by EXECUTING the emitted script and parsing its
 envelope, plus the fail-open path with the payload removed; **the payload's byte-level
