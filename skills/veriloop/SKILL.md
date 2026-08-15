@@ -73,8 +73,10 @@ dev-loop). It emits **plain files** into the target repo:
 - **Portable output only.** Emitted artifacts use `$CLAUDE_PROJECT_DIR` (falling
   back to `git rev-parse --show-toplevel`) — NEVER an absolute path.
 - **Your edits win (asymmetric updates).** On re-run, machine sections regenerate;
-  hand-owned files (`*.overrides.md`, `constitution.md`, `.claude/settings.json`) are preserved untouched — never clobbered and never MERGED (nothing in the generator merges; `handOnce` returns early on an existing file),
-  never clobbered.
+  hand-owned files (`*.overrides.md`, `constitution.md`, `.claude/settings.json`) are preserved
+  untouched — never clobbered and never MERGED (nothing merges a *hand-owned* file; `handOnce`
+  returns early on an existing one. The single splice the generator does perform is its own
+  marked block in the shared `.gitignore` / `.prettierignore`).
 - **Never grade your own homework.** Validation runs the real commands and, in the
   full pipeline, uses a fresh-context agent — not the generator's self-report.
 
@@ -384,9 +386,11 @@ non-waived ones. Blockers are never qualified away. The attestation records both
 and the confirmed count, so a clean run also measures the lenses' noise rate. A
 pre-existing finding is never fixed but is waivable like any other (a waiver yields
 WAIVED, never PASS). A fix-pass diff touching a protected path (constitution,
-personas/overrides, interview + gate definitions, specs, history, hostile fixtures, or a
-deletion from the selftest) is caught in **both** modes: under `clean` it hard-stops the
-run, under `blockers` it is logged and recorded in the attestation's `guardStops` with the
+personas/overrides, interview + gate definitions, specs, history, hostile fixtures, the
+**`SessionStart` surface** — `settings.json`, `settings.local.json`, the hook script and its
+routing payload — or a deletion from the selftest) is caught in **both** modes: under
+`clean` it hard-stops the run, under `blockers` it is logged and recorded in the
+attestation's `guardStops` with the
 verdict untouched. Either way it is a tripwire over an agent-reported diff census, since
 the workflow cannot run git. Docs sync at Land may never edit the constitution —
 constitution edits are owner-only, by hand.

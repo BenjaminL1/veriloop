@@ -230,3 +230,45 @@ being taken here instead.
 
 `/dev-loop` builds to this spec. The gate runs `npm run test` + `lint-bundle` on real exit
 codes and stops before merge.
+
+---
+
+## Pending owner decision — 2026-08-15 (recorded by the remediation drive; ratified text above unchanged)
+
+**Provenance.** The 2026-08-15 two-week `/review` of `feat/resolve-to-clean` observed that
+what shipped for Change B is a **three**-verdict table, while the table ratified above names
+**two**. This block records the discrepancy against the spec it belongs to; it decides
+nothing and amends nothing. Written by the review-remediation drive
+(`.claude/veriloop/specs/review-remediation-2026-08-15.md`, Q1 and D4). Every line above
+this heading is byte-unchanged.
+
+**The discrepancy, stated exactly.** Change B's check enumerates two verdicts — *overreach →
+FAIL*, *uncovered → WARN, never FAIL*. The shipped check has a third: an **empty or absent**
+matcher (`unconstrained`) is its own **FAIL** (`scripts/lint-bundle.mjs`, the
+`wires the SessionStart routing hook on an EMPTY (or absent) matcher` branch). It is not
+reachable through the ratified two: `.filter(Boolean)` erases an unset matcher into zero
+tokens, so *overreach* has nothing to object to and *uncovered* names every source — a
+verdict that reads `(matcher: )` and exits 0, the widest possible false green. The literal
+ratified text therefore prescribes **WARN** for the one case both readings of the harness
+make red: match-all re-injects the full-strength block into `resume` and `fork`, and
+match-none is a hook that can never fire.
+
+**Why FAIL is retained meanwhile.** As the fail-safe, not as a decision. Downgrading it to
+the literal WARN before the owner has ruled would restore a green verdict for a hook that may
+never fire, and a WARN can be ignored indefinitely; the reversible direction is to stay red
+and ask. (A fourth branch — an unrecognized matcher *spelling* — was added 2026-08-15 and is
+deliberately **not** a new verdict class: it reuses the FAIL exit with an honest
+"cannot verify this matcher form" message. It is listed here only so the count is not a
+surprise at merge.)
+
+**The owner's options at merge, none of them taken here.**
+
+1. **Amend the spec** — add `unconstrained → FAIL` to Change B's table as a third verdict,
+   ratifying what shipped.
+2. **Fold it into overreach** — treat an unset matcher as the maximal overreach it may be,
+   keeping the table at two verdicts and the behavior red.
+3. **Downgrade to WARN** per the literal ratified text, accepting the false-green case above
+   as an adopter's supported choice.
+
+Option 3 is the only one that changes shipped behavior. Whichever is chosen, the disposition
+belongs in this spec, not in a code comment. **Pending owner counter-signature at merge.**

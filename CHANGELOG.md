@@ -264,10 +264,29 @@ mid-work) or matches none (a hook that can never fire), and both are red. The `w
 prints the actual tokens. Mutation-verified: a bundle wiring `PreToolUse`, `""`, or no matcher
 key at all goes red and loses the vouch.
 
+**Worktrees share one cargo target dir (`15bdf9c`).** cargo writes its build tree to
+`<cwd>/target`, so every per-feature worktree compiled its own copy and nothing ever
+reclaimed it — measured before the fix, four worktrees of one repo held **5.2 GB** of
+duplicate `target/` on top of the main checkout's 1.4 GB, roughly 1.3 GB apiece. The emitted
+worktree-setup instruction now exports a **shared** `CARGO_TARGET_DIR` resolved against the
+main checkout's root — explicitly resolved, not interpolated from a bare `$REPO`, because the
+instruction is carried out inside the worktree, where re-deriving the toplevel answers with
+the worktree and silently restores the duplication. The tradeoff is **stated rather than
+hidden**: cargo locks the shared directory, so concurrent worktree builds serialize instead
+of corrupting one another. *(Entry written 2026-08-15: this change shipped in the routing era
+and was never written up here. The branch in progress closes the last gap it left — a
+node-primary repo with a Rust addon returned from the node branch before the cargo test ran
+and got no shared-target instruction at all; see the resolve-to-clean section above.)*
+
 Built to `.claude/veriloop/specs/session-hook-compact-delivery.md` (RATIFIED — BINDING,
 2026-08-04), which amends the matcher non-goal in `session-routing-redesign.md`.
 
-Gate: **253 → 481**, +12 assertions this change (the routing redesign above added 21). `lint` 30 ok / 0 warn / 0 fail.
+Gate: **469 → 481**, +12 assertions this change (the routing redesign above added 21,
+448 → 469). *(Span corrected 2026-08-15, derived empirically by running the suite at each
+commit from a `git archive` copy: 61802bd 436 → 15bdf9c 448 → 7022a3a 464 → e4235ce 469 →
+9ae2979 469 → 1026508 **481**. The right edge and both deltas were right; the left edge read
+`253`, a figure belonging to an era two releases earlier that no commit in this section ever
+printed.)* `lint` 30 ok / 0 warn / 0 fail.
 
 ## 0.5.0 — 2026-07-31 — the domain subsystem (Phases 1–3 of `.claude/veriloop/specs/domain-expert-persona.md`)
 

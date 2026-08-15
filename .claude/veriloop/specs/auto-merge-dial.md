@@ -8,14 +8,22 @@ so "full autonomy" is truthfully claimable as an opt-in.
 
 > Ratified in full view of open risks R1–R6, including the premise-rider's judgment that the
 > confirm-to-merge alternative (R4) is stronger. The owner chose to keep this design and answer
-> R1/R2 by SEQUENCING: **`resolve-to-clean` ships first** (its own `/dev-plan` spec — it does
-> not exist yet), the loop demonstrates a real clean-PASS base rate, and only then does this
+> R1/R2 by SEQUENCING: **`resolve-to-clean` ships first** (its own `/dev-plan` spec — it did
+> not exist yet, at ratification time), the loop demonstrates a real clean-PASS base rate, and only then does this
 > spec enter `/dev-loop`. Building this spec before resolve-to-clean lands is a violation of
 > the ratification, not a scheduling choice.
 >
 > **R5 (dial shape) resolved by owner:** the three-position dial `off|trivial|all` stands, on
 > the strength of D3 (diff-re-derived tier) + D4 (prose-surface exclusion) + D5 (full lenses
 > when armed). Security's `off|on` dissent is recorded and overruled.
+
+*Annotation — 2026-08-15, recorded by the review-remediation drive
+(`.claude/veriloop/specs/review-remediation-2026-08-15.md`, D4). The parenthetical in the
+blockquote above read "it does **not** exist yet". `resolve-to-clean` has since been ratified,
+built and gated, so a present-tense claim written on 2026-08-13 had become false on its face;
+the tense was corrected and anchored to the ratification date it was true of. That phrase is
+the only byte of the ratified blockquote this drive changed, and it changes no decision, no
+risk and no sequencing. **Pending owner counter-signature at merge.***
 
 ---
 

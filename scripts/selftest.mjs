@@ -3267,9 +3267,15 @@ function gateFigures(file, re) {
   );
   // The MAIN-session half of the re-entry guard. `<SUBAGENT-STOP>` exempts a dispatched
   // subagent and says nothing about a main session already executing a veriloop command —
-  // which is what a `clear` mid-command, or any harness path `SESSION_START_SOURCES` does not
-  // control, hands the full-strength block to. "Route FIRST, then work" arriving inside a
-  // running `/dev-loop` is an instruction to re-enter the command in flight.
+  // and since 2026-08-04 the DOMINANT path that hands such a session the full-strength block
+  // is one veriloop WIRES ON PURPOSE: `compact`. An auto-compaction is indistinguishable from
+  // a manual `/compact` at the hook, so a source chosen to restore routing after eviction
+  // necessarily also fires mid-work. (A `clear` mid-command, and any harness path
+  // `SESSION_START_SOURCES` does not control, remain in the same class; they are no longer
+  // the main way it happens.) That is the whole reason this clause is load-bearing rather
+  // than defensive: "Route FIRST, then work" arriving inside a running `/dev-loop` is an
+  // instruction to re-enter the command in flight, and it now arrives by design, on a
+  // schedule veriloop chose. The mitigation is prose, which is a stated cost, not a fix.
   //
   // SCOPE, added 2026-08-01 and asserted because the first version over-reached: "routing is
   // a decision taken once, at the top of a session, never a loop" reads literally as making

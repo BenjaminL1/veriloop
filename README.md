@@ -213,8 +213,9 @@ Emitted artifacts are **portable** — they resolve the repo root at run time vi
 module location; no absolute path is ever baked in.
 
 **On the `SessionStart` hook, plainly.** It injects `session-routing.md` at the top of a
-session to **bias** routing toward `/advise` and `/dev-plan`, and to ask the model to say
-plainly when this block — rather than you — is why it entered a veriloop command.
+session — and **re-injects it mid-session** when a compaction evicts it — to **bias** routing
+toward `/advise` and `/dev-plan`, and to ask the model to say plainly when this block —
+rather than you — is why it entered a veriloop command.
 **The first row routes nowhere.** As emitted, the routing table has 3 rows, and the first
 names no command at all: a request for information that already exists — report the test
 results, summarize a file, answer a question about git state — is answered directly, because
@@ -230,13 +231,17 @@ straight through with a cited danger surface — the gate runs either way. That 
 route to `/dev-loop` directly, and "fix the typo in README line 40" went into a full
 worktree + gate + lens + auto-fix drive with no proportionality valve anywhere.
 It is prose in a context window: it raises the odds the model routes and announces, it
-cannot compel either, and both commands stay invocable by hand regardless. Two things worth
+cannot compel either, and both commands stay invocable by hand regardless. Three things worth
 knowing before you keep it.
 **It does not arbitrate with anyone else's hook** — if you also run a skill pack that
 injects its own `SessionStart` block (superpowers does), you get both at full strength and
-nothing resolves a disagreement between them. And **the disable path is all-or-nothing**:
+nothing resolves a disagreement between them. **The disable path is all-or-nothing**:
 deleting the `SessionStart` entry from `.claude/settings.json` removes the routing for both
-commands at once.
+commands at once. And **the `compact` firing can land inside live work**: `compact` cannot
+distinguish a manual `/compact` from an auto-compaction, so a re-injection can arrive in the
+middle of a running `/dev-loop`. Nothing structural prevents that; the only mitigation is the
+payload's own `<ALREADY-ROUTED>` clause, which tells a session already executing a veriloop
+command to continue the task in flight — prose again, so it biases and cannot compel.
 
 ## The emitted loop's shape
 

@@ -16,9 +16,12 @@ const AUTO_END = '<<< veriloop:auto:end >>>';
 
 // NAMES only (rule 9 — domain.mjs owns the definitions); no cycle: it imports nothing here.
 // DELIBERATELY BELOW the splice markers: ESM `import` declarations hoist, so this binds
-// first regardless, and keeping it here holds `AUTO_START` at `:12` — one line off the
+// first regardless, and keeping it here holds `AUTO_START` within the liveness window of the
 // `scripts/lib/render.mjs:11 AUTO_START` citations in the hand-owned constitution and
-// `drift.overrides.md` (rule 8 — never regenerated), inside the +/-6-line liveness window.
+// `drift.overrides.md` (rule 8 — never regenerated). The window is +/-6 lines and the window
+// is what this comment guards: it deliberately does NOT restate the line the declaration sits
+// on today. That numeral was itself stale — a comment naming its own line number rots the
+// moment anything above it moves, which is the failure the liveness scan exists to catch.
 import { STANCES, REFERENCE_CATEGORIES } from './domain.mjs';
 
 function gateList(gate) {

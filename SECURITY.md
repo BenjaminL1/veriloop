@@ -6,7 +6,10 @@ this document states exactly what it does, what it refuses to do, and where the 
 exposure is. Claims here cite the enforcing line; if a citation does not resolve, that is a
 bug — please report it.
 
-Every claim below was checked against the tree at v0.5.0.
+Every claim below was checked against the tree **at the commit that last touched this file** —
+most recently **2026-08-15**. The earlier wording pinned the check to a *version* (`v0.5.0`),
+which is vacuous: one version spans dozens of commits, so "checked at v0.5.0" says nothing
+about which tree was read. The date of the check is the part worth publishing.
 
 ## Threat model
 
@@ -83,7 +86,13 @@ discovered:
 - **When it runs.** On `startup`, `clear` and `compact` — the `SessionStart` sources that
   begin a session with the routing payload **absent** from context. `resume` and `fork` are
   deliberately **not** wired: both replay or copy an existing transcript, so the payload is
-  still there and re-injecting it buys nothing. `compact` is wired because compaction
+  taken to be still there and re-injecting it buys nothing. **That last step is an inference,
+  not a measurement.** It is a claim about *harness* behavior, read off the `SessionStart`
+  contract; this repo asserts it and nothing in this repo verifies it — the same caveat
+  `scripts/lib/render.mjs` states beside `SESSION_START_SOURCES`. What **is** verified
+  end-to-end is the other direction: compaction evicting the payload, and the hook putting it
+  back. If the inference is wrong, the failure mode is a quiet under-injection (a resumed
+  session with no routing table), not an over-injection. `compact` is wired because compaction
   **evicts** the payload, and the cost of that is stated rather than smoothed over: `compact`
   cannot distinguish a manual `/compact` from an auto-compaction, so a firing **can** land
   inside live work — inside a running `/dev-loop`, for instance. Nothing structural prevents
