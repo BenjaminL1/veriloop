@@ -282,12 +282,12 @@ function buildConfig(cj, roster, repoName, interview = {}) {
 function buildMeta(repoName, hasUi) {
   return {
     name: `${repoName}-dev-loop`,
-    description: `Per-feature dev loop for ${repoName}: plan(vs constitution) -> triage -> worktree implement -> risk-tiered gate(real exit-code checks + review lenses${hasUi ? ' + screenshot' : ''}) -> bounded auto-fix -> docs sync -> push preview. Stops before merge.`,
+    description: `Per-feature dev loop for ${repoName}: plan(vs constitution) -> triage -> worktree implement -> risk-tiered gate(real exit-code checks + review lenses${hasUi ? ' + screenshot' : ''}) -> bounded auto-fix of blockers (and, under resolve=clean, of independently confirmed concerns) -> docs sync -> push preview. Stops before merge.`,
     phases: [
       { title: 'Plan', detail: 'design + baseline review vs constitution + risk triage' },
       { title: 'Implement', detail: 'build in an isolated git worktree' },
       { title: 'Gate', detail: 'real exit-code checks + review lenses (depth by tier)' },
-      { title: 'Fix', detail: 'bounded auto-fix of blockers (<=3 passes)' },
+      { title: 'Fix', detail: 'bounded auto-fix of blockers — plus confirmed concerns under resolve=clean (<=3 passes)' },
       { title: 'Land', detail: 'docs sync + push branch/preview (no merge)' },
       { title: 'Report', detail: 'compress the run into a lossless brief' },
     ],
@@ -431,6 +431,11 @@ function main() {
   // roster-conditional risk keywords (e.g. drift) engage.
   applyRosterAdd(roster, interview);
   const config = buildConfig(cj, roster, repoName, interview);
+  // resolve-to-clean (D1 + D6). Attached HERE rather than inside `buildConfig` so the
+  // line numbers the constitution and both hand-owned `*.overrides.md` cite in this file
+  // (`:303 backup`, `:313 machine`, `:325 spliceBlock`, `:351 handOnce`) do not move.
+  config.resolveDefault = buildResolveDefault(interview);
+  config.protectedPaths = deriveProtectedPaths(args.repo, config);
   const meta = buildMeta(repoName, cj.has_ui);
   // Tier 1 (declared dependencies) and Tier 3 (file census) facts for the domain
   // audit. Computed HERE, by a script, and published in the manifest so the audit
@@ -569,6 +574,13 @@ function main() {
     roster_notes: roster.notes,
     gate_commands: config.gate,
     budget: config.budget,
+    // The keys `lint-bundle.mjs`'s GENERALIZED manifest↔workflow parity check compares.
+    // `cross_model` and `budget` were emitted into the workflow with no manifest twin to
+    // check them against; `resolve_default` and `protected_paths` join them rather than
+    // adding two more unchecked copies (constitution rule 9).
+    cross_model: config.crossModel,
+    resolve_default: config.resolveDefault,
+    protected_paths: config.protectedPaths,
     e2e: config.e2e,
     commands_summary: Object.fromEntries(Object.entries(cj.commands).map(([k, c]) => [k, { cmd: c.cmd, safety: c.safety, verified: c.verified, verified_by_ci: c.verified_by_ci }])),
     domain_facts: domainFacts,
@@ -696,6 +708,99 @@ function cargoShare() {
 /** Rust as the primary stack OR as a maturin extension alongside python. */
 function usesCargo(cj) {
   return cj.stack.includes('rust') || (cj.polyglot || []).some((p) => /rust|maturin/i.test(p));
+}
+
+// ---------------------------------------------------------------------------
+// resolve-to-clean (spec `.claude/veriloop/specs/resolve-to-clean.md`, D1 + D6).
+//
+// FUNCTION DECLARATIONS at the foot of the file for the reason stated above: this
+// file is cited by `file:line` from the constitution, both hand-owned
+// `*.overrides.md`, `interview.json`, the manifest, SECURITY.md and README.md, and
+// declarations hoist, so nothing above them moves.
+// ---------------------------------------------------------------------------
+
+/**
+ * D1. The repo's DEFAULT resolve mode. Fails the BUILD on an unrecognized value —
+ * the same posture as an unknown posture or model name: never emit a loop that
+ * silently runs a different mode than the interview asked for.
+ */
+function buildResolveDefault(interview) {
+  const v = interview.resolve_default;
+  if (v === undefined || v === null) return 'blockers';
+  if (v !== 'blockers' && v !== 'clean') {
+    throw new Error(`interview.resolve_default: '${v}' is not one of blockers | clean`);
+  }
+  return v;
+}
+
+/**
+ * The classes the protected-path guard covers, in the order the spec's D6 lists them.
+ * `deletionsOnly` classes hard-stop only on a REMOVAL — a fix pass must still be able
+ * to ADD the selftest assertion constitution rule 3 demands.
+ *
+ * A FUNCTION, not a `const`: everything in this trailer is reached from `main()`, which
+ * runs above it, and only declarations hoist. NOT exported: `main()` runs at import
+ * time, so nothing may import this module — the selftest reads the GENERATED manifest
+ * instead, which is the same source of truth one step downstream.
+ */
+function protectedClasses() {
+  return ['constitution', 'personas', 'overrides', 'interview', 'gate-defs', 'binding-spec', 'history', 'hostile-fixtures', 'selftest'];
+}
+
+/**
+ * D6. Derive the guard's path list AT GENERATE TIME, per host repo, REPO-RELATIVE only
+ * (constitution rule 7 — emitted artifacts are portable). A trailing `/` means "this
+ * prefix"; anything else is an exact path.
+ *
+ * A class that derives EMPTY on this repo is still recorded, with `path: null`, so the
+ * manifest and the workflow both say plainly which classes the guard does NOT cover
+ * here. The guard skips a null path; it never implies coverage it lacks.
+ */
+function deriveProtectedPaths(repo, config) {
+  const found = [];
+  const add = (path, cls, deletionsOnly = false) => found.push({ path, class: cls, deletionsOnly });
+  add(config.constitution, 'constitution');
+  for (const e of config.experts) { add(e.file, 'personas'); add(e.overrides, 'overrides'); }
+  add('.claude/veriloop/interview.json', 'interview');
+  // the gate's own definitions: the detected commands and the emitted manifest
+  add('.claude/veriloop/commands.json', 'gate-defs');
+  add('.claude/veriloop/veriloop-manifest.json', 'gate-defs');
+  add('.claude/veriloop/specs/', 'binding-spec');
+  add('.claude/veriloop/history/', 'history');
+  if (existsSync(join(repo, 'fixtures/hostile-ci'))) add('fixtures/hostile-ci/', 'hostile-fixtures');
+  const selftest = resolveSelftestPath(repo, config.gate);
+  if (selftest) add(selftest, 'selftest', true);
+  // record every class, including the ones that derived nothing here
+  for (const cls of protectedClasses()) {
+    if (!found.some((p) => p.class === cls)) found.push({ path: null, class: cls, deletionsOnly: cls === 'selftest' });
+  }
+  return found;
+}
+
+/**
+ * Resolve the repo's TEST script to an in-repo file that exists — the `selftest` class.
+ * The gate command is usually a wrapper (`npm test`), so it is followed through
+ * `package.json` scripts once, then scanned for the first source-file token that
+ * resolves on disk. No match ⇒ null ⇒ the class is recorded as empty rather than
+ * guessed.
+ */
+function resolveSelftestPath(repo, gate) {
+  const test = (gate || []).find((c) => c.name === 'test');
+  if (!test) return null;
+  let cmd = test.cmd;
+  const wrapper = cmd.match(/^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([\w:.-]+)/);
+  if (wrapper) {
+    try {
+      const body = (JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).scripts || {})[wrapper[1]];
+      if (body) cmd = body;
+    } catch { /* no/unreadable package.json — fall through to the raw command */ }
+  }
+  for (const raw of cmd.split(/\s+/)) {
+    const tok = raw.replace(/^['"]|['"]$/g, '').replace(/^\.\//, '');
+    if (!/^[\w./-]+\.(mjs|cjs|js|ts|py|rs)$/.test(tok) || tok.startsWith('..')) continue;
+    if (existsSync(join(repo, tok))) return tok;
+  }
+  return null;
 }
 
 /** Rust-primary: no install step needed — the registry cache is already shared. */

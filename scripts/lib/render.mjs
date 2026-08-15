@@ -198,7 +198,7 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     .join(' · ');
   return (
     `---\n` +
-    `description: Run the ${repoName} per-feature dev loop (detect/confirm the spec → plan → risk-tiered gate → bounded auto-fix → push a preview) on an isolated branch, stopping before merge for owner sign-off. For a full spec interview + expert council on a non-trivial feature, run /dev-plan first to produce the binding spec.\n` +
+    `description: Run the ${repoName} per-feature dev loop (detect/confirm the spec → plan → risk-tiered gate → bounded auto-fix of blockers — and, with resolve=clean, of independently confirmed concerns too → push a preview) on an isolated branch, stopping before merge for owner sign-off. For a full spec interview + expert council on a non-trivial feature, run /dev-plan first to produce the binding spec.\n` +
     `---\n\n` +
     `Run the **${repoName} dev-loop** for this feature:\n\n` +
     `> $ARGUMENTS\n\n` +
@@ -232,7 +232,11 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `   against the base tree, so a **pre-existing** red check is a concern, not a blocker — but a NEW failure\n` +
     `   stacked on a red baseline still blocks. Emits **PASS / CONCERNS / FAIL / WAIVED**.\n` +
     `5. **Bounded auto-fix** — on FAIL, fixes blockers and re-runs, up to **3 passes**, stopping early if it\n` +
-    `   stops making progress.\n` +
+    `   stops making progress. With \`args.resolve = "clean"\` each SHOULD-FIX first goes to an **independent\n` +
+    `   confirm agent**, and the loop then also fixes the concerns that survive confirmation — never the raw\n` +
+    `   ones, and never one the confirmer judged pre-existing (baseline code stays out of scope). The halt\n` +
+    `   rule becomes lexicographic on (blockers, confirmed concerns), and one pass stays reserved for the\n` +
+    `   concerns phase inside the same 3.\n` +
     `6. **Docs sync**, then **push the branch + leave a preview**.\n\n` +
     `It **STOPS before merge/deploy** — that is the owner gate.\n\n` +
     `## Options\n\n` +
@@ -240,6 +244,18 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `- \`args.waive = ["substring", ...]\` — human waiver: downgrade a matching blocker to WAIVED. An agent\n` +
     `  may never waive its own finding.\n` +
     `- \`args.spec = "..."\` — the spec from step 1 (binding on the planner, implementer, and reviewers).\n` +
+    `- \`args.resolve = "blockers" | "clean"\` — how far the loop resolves findings. **Default \`blockers\`:\n` +
+    `  today's behavior exactly** — the fix loop runs on FAIL only and concerns are reported, not qualified.\n` +
+    `  \`clean\` sends every SHOULD-FIX to a fresh **independent confirm agent** first (blockers are never\n` +
+    `  qualified away), counts only confirmed concerns toward the verdict, and extends the fix loop to the\n` +
+    `  confirmed, non-pre-existing, non-waived ones. The attestation records the raw AND confirmed counts,\n` +
+    `  so every clean run also measures the lenses' own noise rate. A pre-existing finding is never fixed,\n` +
+    `  but \`args.waive\` reaches it like any other finding — a waiver can only ever yield WAIVED, never PASS.\n` +
+    `  The protected-path guard (the constitution, personas/overrides, interview/gate definitions, specs,\n` +
+    `  history, hostile fixtures, or a deletion from the selftest) watches fix passes in BOTH modes: under\n` +
+    `  \`clean\` a touch HARD-STOPS the run, under \`blockers\` it is logged and recorded in the attestation's\n` +
+    `  \`guardStops\` with the verdict untouched. Either way it is a tripwire over agent-reported diff lists,\n` +
+    `  since this workflow cannot run git itself.\n` +
     `- \`args.posture = "frugal" | "balanced" | "max"\` — the cost dial. Shifts the model + reasoning effort of\n` +
     `  each phase. **It never removes a check, a lens, or the baseline probe** — the exit-code gate is ground\n` +
     `  truth, not a budget line.\n` +

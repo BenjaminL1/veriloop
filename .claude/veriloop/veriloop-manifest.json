@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-02T08:14:29.443Z",
+  "generated_at": "2026-08-15T08:37:51.790Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "7022a3a173d757c82b23d9dce752ba3a9eb0aa89",
+  "repo_sha": "a9e297177e8acffb9d68fc45093f75f4c8b451df",
   "stack": [
     "node"
   ],
@@ -177,6 +177,80 @@
     },
     "effort": {}
   },
+  "cross_model": true,
+  "resolve_default": "blockers",
+  "protected_paths": [
+    {
+      "path": ".claude/veriloop/constitution.md",
+      "class": "constitution",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/baseline-reviewer.md",
+      "class": "personas",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/baseline-reviewer.overrides.md",
+      "class": "overrides",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/security.md",
+      "class": "personas",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/security.overrides.md",
+      "class": "overrides",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/drift.md",
+      "class": "personas",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/experts/drift.overrides.md",
+      "class": "overrides",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/interview.json",
+      "class": "interview",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/commands.json",
+      "class": "gate-defs",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/veriloop-manifest.json",
+      "class": "gate-defs",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/specs/",
+      "class": "binding-spec",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/history/",
+      "class": "history",
+      "deletionsOnly": false
+    },
+    {
+      "path": "fixtures/hostile-ci/",
+      "class": "hostile-fixtures",
+      "deletionsOnly": false
+    },
+    {
+      "path": "scripts/selftest.mjs",
+      "class": "selftest",
+      "deletionsOnly": true
+    }
+  ],
   "e2e": null,
   "commands_summary": {
     "install": {
@@ -356,7 +430,7 @@
     {
       "path": ".claude/veriloop/session-routing.md",
       "ownership": "machine",
-      "status": "written"
+      "status": "unchanged"
     },
     {
       "path": ".claude/veriloop/session-start.mjs",

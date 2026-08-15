@@ -3558,6 +3558,484 @@ function assert(cond, desc) {
   for (const d of [rustDir, mixDir, nodeDir]) rmSync(d, { recursive: true, force: true });
 }
 
+// --- resolve-to-clean (spec `.claude/veriloop/specs/resolve-to-clean.md`, D9). The fix
+//     loop's predicate is SLICED out of a freshly generated workflow and EXECUTED against a
+//     case table built INLINE here — never from a fixture (constitution rule 3). Until this
+//     block existed, nothing in the repo pinned the fix loop at all: the halt rule, the
+//     budget and the concerns phase were all reachable only by running a real drive.
+//
+//     The `veriloop:verdict` region is spliced in ahead of `veriloop:resolve` because D7
+//     REUSES `applyWaivers` for concerns rather than growing a second copy. Both regions are
+//     pure, so the composition is too. ---
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'veriloop-resolve-'));
+  writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'rtc', scripts: { lint: 'eslint .', test: 'node scripts/selftest.mjs' } }));
+  mkdirSync(join(tmp, 'scripts'), { recursive: true });
+  writeFileSync(join(tmp, 'scripts/selftest.mjs'), '// synthetic test entrypoint\n');
+  mkdirSync(join(tmp, 'fixtures/hostile-ci'), { recursive: true });
+  const cj = detectCommands(tmp);
+  const cjPath = join(tmp, 'commands.json');
+  writeFileSync(cjPath, JSON.stringify(cj, null, 2));
+  spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp], { encoding: 'utf8' });
+  const man = JSON.parse(readFileSync(join(tmp, '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  const wf = readFileSync(join(tmp, `.claude/workflows/${man.repo_name}-dev-loop.js`), 'utf8');
+
+  const VS = '// <<< veriloop:verdict:start >>>', VE = '// <<< veriloop:verdict:end >>>';
+  const RS = '// <<< veriloop:resolve:start >>>', RE = '// <<< veriloop:resolve:end >>>';
+  assert(wf.includes(RS) && wf.includes(RE), 'template: emitted workflow carries the veriloop:resolve markers');
+  const region = wf.slice(wf.indexOf(VS) + VS.length, wf.indexOf(VE)) + wf.slice(wf.indexOf(RS) + RS.length, wf.indexOf(RE));
+  const R = new Function(`${region}; return { resolveState, shouldFix, progressed, budgetCaps, diffDelta, guardViolations, isCheckFact, CHECK_FACT_PREFIX };`)();
+
+  // The MODE DERIVATION itself, sliced and EXECUTED — not just the pure predicate it
+  // feeds. Until this case existed, the arg-parsing line where the mode is actually
+  // chosen was pinned by nothing, and its comment could promise anything.
+  const MS = '// <<< veriloop:resolvemode:start >>>', ME = '// <<< veriloop:resolvemode:end >>>';
+  assert(wf.includes(MS) && wf.includes(ME), 'template: emitted workflow carries the veriloop:resolvemode markers');
+  const modeRegion = wf.slice(wf.indexOf(MS) + MS.length, wf.indexOf(ME));
+  const deriveMode = new Function('VERILOOP', 'a', `${modeRegion}; return resolveMode;`);
+  assert(
+    deriveMode({ resolveDefault: 'blockers' }, {}) === 'blockers' &&
+      deriveMode({}, {}) === 'blockers' &&
+      deriveMode({ resolveDefault: 'clean' }, {}) === 'clean' &&
+      deriveMode({ resolveDefault: 'blockers' }, { resolve: 'clean' }) === 'clean' &&
+      deriveMode({ resolveDefault: 'clean' }, { resolve: 'blockers' }) === 'blockers',
+    'resolve/mode: an ABSENT `resolve` arg takes the repo default and a recognized one wins over it (acceptance 1 — absent ⇒ today\'s behavior)',
+  );
+  assert(
+    deriveMode({ resolveDefault: 'clean' }, { resolve: 'blokers' }) === 'blockers' &&
+      deriveMode({ resolveDefault: 'clean' }, { resolve: '' }) === 'blockers' &&
+      deriveMode({ resolveDefault: 'clean' }, { resolve: true }) === 'blockers',
+    'resolve/mode: an UNRECOGNIZED `resolve` value never ESCALATES — it falls back to blockers even where the repo default is clean, so a typo cannot silently arm the guard or spend confirm agents',
+  );
+
+  // --- the gate results the table runs against, all built inline ---
+  const G = (verdict, blockers, concerns, waived = []) => ({ verdict, blockers, concerns, waived });
+  const conf = (index, verdict, preExisting = false, extra = {}) => ({ index, verdict, preExisting, citation: 'src/a.ts:4', reason: 'r', ...extra });
+
+  // ACCEPTANCE 1 — `resolve` absent/'blockers' ⇒ identical to today. `resolveState` is a
+  // strict pass-through: the gate's verdict survives untouched, nothing is confirmed
+  // (null, not zero — a null is "never measured"), and nothing is fixable.
+  const passthru = R.resolveState(G('CONCERNS', [], ['[code-review] x', '[drift] y']), null, 'blockers', []);
+  assert(
+    passthru.effectiveVerdict === 'CONCERNS' && passthru.confirmedConcerns === null &&
+      passthru.fixable.length === 0 && passthru.rawConcerns === 2,
+    'resolve: default mode is a strict PASS-THROUGH — the gate verdict is unchanged, nothing is confirmed (null), nothing is fixable (acceptance 1)',
+  );
+  const passWaive = R.resolveState(G('CONCERNS', [], ['[drift] flaky helper']), null, 'blockers', ['flaky helper']);
+  assert(
+    passWaive.effectiveVerdict === 'CONCERNS' && passWaive.waivedConcerns.length === 0,
+    'resolve: default mode applies NO waiver to a concern — waivers keep their pre-feature blockers-only meaning (acceptance 1)',
+  );
+  assert(
+    R.shouldFix(R.resolveState(G('CONCERNS', [], ['x']), null, 'blockers', []), 'blockers') === false &&
+      R.shouldFix(R.resolveState(G('FAIL', ['b'], ['x']), null, 'blockers', []), 'blockers') === true,
+    'resolve: under default mode the fix loop runs on FAIL and ONLY on FAIL (acceptance 1)',
+  );
+  assert(
+    R.progressed({ blockers: 3, fixable: 0 }, { blockers: 2, fixable: 0 }) === true &&
+      R.progressed({ blockers: 3, fixable: 0 }, { blockers: 3, fixable: 0 }) === false &&
+      R.progressed({ blockers: 3, fixable: 0 }, { blockers: 4, fixable: 0 }) === false,
+    'resolve: with fixable pinned at 0 the lexicographic halt reduces EXACTLY to today\'s "stop unless blockers went down" (acceptance 1)',
+  );
+  const capsB = R.budgetCaps('blockers', 3);
+  assert(capsB.blockerCap === 3 && capsB.total === 3, 'resolve: default mode reserves nothing — blockers may use the whole MAX_FIX budget, as today (acceptance 1)');
+
+  // FAIL-only entry under clean: blockers dominate and are NEVER qualified away.
+  const cleanFail = R.resolveState(G('FAIL', ['[security] real blocker'], ['[drift] c0']), [conf(0, 'refute')], 'clean', []);
+  assert(
+    cleanFail.effectiveVerdict === 'FAIL' && cleanFail.fixable.length === 0,
+    'resolve: a blocker keeps full weight under clean mode — a refuted concern cannot lift the FAIL (blockers are never qualified away)',
+  );
+
+  // Clean-mode entry ON CONFIRMED CONCERNS — the whole point of the feature.
+  const cleanConf = R.resolveState(G('CONCERNS', [], ['[drift] c0', '[code-review] c1']), [conf(0, 'confirm'), conf(1, 'refute')], 'clean', []);
+  assert(
+    cleanConf.effectiveVerdict === 'CONCERNS' && cleanConf.rawConcerns === 2 && cleanConf.confirmedConcerns === 1 &&
+      cleanConf.fixable.length === 1 && cleanConf.fixable[0] === '[drift] c0' && R.shouldFix(cleanConf, 'clean') === true,
+    'resolve: clean mode counts only CONFIRMED concerns, records raw AND confirmed (2 → 1), and enters the fix loop on the confirmed one',
+  );
+  const allRefuted = R.resolveState(G('CONCERNS', [], ['[drift] c0', '[ux] c1']), [conf(0, 'refute'), conf(1, 'refute')], 'clean', []);
+  assert(
+    allRefuted.effectiveVerdict === 'PASS' && allRefuted.confirmedConcerns === 0 && R.shouldFix(allRefuted, 'clean') === false,
+    'resolve: an UNCONFIRMED SHOULD-FIX never blocks PASS — a clean PASS is reachable and means something (acceptance 4)',
+  );
+
+  // D3 scope fence — confirmed PRE-EXISTING is attested, counted, and never fixed.
+  const preEx = R.resolveState(G('CONCERNS', [], ['[security] baseline defect']), [conf(0, 'confirm', true)], 'clean', []);
+  assert(
+    preEx.confirmedConcerns === 1 && preEx.preExisting.length === 1 && preEx.fixable.length === 0 &&
+      preEx.effectiveVerdict === 'CONCERNS',
+    'resolve: a confirmed PRE-EXISTING finding is attested and counted but NEVER fixable — the fixer does not enter baseline code (acceptance 4)',
+  );
+  // OWNER RULING 3 — the pre-existing bucket is WAIVABLE. Before the ruling this bucket
+  // was unconditional: one genuine baseline defect pinned every run of that branch at
+  // CONCERNS forever, with no human-authored way out, which is exactly the structural
+  // unreachability the ruling names. The waiver folds it into `waivedConcerns`; it is
+  // still never fixable (baseline code stays out of scope) and still never PASS.
+  const preExWaived = R.resolveState(G('CONCERNS', [], ['[security] baseline defect']), [conf(0, 'confirm', true)], 'clean', ['baseline defect']);
+  assert(
+    preExWaived.effectiveVerdict === 'WAIVED' && preExWaived.preExisting.length === 0 &&
+      preExWaived.waivedConcerns.length === 1 && preExWaived.fixable.length === 0 &&
+      preExWaived.confirmedConcerns === 1,
+    'resolve: a confirmed PRE-EXISTING finding matched by an owner waiver folds into waivedConcerns, stops forcing CONCERNS, and attests WAIVED — still never fixable, still never PASS (owner ruling 3)',
+  );
+  // NON-VACUITY for the case above: the waiver has to MATCH. A waiver aimed elsewhere
+  // leaves the pre-existing floor exactly where the ratified D3 put it.
+  const preExMismatched = R.resolveState(G('CONCERNS', [], ['[security] baseline defect']), [conf(0, 'confirm', true)], 'clean', ['a different finding']);
+  assert(
+    preExMismatched.effectiveVerdict === 'CONCERNS' && preExMismatched.preExisting.length === 1 &&
+      preExMismatched.waivedConcerns.length === 0,
+    'resolve: an UNWAIVED pre-existing finding still forces CONCERNS — the pre-existing waiver is a match, not a blanket amnesty',
+  );
+  // And a pre-existing waiver must not leak into the FIXABLE path: waiving baseline code
+  // is permission to stop counting it, never permission to go edit it.
+  const mixedWaive = R.resolveState(
+    G('CONCERNS', [], ['[security] baseline defect', '[drift] live concern']),
+    [conf(0, 'confirm', true), conf(1, 'confirm')], 'clean', ['baseline defect'],
+  );
+  assert(
+    mixedWaive.effectiveVerdict === 'CONCERNS' && mixedWaive.fixable.length === 1 &&
+      mixedWaive.fixable[0] === '[drift] live concern' && mixedWaive.waivedConcerns.length === 1 &&
+      mixedWaive.preExisting.length === 0,
+    'resolve: waiving the pre-existing half of a mixed run frees the verdict of it but hands the fixer only the live concern — a waived baseline defect never becomes fixable work',
+  );
+  // FAIL CLOSED — a dead confirm agent's finding still counts, and is still not fixed.
+  const unver = R.resolveState(G('CONCERNS', [], ['[drift] unchecked']), [conf(0, 'confirm', false, { unverified: true })], 'clean', []);
+  assert(
+    unver.effectiveVerdict === 'CONCERNS' && unver.fixable.length === 0 && unver.unverified.length === 1 &&
+      unver.confirmedConcerns === 0,
+    'resolve: a concern whose confirm agent died still COUNTS (no manufactured PASS) and is still not handed to the fixer (fail closed) — but is NOT counted as CONFIRMED: fail-closed on the verdict is not fail-closed on the measurement, or a run where every confirm agent died would report 100% confirmation',
+  );
+
+  // CONSTITUTION RULE 2 — scripts own facts, the LLM owns judgment. A `[pre-existing]
+  // check:` concern is an exit code plus a deterministic base probe, not a lens
+  // judgment. No confirm agent may delete one from the verdict, and it must not appear
+  // on either side of the raw-vs-confirmed delta that D2/R1 define as the LENSES' noise
+  // rate. The fact string is built from the WORKFLOW'S OWN constant, so a rewording of
+  // the message cannot silently unhook the exemption.
+  const checkFact = `${R.CHECK_FACT_PREFIX}test was already RED on the base tree — not caused by this change (\`npm run test\`)`;
+  assert(
+    R.isCheckFact(checkFact) === true && R.isCheckFact('[drift] a lens finding') === false &&
+      R.isCheckFact('[security] mentions [pre-existing] check: mid-string') === false,
+    'resolve: the script-fact partition keys off the workflow\'s own CHECK_FACT_PREFIX at position 0 — a lens finding that merely quotes the phrase is not exempted',
+  );
+  const refutedFact = R.resolveState(G('CONCERNS', [], [checkFact]), [conf(0, 'refute')], 'clean', []);
+  assert(
+    refutedFact.effectiveVerdict === 'CONCERNS' && refutedFact.preExisting.length === 1 &&
+      refutedFact.fixable.length === 0 && refutedFact.rawConcerns === 0 && refutedFact.confirmedConcerns === 0,
+    'resolve: a REFUTED script-owned check fact still holds the verdict at CONCERNS — an LLM cannot overrule a red exit code into a PASS (constitution rule 2), and the fact counts on NEITHER side of the lens noise-rate delta (D2)',
+  );
+  const factPlusLens = R.resolveState(G('CONCERNS', [], [checkFact, '[drift] c1']), [conf(1, 'refute')], 'clean', []);
+  assert(
+    factPlusLens.rawConcerns === 1 && factPlusLens.confirmedConcerns === 0 &&
+      factPlusLens.effectiveVerdict === 'CONCERNS' && R.shouldFix(factPlusLens, 'clean') === false,
+    'resolve: with a check fact alongside a refuted lens finding, raw/confirmed count the LENS ONLY (1 → 0) and the check fact alone keeps the run off PASS',
+  );
+  // OWNER RULING 3 (2026-08-15) REPLACES the case that pinned "a check fact is not
+  // waivable": the whole PRE-EXISTING bucket now goes through `applyWaivers`, check facts
+  // included, because a red baseline check is the most genuine baseline defect there is
+  // and the ruling's whole point is that one must stop making a clean verdict
+  // structurally unreachable. Rule 2 is intact: the waiver is HUMAN-authored, no agent
+  // verdict moved anything, and the ceiling a waiver can buy is WAIVED — never PASS.
+  const factWaived = R.resolveState(G('CONCERNS', [], [checkFact]), [], 'clean', ['already RED on the base tree']);
+  assert(
+    factWaived.effectiveVerdict === 'WAIVED' && factWaived.waivedConcerns.length === 1 &&
+      factWaived.preExisting.length === 0 && factWaived.fixable.length === 0,
+    'resolve: an owner waiver matching a script-owned check fact folds it into waivedConcerns and lifts the run to WAIVED — never to PASS, and never by an agent verdict (owner ruling 3)',
+  );
+  const factUnwaived = R.resolveState(G('CONCERNS', [], [checkFact]), [], 'clean', ['some other finding entirely']);
+  assert(
+    factUnwaived.effectiveVerdict === 'CONCERNS' && factUnwaived.preExisting.length === 1 &&
+      factUnwaived.waivedConcerns.length === 0,
+    'resolve: a check fact NOT matched by any waiver still holds the run at CONCERNS — ruling 3 opened a human-authored door, it did not remove the floor',
+  );
+
+  // Lexicographic halt on the concerns axis.
+  assert(
+    R.progressed({ blockers: 0, fixable: 3 }, { blockers: 0, fixable: 2 }) === true &&
+      R.progressed({ blockers: 0, fixable: 3 }, { blockers: 0, fixable: 3 }) === false &&
+      R.progressed({ blockers: 1, fixable: 9 }, { blockers: 0, fixable: 40 }) === true,
+    'resolve: the halt rule is LEXICOGRAPHIC on (blockers, fixable) — same blockers + no fewer fixable stops; a blocker removed is progress whatever the concerns did',
+  );
+
+  // D4's reserved pass, and the shared budget.
+  const capsC = R.budgetCaps('clean', 3);
+  assert(
+    capsC.total === 3 && capsC.blockerCap === 2 && capsC.blockerCap < capsC.total,
+    'resolve: under clean mode blockers may consume at most MAX_FIX-1 passes — at least ONE stays reserved for the concerns phase inside the shared budget',
+  );
+
+  // D7 — waived-concern clean attests as WAIVED, never as PASS.
+  const waivedClean = R.resolveState(G('CONCERNS', [], ['[drift] known helper churn']), [conf(0, 'confirm')], 'clean', ['known helper churn']);
+  assert(
+    waivedClean.effectiveVerdict === 'WAIVED' && waivedClean.waivedConcerns.length === 1 && waivedClean.fixable.length === 0,
+    'resolve: a clean run whose only confirmed concern was WAIVED attests WAIVED, not PASS (acceptance 5)',
+  );
+
+  // D5 as amended by OWNER RULING 2 (2026-08-15) — the anti-appeasement contract is
+  // UNCONDITIONAL, in every fix prompt in every mode; only the closing sentence, which
+  // names a confirm pass that only clean runs ever run, stays clean-gated. Asserted on
+  // the SHAPE of the emitted expression rather than on its mere presence: the paragraph
+  // used to be the consequent of a `resolveMode === 'clean' ?` ternary, so "it is in the
+  // file" was already true of the version this ruling replaced.
+  const wfLines = wf.split('\n');
+  const appeasementLine = wfLines.find((l) => l.includes('ANTI-APPEASEMENT CONTRACT — binding on this pass'));
+  const confirmPassLine = wfLines.find((l) => l.includes('an independent confirm pass is what verifies it'));
+  assert(
+    !!appeasementLine && /^\s*`ANTI-APPEASEMENT CONTRACT/.test(appeasementLine) &&
+      !/resolveMode === 'clean' \?/.test(appeasementLine) &&
+      !!confirmPassLine && appeasementLine !== confirmPassLine &&
+      /resolveMode === 'clean' \?/.test(confirmPassLine),
+    'resolve: the anti-appeasement contract is emitted UNCONDITIONALLY (its literal opens the expression — no `clean` ternary), and only its confirm-pass closing sentence stays clean-gated (owner ruling 2)',
+  );
+
+  // The named budget-exhaustion marker, in the emitted workflow verbatim.
+  assert(
+    wf.includes('budget-exhausted-at-CONCERNS'),
+    'resolve: the emitted loop records the spec-named marker `budget-exhausted-at-CONCERNS` verbatim (D8 — the future dial reads it, never re-derives it)',
+  );
+
+  // --- the protected-path GUARD case table (D6, acceptance 3). One case per class. ---
+  const protectedPaths = man.protected_paths;
+
+  // OWNER RULING 1 (2026-08-15) — the MIDDLE PATH, and it REPLACES the clean-only arming
+  // this block used to pin. The census and `guardViolations` run in EVERY mode; only the
+  // CONSEQUENCE is mode-conditional. The arming decision is sliced out of the emitted
+  // workflow and EXECUTED (the `veriloop:resolvemode` precedent above), because a comment
+  // promising "observes in blockers too" is not evidence that it does.
+  const GS = '// <<< veriloop:guardmode:start >>>', GE = '// <<< veriloop:guardmode:end >>>';
+  assert(wf.includes(GS) && wf.includes(GE), 'template: emitted workflow carries the veriloop:guardmode markers');
+  const guardRegion = wf.slice(wf.indexOf(GS) + GS.length, wf.indexOf(GE));
+  const deriveGuard = new Function('protectedPaths', 'resolveMode', `${guardRegion}; return { guardOn, guardEnforced };`);
+  const gBlockers = deriveGuard(protectedPaths, 'blockers'), gClean = deriveGuard(protectedPaths, 'clean');
+  assert(
+    gBlockers.guardOn === true && gBlockers.guardEnforced === false &&
+      gClean.guardOn === true && gClean.guardEnforced === true &&
+      deriveGuard([{ path: null, class: 'constitution', deletionsOnly: false }], 'clean').guardOn === false,
+    'resolve/guard: the census + guard are ON in BOTH modes and ENFORCED only under clean — a default run observes and attests, it does not hard-stop (owner ruling 1)',
+  );
+  // The whole blockers-mode story end to end, on the same inputs the enforcing path uses:
+  // the violation IS computed (so it reaches `guardStops` and the attestation), and the
+  // verdict `resolveState` returns is the gate's own, untouched by any of it.
+  const guardConstPath = protectedPaths.find((p) => p.class === 'constitution').path;
+  const observed = R.guardViolations([{ path: guardConstPath, added: 4, deleted: 1 }], protectedPaths);
+  const observedState = R.resolveState(G('CONCERNS', [], ['[drift] c0']), null, 'blockers', []);
+  assert(
+    observed.length === 1 && observed[0].class === 'constitution' && gBlockers.guardEnforced === false &&
+      observedState.effectiveVerdict === 'CONCERNS' && R.shouldFix(observedState, 'blockers') === false,
+    'resolve/guard: under `blockers` a protected-path touch still produces a violation to log and attest in guardStops, while the verdict and the fix condition stay exactly what the gate said (owner ruling 1 — observe and attest, never a verdict change)',
+  );
+  // …and the CONSEQUENCE in the emitted loop is gated on `guardEnforced`, not on the
+  // census having run. `guardOn` alone reaching that branch would silently turn every
+  // default run's observation into a FAIL — the precise regression ruling 1 forbids.
+  assert(
+    /if \(guardEnforced && guardStops\.length\)/.test(wf) && !/if \(guardStops\.length\)/.test(wf) &&
+      /Guard OBSERVED \(resolve=blockers/.test(wf),
+    'resolve/guard: the emitted hard-stop branch is gated on `guardEnforced` (never on `guardStops` alone), and the observing path logs its stops instead — the mode split is one branch, outside the pure region',
+  );
+  const classes = [...new Set(protectedPaths.filter((p) => p.path).map((p) => p.class))];
+  // EXACT, not `>=`. The synthetic repo above is built so all NINE classes derive, so a
+  // regression that dropped one to `path: null` must fail HERE — under `>= 8` it passed
+  // while the per-class loop below (which skips null paths) also silently stopped
+  // covering it: the one assertion between a disarmed guard class and a landed change
+  // was satisfied by 8 of 9. The `uncovered` term names the offender in the message.
+  const uncovered = protectedPaths.filter((p) => !p.path).map((p) => p.class);
+  assert(
+    classes.length === 9 && uncovered.length === 0 &&
+      protectedPaths.some((p) => p.class === 'selftest' && p.deletionsOnly === true),
+    `resolve/guard: the generator derives a protected path for EVERY one of the nine classes on a repo that has them all (${classes.length}: ${classes.join(', ')}${uncovered.length ? `; UNCOVERED: ${uncovered.join(', ')}` : ''}), and only the selftest class is deletions-only`,
+  );
+  const touched = [];
+  for (const p of protectedPaths.filter((x) => x.path)) {
+    const target = p.path.slice(-1) === '/' ? `${p.path}thing.md` : p.path;
+    const stops = R.guardViolations([{ path: target, added: 3, deleted: 2 }], protectedPaths);
+    if (!stops.length) touched.push(p.class);
+  }
+  assert(touched.length === 0, `resolve/guard: EVERY protected class hard-stops on a fix-pass touch${touched.length ? ` [passed through: ${touched.join(', ')}]` : ''} (acceptance 3)`);
+  const selftestPath = protectedPaths.find((p) => p.class === 'selftest').path;
+  assert(
+    R.guardViolations([{ path: selftestPath, added: 12, deleted: 0 }], protectedPaths).length === 0 &&
+      R.guardViolations([{ path: selftestPath, added: 0, deleted: 1 }], protectedPaths).length === 1,
+    'resolve/guard: the selftest class is deletions-only — a fix pass may ADD the assertion rule 3 demands, and may never remove one',
+  );
+  assert(
+    R.guardViolations([{ path: 'src/widget.ts', added: 40, deleted: 9 }], protectedPaths).length === 0,
+    'resolve/guard: an ordinary source file is untouched by the guard — it stops protected paths, not work',
+  );
+  // RENAMES. `git diff --numstat` prints a move as a COMPOSITE path, and the census
+  // prompt asks the agent to report paths exactly as numstat prints them — so a raw
+  // string compare matched neither side and a fix pass could MOVE the constitution (or
+  // the selftest) straight past the tripwire without lying about it.
+  const constPath = protectedPaths.find((p) => p.class === 'constitution').path;
+  const dir = constPath.slice(0, constPath.lastIndexOf('/') + 1), base = constPath.slice(constPath.lastIndexOf('/') + 1);
+  assert(
+    R.guardViolations([{ path: `${dir}{${base} => renamed.md}`, added: 1, deleted: 0 }], protectedPaths).length === 1 &&
+      R.guardViolations([{ path: `{${constPath} => elsewhere/x.md}`, added: 0, deleted: 0 }], protectedPaths).length === 1 &&
+      R.guardViolations([{ path: `${constPath} => elsewhere/x.md`, added: 0, deleted: 0 }], protectedPaths).length === 1,
+    'resolve/guard: a RENAME reported in numstat\'s composite form hard-stops in all three shapes (`dir/{a => b}`, `{a => b}`, `a => b`) — moving a protected path out from under the guard is not an escape hatch',
+  );
+  assert(
+    R.guardViolations([{ path: `${selftestPath} => scripts/renamed.mjs`, added: 0, deleted: 0 }], protectedPaths).length === 1,
+    'resolve/guard: a rename counts as a REMOVAL even at +0/-0, so it hard-stops the deletions-only selftest class too — the protected file no longer exists where the guard looks',
+  );
+  assert(
+    R.guardViolations([{ path: 'src/{old.ts => new.ts}', added: 0, deleted: 0 }], protectedPaths).length === 0,
+    'resolve/guard: renaming an ordinary source file is still not a guard hit — rename handling widened the matcher, not its scope',
+  );
+  assert(
+    R.guardViolations([{ path: 'x.md', added: 1, deleted: 0 }], [{ path: null, class: 'hostile-fixtures', deletionsOnly: false }]).length === 0,
+    'resolve/guard: a class that derived EMPTY (path null) matches nothing — the guard never implies coverage it does not have',
+  );
+  // the census delta itself: only what a fix pass CHANGED reaches the guard
+  const before = [{ path: 'src/a.ts', added: 10, deleted: 0 }, { path: selftestPath, added: 5, deleted: 0 }];
+  const delta = R.diffDelta(before, [{ path: 'src/a.ts', added: 14, deleted: 0 }, { path: selftestPath, added: 5, deleted: 0 }]);
+  assert(
+    delta.length === 1 && delta[0].path === 'src/a.ts' && delta[0].added === 4,
+    'resolve/guard: diffDelta reports only what the fix pass changed — a file the implementer touched and the fixer did not is not a guard hit',
+  );
+  const dropped = R.diffDelta(before, [{ path: 'src/a.ts', added: 10, deleted: 0 }]);
+  assert(
+    dropped.length === 1 && dropped[0].dropped === true && R.guardViolations(dropped, protectedPaths).length === 1,
+    'resolve/guard: a protected path that VANISHES from the later census (its edits undone) is a removal, and hard-stops',
+  );
+  // NEGATIVE `added` — the shape the deletions-only class is actually attacked in. The
+  // censuses are CUMULATIVE against the base, so a fix pass that strips lines THIS BRANCH
+  // added reports `added` going DOWN and `deleted` staying 0: git counts no deletion,
+  // because relative to the base the lines never existed. The removal predicate read only
+  // `deleted > 0`, so this passed straight through the one class whose entire purpose is
+  // to stop it.
+  const shrunk = R.diffDelta([{ path: selftestPath, added: 300, deleted: 0 }], [{ path: selftestPath, added: 260, deleted: 0 }]);
+  assert(
+    shrunk.length === 1 && shrunk[0].added === -40 && shrunk[0].deleted === 0 &&
+      R.guardViolations(shrunk, protectedPaths).length === 1 &&
+      R.guardViolations(shrunk, protectedPaths)[0].class === 'selftest',
+    'resolve/guard: a fix pass that DELETES lines this branch added (cumulative `added` falls, `deleted` stays 0) is a removal and hard-stops the deletions-only selftest class',
+  );
+
+  // GUARANTEE CLASS. The workflow cannot run git, so the guard reads agent-reported
+  // lists. Nothing veriloop emits or publishes may call that deterministic enforcement.
+  const OVERCLAIM_DOCS = [
+    join(tmp, `.claude/workflows/${man.repo_name}-dev-loop.js`),
+    join(tmp, '.claude/commands/dev-loop.md'),
+    join(here, '..', 'README.md'),
+    join(here, '..', 'skills/veriloop/SKILL.md'),
+    join(here, '..', 'scripts/templates/dev-loop.template.js'),
+  ];
+  const overclaimed = OVERCLAIM_DOCS.filter((f) => existsSync(f) && /deterministic enforcement/i.test(readFileSync(f, 'utf8')));
+  assert(
+    overclaimed.length === 0,
+    `resolve/guard: no emitted artifact or published doc calls the protected-path guard "deterministic enforcement" — it is a tripwire over agent-reported diff lists (acceptance 6)${overclaimed.length ? ` [${overclaimed.join(', ')}]` : ''}`,
+  );
+
+  // OWNER RULING 4 (2026-08-15) — the guard's LAND-PHASE BACK DOOR. The guard watches fix
+  // passes; the docs-sync agent runs afterwards, outside it, and its permitted-target list
+  // used to name the constitution outright ("…and `$REPO/${CONSTITUTION}` if a rule
+  // changed"). Everything the fix loop is forbidden to do to that file, the Land phase was
+  // invited to do. The list is now read out of the emitted prompt and required not to
+  // contain it, so restoring the invitation goes red here rather than in a postmortem.
+  const docsSyncLine = wfLines.find((l) => l.includes('Docs sync for branch'));
+  const permittedTargets = (docsSyncLine || '').match(/update ONLY existing artifacts the change touched \(([^)]*)\)/);
+  assert(
+    !!docsSyncLine && !!permittedTargets && !/CONSTITUTION/.test(permittedTargets[1]) &&
+      !/if a rule changed/.test(docsSyncLine) && /owner-only, by hand/.test(docsSyncLine),
+    'resolve/guard: the Land docs-sync prompt no longer lists the constitution among its update targets and says outright that constitution edits are owner-only, by hand (owner ruling 4 — the guard\'s Land-phase back door)',
+  );
+
+  // --- D8: the attestation record carries the NAMED fields, from the SAME emitted region
+  //     the existing emit block executes. Synthetic evidence, built inline (rule 3). ---
+  const ES = '// <<< veriloop:emit:start >>>', EE = '// <<< veriloop:emit:end >>>';
+  const attestationFrom = new Function(`${wf.slice(wf.indexOf(ES) + ES.length, wf.indexOf(EE))}; return attestationFrom;`)();
+  const attBase = {
+    feature: 'f', repo: 'rtc', tier: 'standard', fixPasses: 1, gateHistory: [], filesChanged: [],
+    checks: [], lenses: [], blockers: [], concerns: ['[drift] c0', '[ux] c1'], waived: [], dryRun: false,
+  };
+  const attStamps = { ts: '2026-08-13T00-00-00Z', baseSha: 'b0', headSha: 'h0' };
+  const cleanRec = JSON.parse(attestationFrom({
+    ...attBase, verdict: 'CONCERNS', resolveMode: 'clean', rawConcerns: 2, confirmedConcerns: 1,
+    preExistingConcerns: ['[ux] c1'], waivedConcerns: [], guardStops: [], budgetExhaustedAt: 'budget-exhausted-at-CONCERNS',
+  }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+  assert(
+    cleanRec.resolveMode === 'clean' && cleanRec.rawConcerns === 2 && cleanRec.confirmedConcerns === 1 &&
+      cleanRec.preExistingConcerns.length === 1 && cleanRec.budgetExhaustedAt === 'budget-exhausted-at-CONCERNS',
+    'resolve/attestation: a clean run records resolveMode, BOTH concern counts (raw 2 / confirmed 1), the pre-existing finding and the named exhaustion marker (D8, acceptance 4+5)',
+  );
+  const defaultRec = JSON.parse(attestationFrom({ ...attBase, verdict: 'CONCERNS' }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+  assert(
+    defaultRec.resolveMode === 'blockers' && defaultRec.rawConcerns === 2 && defaultRec.confirmedConcerns === null &&
+      defaultRec.budgetExhaustedAt === null,
+    'resolve/attestation: a default-mode record says so and reports confirmedConcerns as NULL — nothing was confirmed, and a null is not a zero',
+  );
+
+  // --- PARITY, extended to the new key across the interview↔manifest↔workflow triangle ---
+  const selfInterview = JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/interview.json'), 'utf8'));
+  const selfMan = JSON.parse(readFileSync(join(here, '..', '.claude/veriloop/veriloop-manifest.json'), 'utf8'));
+  const selfWf = readFileSync(join(here, '..', '.claude/workflows/veriloop-dev-loop.js'), 'utf8');
+  const selfCfg = JSON.parse((selfWf.match(/^const VERILOOP = (\{[\s\S]*?\n\});$/m) || [])[1]);
+  assert(
+    selfMan.resolve_default === (selfInterview.resolve_default ?? 'blockers') &&
+      selfCfg.resolveDefault === selfMan.resolve_default &&
+      JSON.stringify(selfCfg.protectedPaths) === JSON.stringify(selfMan.protected_paths) &&
+      selfCfg.crossModel === selfMan.cross_model,
+    `self-host parity: resolve_default, protected_paths and cross_model agree across interview → manifest → workflow (resolve_default '${selfMan.resolve_default}')`,
+  );
+
+  // --- the parity table MUTATED, one key at a time, through lint-bundle as a BLACK BOX
+  //     (the `advise.md`-deleted / poisoned-record precedent: copy a real generated bundle,
+  //     break exactly one thing, run the real linter as a child process, read its exit code).
+  //     The check itself was generalized from `gate_commands`-only to a five-row key table,
+  //     and NOTHING made the four new rows go red: every row could be deleted from
+  //     PARITY_KEYS and every assertion in this file would still pass — the same
+  //     agrees-perfectly-while-stale failure the table exists to catch. The comparison is
+  //     never re-implemented here; a mutation is judged solely by lint-bundle's exit status
+  //     and by the mutated key being NAMED in what it printed.
+  const parityDir = mkdtempSync(join(tmpdir(), 'veriloop-parity-'));
+  cpSync(tmp, parityDir, { recursive: true });
+  const parityManPath = join(parityDir, '.claude/veriloop/veriloop-manifest.json');
+  const parityPristine = readFileSync(parityManPath, 'utf8');
+  assert(
+    spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' }).status === 0,
+    'lint-bundle: the copied bundle passes before any parity key is mutated (0 fail) — every failure below is attributable to its own mutation',
+  );
+  // one diverging edit per PARITY_KEYS row, each touching ONLY the manifest copy
+  const PARITY_MUTATIONS = [
+    ['gate_commands', (pm) => { pm.gate_commands[0].cmd = `${pm.gate_commands[0].cmd} --mutated`; }],
+    ['budget', (pm) => { pm.budget.posture = pm.budget.posture === 'max' ? 'frugal' : 'max'; }],
+    ['cross_model', (pm) => { pm.cross_model = !pm.cross_model; }],
+    ['resolve_default', (pm) => { pm.resolve_default = pm.resolve_default === 'clean' ? 'blockers' : 'clean'; }],
+    ['protected_paths', (pm) => { pm.protected_paths[0].path = 'mutated/elsewhere.md'; }],
+  ];
+  const paritySurvived = [];
+  for (const [key, mutate] of PARITY_MUTATIONS) {
+    const pm = JSON.parse(parityPristine);
+    mutate(pm);
+    writeFileSync(parityManPath, JSON.stringify(pm, null, 2));
+    const mutated = spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' });
+    const named = new RegExp(`manifest↔workflow parity: manifest \`${key}\``).test(mutated.stdout || '');
+    if (mutated.status === 0 || !named) paritySurvived.push(`${key}${mutated.status === 0 ? ' (exit 0)' : ' (unnamed)'}`);
+    writeFileSync(parityManPath, parityPristine); // restore before the next mutation
+  }
+  assert(
+    paritySurvived.length === 0,
+    `lint-bundle: EVERY manifest↔workflow parity key FAILS the bundle when it alone diverges, and the failure NAMES it (${PARITY_MUTATIONS.map(([k]) => k).join(', ')})${paritySurvived.length ? ` [SURVIVED: ${paritySurvived.join('; ')}]` : ''}`,
+  );
+  assert(
+    spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' }).status === 0,
+    'lint-bundle: the bundle passes again once the pristine manifest is restored — the loop above left no residue',
+  );
+  rmSync(parityDir, { recursive: true, force: true });
+
+  // build-time validation — never emit a loop that runs a mode the interview never named
+  const ivBad = join(tmp, 'bad-interview.json');
+  writeFileSync(ivBad, JSON.stringify({ resolve_default: 'everything' }));
+  const rBad = spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivBad], { encoding: 'utf8' });
+  assert(
+    rBad.status !== 0 && /resolve_default/.test(rBad.stderr || ''),
+    'resolve: an unknown interview.resolve_default FAILS THE BUILD, naming the key (fail fast, not mid-run)',
+  );
+
+  rmSync(tmp, { recursive: true, force: true });
+}
+
 // --- the PUBLISHED ROUTE-COUNT, pinned to the table this repo actually emits. Same shape as
 //     the gate-figure pin below and for the same reason: README, CHANGELOG and SECURITY each
 //     published "two rows" for a table that is no longer two rows, and three copies of one

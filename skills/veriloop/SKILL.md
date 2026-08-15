@@ -172,6 +172,10 @@ Schema (every field optional):
   "high_risk_areas": string[],      // extra keywords appended to the high-risk tier
   "budget_posture": "frugal" | "balanced" | "max",   // default balanced; cost dial
   "question_cap": int,              // default null (no cap); /dev-plan interview's DEFAULT question ceiling (positive int)
+  "resolve_default": "blockers" | "clean",   // default blockers (today's loop, unchanged). "clean" makes
+                                    // /dev-loop qualify every SHOULD-FIX through an independent confirm
+                                    // agent and extend the fix loop to the confirmed ones. Any OTHER
+                                    // value FAILS THE BUILD — it is never silently ignored.
   "phase_models": {                 // per-phase model — overrides the posture preset
     "plan"|"implement"|"review"|"checks"|"fix"|"land"|"report": "haiku"|"sonnet"|"opus"|"fable" },
   "phase_effort": {                 // per-phase reasoning effort
@@ -368,9 +372,24 @@ authored upstream by `/dev-plan`)** → plan-vs-constitution
 review → risk triage (trivial/standard/high) → isolated **worktree** implement → tiered
 **GO/NO-GO gate** (real typecheck/lint/test exit codes + review-lens experts + screenshot
 gate on UI + optional cross-model second opinion → **PASS / CONCERNS / FAIL / WAIVED**) →
-bounded auto-fix (≤3 passes, stop on no-progress) → docs sync → push a branch/preview,
-**STOP before merge** (owner gate). Waivers are human-only (`args.waive`); an agent may
-never waive its own finding.
+bounded auto-fix of **blockers** (≤3 passes, stop on no-progress) → docs sync → push a
+branch/preview, **STOP before merge** (owner gate). Waivers are human-only (`args.waive`);
+an agent may never waive its own finding.
+
+**`args.resolve` (default `"blockers"` — the shape above, unchanged).** With
+`resolve: "clean"` each SHOULD-FIX first goes to a **fresh independent confirm agent**
+(one finding + the diff, never another lens's agreement); only confirmed concerns count
+toward the verdict, and the fix loop extends to the confirmed, non-pre-existing,
+non-waived ones. Blockers are never qualified away. The attestation records both the raw
+and the confirmed count, so a clean run also measures the lenses' noise rate. A
+pre-existing finding is never fixed but is waivable like any other (a waiver yields
+WAIVED, never PASS). A fix-pass diff touching a protected path (constitution,
+personas/overrides, interview + gate definitions, specs, history, hostile fixtures, or a
+deletion from the selftest) is caught in **both** modes: under `clean` it hard-stops the
+run, under `blockers` it is logged and recorded in the attestation's `guardStops` with the
+verdict untouched. Either way it is a tripwire over an agent-reported diff census, since
+the workflow cannot run git. Docs sync at Land may never edit the constitution —
+constitution edits are owner-only, by hand.
 
 **Why the interview lives in a command, not the workflow:** the workflow's agents are
 background subagents with **no channel to ask the owner anything**. So `/dev-plan` (main

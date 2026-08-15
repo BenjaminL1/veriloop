@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased — resolve-to-clean: a SHOULD-FIX counts only if it survives independent confirmation
+
+Ratified spec: `.claude/veriloop/specs/resolve-to-clean.md`. The measured baseline it was
+written against: six recorded runs, concern counts 5/2/1/14/18/6, **zero PASS ever**, and one
+observed fix pass that took blockers 3 → 0 while concerns went 6 → 9. Concern counts behaved
+like draws from a fresh-lens resample, so the fix went to the **measurement** first.
+
+**New per-run arg `resolve`, default `"blockers"` — today's loop, unchanged.** The default
+path is a strict pass-through: same fix condition (FAIL only), same halt rule, same verdict
+semantics, no confirm agents spawned, no guard armed. `resolve: "clean"` sends every raw
+SHOULD-FIX to a **fresh independent confirm agent** (one finding plus the diff, and nothing
+about which lens raised it or how many agreed), counts only confirmed concerns toward the
+verdict, and extends the fix loop to the confirmed, non-pre-existing, non-waived ones.
+**Blockers are never qualified away.** A confirmed finding judged pre-existing is attested and
+never fixed. The attestation records the **raw and the confirmed count** — the first
+measurement veriloop has ever taken of its own lenses' noise rate. Optional interview key
+`resolve_default`; an unknown value fails the build.
+
+**A protected-path guard, honestly labelled — watching in every mode, stopping only under
+`resolve: "clean"`.** A fix-pass diff touching the constitution, an expert persona or its
+overrides, the interview/gate definitions, `.claude/veriloop/specs/`, the attestation
+history, `fixtures/hostile-ci/`, or *deleting* from the selftest is detected on every run.
+On a clean run it **hard-stops**. On a default run it is **observed and attested** — logged
+with its path and class, recorded in the attestation's `guardStops` — and the verdict and
+control flow are untouched, so default-mode verdict semantics still match today exactly
+(owner ruling, 2026-08-15; the earlier build scoped the census itself to clean, which bought
+byte-equivalence at the price of never measuring the thing). The path list derives per host
+repo at generate time and rides in the manifest; a class that derives nothing on a repo is
+recorded as a null and reported as a coverage GAP, never as coverage. It reads an
+**agent-reported** diff census — the workflow cannot run git — so it is a tripwire, and no
+artifact describes it as more than that; an assertion greps for the overclaim.
+
+**The anti-appeasement contract binds every fix pass, and the constitution leaves the
+docs-sync target list.** Fix prompts in *both* modes carry it: fix the cause, ship the
+assertion the constitution's test rule demands, never silence, reword or comment a finding
+away. Only the closing sentence — re-running the lenses is not resolution verification, an
+independent confirm pass is — stays clean-only, because that is the only mode with a confirm
+pass. Separately, the Land docs-sync agent no longer lists `constitution.md` among the
+artifacts it may update: constitution edits are owner-only, by hand. The guard watches fix
+passes and the docs-sync agent runs after them, so that entry was an open back door around
+the most protected path in the repo.
+
+**A confirmed pre-existing finding is waivable.** `applyWaivers` now runs over the
+pre-existing bucket too — the script-owned `[pre-existing] check:` facts included — so a
+matching human-authored `args.waive` entry folds it into `waivedConcerns` and it stops
+forcing CONCERNS. Constitution rule 2 is intact: no *agent* verdict can move a check fact,
+and the ceiling a waiver can buy is **WAIVED**, never PASS, which the future auto-merge dial
+reads as not clean. Before this, one genuine baseline defect made a clean verdict
+structurally unreachable for the life of the branch.
+
+**What the confirm pass may never touch.** A `[pre-existing] check:` concern is a
+script-owned fact — an exit code plus the deterministic baseline probe — not a lens
+judgment. It is never sent to a confirm agent, can never be qualified out of the verdict,
+and is counted on neither side of the raw-vs-confirmed delta, which measures the *lenses'*
+noise rate and nothing else. A run whose `npm test` was red at baseline cannot be labelled
+PASS by any agent verdict (constitution rule 2) — only an owner waiver reaches it, and only
+as far as WAIVED.
+
+**The manifest↔workflow parity check was generalized.** It compared `gate_commands` and
+nothing else, while `budget` and `crossModel` were emitted into both places and checked in
+neither. It is now a key table: `gate_commands`, `budget`, `cross_model`, `resolve_default`,
+`protected_paths` — and every row is pinned by a mutation case that diverges that one key in
+a copy of a generated bundle and requires `lint-bundle` to exit non-zero naming it, so a
+dropped row cannot pass silently the way the four unchecked copies did.
+
+**Gate count: 481 → 532.** The fix loop had no assertions at all before this change: the
+predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
+`verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
+default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
+value never escalates), confirmed-concern entry, lexicographic halt, pre-existing exclusion
+and the owner waiver that now lifts it (plus the mismatched-waiver and mixed-bucket cases
+that keep the waiver a match rather than an amnesty), the script-owned check-fact exemption,
+the reserved concern pass, waived-clean, and one guard case per protected class (the
+class-coverage assertion pins nine of nine, not `>= 8`) plus each of numstat's three rename
+shapes and the deletions-only class's real attack shape — a fix pass stripping lines *this
+branch* added, which the cumulative census reports as a falling `added` with `deleted` still
+0. The guard's arming decision got its own marker region (`veriloop:guardmode`) and is
+sliced and executed like the mode derivation, so "on in both modes, enforced only under
+clean" is a case rather than a comment; the hard-stop branch is required to be gated on
+`guardEnforced` and never on `guardStops` alone. The anti-appeasement contract is asserted
+on the SHAPE of the emitted expression — its literal must open the expression, with no
+`clean` ternary — because "the paragraph is in the file" was already true of the version
+the ruling replaced. The Land docs-sync prompt's permitted-target list is parsed and
+required not to name the constitution.
+
 ## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 
 **Motivated by probe evidence, not review taste.** Three routing probes were run against the

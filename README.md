@@ -243,11 +243,63 @@ commands at once.
 plan-vs-constitution review → risk triage (trivial / standard / high) → isolated
 **worktree** implement → tiered **GO/NO-GO gate** (real typecheck/lint/test exit
 codes + review-lens experts + screenshot gate on UI + optional cross-model second
-opinion → **PASS / CONCERNS / FAIL / WAIVED**) → bounded auto-fix (≤3 passes, stop
-on no-progress) → docs sync → push a branch/preview, **STOP before merge**. Waivers
-are human-only — an agent may never waive its own finding. The cross-model second
-opinion is **on by default** and can be disabled via the interview
+opinion → **PASS / CONCERNS / FAIL / WAIVED**) → bounded auto-fix of **blockers**
+(≤3 passes, stop on no-progress) → docs sync → push a branch/preview, **STOP before
+merge**. Waivers are human-only — an agent may never waive its own finding. The
+cross-model second opinion is **on by default** and can be disabled via the interview
 (`cross_model: false`).
+
+### Resolving to clean (`args.resolve`)
+
+The fix loop is **blockers-only by default**, and that default is unchanged: `resolve`
+absent or `"blockers"` runs exactly the loop above. With **`args.resolve = "clean"`**
+every SHOULD-FIX is first sent to a **fresh, independent confirm agent** that sees one
+finding and the diff and nothing else — no other lens's agreement, because agreement is
+not a second sample. A concern counts toward the verdict **only if it is confirmed**, and
+the fix loop then extends to exactly the confirmed ones. **Blockers are never qualified
+away.** A confirmed finding the confirmer judges **pre-existing** (the cited hunk is
+identical in the base tree) is attested and never fixed — the fixer does not enter
+baseline code — but it *is* **waivable** by `args.waive` like any other finding, so one
+genuine baseline defect no longer pins every run of the branch at CONCERNS with no way
+out. A waiver can only ever produce **WAIVED**, never PASS, and only a human writes one.
+The halt rule becomes lexicographic on `(blockers, confirmed concerns)`,
+one pass stays reserved for the concerns phase inside the same budget of 3, and the
+attestation records **both** the raw and the confirmed concern count — so every clean run
+also measures the lenses' own noise rate.
+
+A fix pass that touches a **protected path** (the constitution, the expert
+personas/overrides, the interview and gate definitions, `.claude/veriloop/specs/`, the
+attestation history, `fixtures/hostile-ci/`, or a *deletion* from the selftest) is caught in
+**every mode** — the diff census and the guard run on every fix pass — but the consequence is
+scoped: under `resolve = "clean"` a violation **hard-stops the run**, and under the default
+`blockers` it is **observed and attested**, logged with its path and class and recorded in the
+attestation's `guardStops`, with the verdict and the control flow untouched. Default runs
+therefore keep today's verdict semantics exactly while finally *measuring* how often a fix
+pass reaches for a protected path. The path list is derived per host repo at generate time and
+carried in the manifest, where a generalized parity check pins it — along with `budget`,
+`cross_model` and `resolve_default` — to the copy spliced into the workflow. It is a
+**tripwire, not a lock**: the workflow cannot run git, so the guard reads an agent-reported
+diff census, and when it trips it stops the run and reports rather than reverting anything.
+
+Every fix prompt, in every mode, carries the **anti-appeasement contract**: fix the cause,
+ship the assertion the constitution's test rule demands, never silence or reword a finding so
+that it stops being reported. Only its closing sentence — that re-running the lenses is not
+resolution verification, an independent confirm pass is — is clean-only, because that is the
+only mode where a confirm pass exists. The **docs-sync** step at Land may update READMEs,
+docstrings, type defs and plans, and explicitly **not** the constitution: those edits are
+owner-only, by hand.
+
+Pinning all of this, the gate went 481 → 532: the fix loop had no assertions at all before
+this change, and its predicate is now sliced out of a generated workflow and executed against
+an inline case table — pass-through under the default mode, the mode derivation itself (an
+unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,
+pre-existing exclusion and its owner-waivable escape, the script-owned check-fact exemption,
+the reserved concern pass, waived-clean, and one guard case per protected class plus numstat's
+three rename shapes and a fix pass deleting lines *this branch* added (which the cumulative
+census reports as a falling `added` with `deleted` still 0). The guard's own arming decision
+is sliced and executed too, so "observes in both modes, stops only under clean" is a test
+rather than a comment. Each parity key gets a mutation case: diverge it alone in a copy of a
+generated bundle and `lint-bundle` must go red naming that key.
 
 ### Repo-specific gate checks (`extra_checks`)
 
@@ -349,7 +401,7 @@ for code. Note the condition, because the intuitive guess is backwards: the fetc
 of the *skill*, not anything in `scripts/`, and it runs when `.claude/veriloop/domain.json` is
 **absent** (a first install) or `--refresh` is asked for. An existing `domain.json` is what
 suppresses it. One reader's note: `selftest.mjs` is
-the outlier at ~3,600 lines. It is a flat sequence of independent assertion blocks with
+the outlier at ~4,100 lines. It is a flat sequence of independent assertion blocks with
 section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
 for the behavior you care about.
 

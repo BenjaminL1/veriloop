@@ -174,16 +174,38 @@ function main() {
         if (existsSync(join(args.bundle, e.file))) ok(`roster persona present: ${e.file}`);
         else fail(`roster expert '${e.key}' persona missing: ${e.file}`);
       }
-      // the workflow's wired gate must equal the manifest's gate commands
+      // the workflow's spliced config must equal the manifest's copy — `gate_commands`
+      // first, and now EVERY key emitted into both places. Generalized from the gate-only
+      // comparison because `budget` and `crossModel` were emitted twice and checked once;
+      // `resolve_default` and `protected_paths` join the table rather than adding two more
+      // unchecked copies. One key table, so a new emitted key is covered by a new row.
+      const PARITY_KEYS = [
+        ['gate_commands', 'gate'],
+        ['budget', 'budget'],
+        ['cross_model', 'crossModel'],
+        ['resolve_default', 'resolveDefault'],
+        ['protected_paths', 'protectedPaths'],
+      ];
       const wfDirX = join(args.bundle, '.claude/workflows');
       const wfX = (listDir(wfDirX) || []).find((x) => x.endsWith('-dev-loop.js'));
-      if (wfX && m.gate_commands) {
+      if (wfX) {
         const srcX = readFileSync(join(wfDirX, wfX), 'utf8');
-        const gm = srcX.match(/"gate":\s*\[([^\]]*)\]/);
-        const wired = gm ? [...gm[1].matchAll(/"cmd":\s*"((?:[^"\\]|\\.)*)"/g)].map((x) => JSON.parse(`"${x[1]}"`)) : [];
-        const manifest = m.gate_commands.map((c) => c.cmd);
-        if (JSON.stringify(wired) === JSON.stringify(manifest)) ok('workflow gate matches manifest gate_commands');
-        else fail(`gate mismatch — workflow [${wired.join(' | ')}] vs manifest [${manifest.join(' | ')}]`);
+        const cfgRaw = (srcX.match(/^const VERILOOP = (\{[\s\S]*?\n\});$/m) || [])[1];
+        let cfg = null;
+        try { cfg = cfgRaw ? JSON.parse(cfgRaw) : null; } catch { /* reported below */ }
+        if (!cfg) {
+          fail(`workflow ${wfX} — its spliced VERILOOP config could not be read, so NOT ONE manifest↔workflow parity key could be compared (re-run generate)`);
+        } else {
+          let diverged = 0;
+          for (const [mKey, wKey] of PARITY_KEYS) {
+            // absent from BOTH = a bundle predating the key, not a divergence
+            if (!(mKey in m) && !(wKey in cfg)) continue;
+            if (JSON.stringify(m[mKey]) === JSON.stringify(cfg[wKey])) continue;
+            diverged++;
+            fail(`manifest↔workflow parity: manifest \`${mKey}\` and workflow \`${wKey}\` disagree — the emitted config has two copies and only one was updated. Re-run \`node scripts/generate.mjs\` to regenerate the bundle from its single source of truth.`);
+          }
+          if (!diverged) ok(`workflow config matches the manifest on every emitted key (${PARITY_KEYS.map(([k]) => k).join(', ')})`);
+        }
       }
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
   } else fail('no veriloop-manifest.json emitted');
