@@ -563,23 +563,45 @@ function main() {
     const unemitted = ROUTED_COMMANDS.filter((c) => !EMITTED_COMMANDS.includes(c));
     const ROUTED = ROUTED_COMMANDS.map((c) => `/${c.replace(/\.md$/, '')}`);
     const settingsPath = join(args.bundle, CLAUDE_SETTINGS);
+    // The WHITELIST of matcher spellings this check can tokenize without guessing (see the
+    // tokenizer below for why a whitelist and not a wider splitter): a bare `|`-separated
+    // list, the same list inside a capturing or non-capturing group, with or without `^`/`$`
+    // anchors. Group 1 is the grouped alternation, group 2 the bare one; exactly one matches.
+    const MATCHER_FORM = /^(?:\^)?(?:\((?:\?:)?([a-z]+(?:\|[a-z]+)*)\)|([a-z]+(?:\|[a-z]+)*))(?:\$)?$/;
     let wired = false;
     let unreadable = null;
     let tokens = [];
     let unconstrained = false;
+    let unverifiable = null;
     if (registered && existsSync(settingsPath)) {
       const raw = readFileSync(settingsPath, 'utf8');
       try {
         wired = wiresSessionHook(raw);
-        // Only veriloop's OWN groups (`sessionHookMatchers` scopes it), `|`-split and deduped.
+        // Only veriloop's OWN groups (`sessionHookMatchers` scopes it), tokenized per matcher.
         const matchers = sessionHookMatchers(raw);
-        tokens = [...new Set(matchers.flatMap((m) => m.split('|')))].filter(Boolean);
+        // A matcher is a REGEX, and `split('|')` is not a regex parser. The first version
+        // split every matcher unconditionally, so `^(startup|clear|compact)$` — the ANCHORED
+        // spelling Claude Code's own docs use, and a correctly-wired hook — tokenized to
+        // `^(startup`, `clear`, `compact)$`: two tokens that are not SessionStart sources, and
+        // the check FAILED a bundle that was right. Widening the splitter is not the fix (the
+        // next spelling breaks it again). WHITELIST the spellings this check can actually read
+        // — a bare `|`-list, a group, an anchored group, a non-capturing group — tokenize those
+        // from the captured alternation, and refuse to guess at anything else.
+        const parsed = matchers.map((m) => (m.trim() ? MATCHER_FORM.exec(m.trim()) : null));
+        tokens = [...new Set(parsed.flatMap((p) => (p ? (p[1] || p[2]).split('|') : [])))].filter(Boolean);
         // An EMPTY or ABSENT matcher is not a narrow matcher, it is an UNCONSTRAINED one, and
         // it has to be read separately: `.filter(Boolean)` erases it into zero tokens, so the
         // overreach comparison below sees nothing to complain about and the ok line printed
         // `(matcher: )` — the widest possible false green, reachable by deleting six characters
         // from a hand-owned file `handOnce` will never correct.
         unconstrained = matchers.some((m) => !m.trim());
+        // An UNRECOGNIZED spelling is not a pass and not an overreach — it is a matcher this
+        // check cannot read. It keeps the FAIL exit (fail-noisy: a whitelist whose miss case
+        // is a soft green would be a silent hole that widens with every new spelling), but the
+        // message says the check could not verify rather than accusing the matcher of naming
+        // sources it may not name. Carries the offending string so the report names it.
+        const badIdx = parsed.findIndex((p, i) => matchers[i].trim() && !p);
+        if (badIdx !== -1) unverifiable = matchers[badIdx].trim();
       } catch (e) { unreadable = e.message; }
     }
     if (!registered) {
@@ -613,12 +635,24 @@ function main() {
           // firing on; if it matches nothing the hook CAN NEVER FIRE, the same false-green
           // this check exists to kill. The uncovered WARN is suppressed either way.
           fail(`${CLAUDE_SETTINGS} wires the SessionStart routing hook on an EMPTY (or absent) matcher — ${SESSION_HOOK_SCRIPT} is wired ONLY to ${SESSION_START_SOURCES.join('|')}, the sources that begin a session with the routing payload absent. An unset matcher is not a narrower matcher: it either matches every source (re-injecting the full-strength routing block into resume and fork, sessions that are mid-work) or matches none (a hook that can never fire). Not re-injecting mid-work is veriloop's own safety property, not a setting: spell the matcher out in ${CLAUDE_SETTINGS} (it is hand-owned, so re-running generate will NOT correct it)`);
+        } else if (unverifiable) {
+          // NOT a new verdict class: the same FAIL, with an honest message. The check knows
+          // what it cannot read, and says that instead of pretending the tokens it failed to
+          // extract are sources the adopter asked for.
+          fail(`${CLAUDE_SETTINGS} wires the SessionStart routing hook on \`${unverifiable}\` — cannot verify this matcher form — use plain |-separated source tokens (${SESSION_START_SOURCES.join('|')}, optionally as an anchored group like ^(${SESSION_START_SOURCES.join('|')})$). A matcher is a regex and this check only reads the spellings it can tokenize without guessing; anything else could name sources veriloop does not wire, so it stays red rather than vouching for a hook nobody read. ${CLAUDE_SETTINGS} is hand-owned, so re-running generate will NOT correct it`);
         } else if (overreach.length) {
           fail(`${CLAUDE_SETTINGS} wires the SessionStart routing hook on ${overreach.join(', ')} — ${SESSION_HOOK_SCRIPT} is wired ONLY to ${SESSION_START_SOURCES.join('|')}, the sources that begin a session with the routing payload absent. Anything else either never fires at all (a matcher that is not a SessionStart source) or re-injects the full-strength routing block into a session that is mid-work. Not doing that is veriloop's own safety property, not a setting: fix the matcher in ${CLAUDE_SETTINGS} (it is hand-owned, so re-running generate will NOT correct it)`);
         } else {
           ok(`SessionStart routing hook wired: settings.json → ${SESSION_HOOK_SCRIPT} (matcher: ${tokens.join('|')})`);
         }
-        if (uncovered.length && !unconstrained) {
+        // The uncovered WARN prints ONLY beside the green vouch. Beside any of the three FAILs
+        // it is noise at best and false at worst: "those sessions start with no routing table"
+        // is a claim about a matcher that was READ, and an overreaching, unconstrained or
+        // unreadable matcher is precisely one that was not. It co-fired with the overreach FAIL
+        // until 2026-08-15 — a `PreToolUse` matcher (an overreach under that day's tokenizer;
+        // an unreadable FORM under this one) printed the FAIL and then advised the adopter to
+        // widen the matcher the same check had just rejected.
+        if (uncovered.length && !unconstrained && !unverifiable && !overreach.length) {
           warn(`${CLAUDE_SETTINGS}'s SessionStart matcher omits ${uncovered.join(', ')} — veriloop wires ${SESSION_START_SOURCES.join('|')}, so those sessions start with no routing table. settings.json is hand-owned and a narrower matcher is a supported choice, so this is a WARN, never a failure (widen the matcher yourself if you want it; generate will not touch your file)`);
         }
       }

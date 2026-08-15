@@ -725,6 +725,25 @@ const SECRET_PATTERNS = [
 ];
 function attestationFrom(evidence, ctx, stamps, roots) {
   const ABS = /(\/Users\/|\/home\/[a-z]|\b[A-Z]:[\\/])/; // === lint-bundle.mjs absolute-path regex
+  // ABS covers HOME directories and Windows drive letters. It does NOT cover the machine's
+  // TEMP roots, and an agent's scratch directory is where a drive's intermediate work
+  // actually lives: two committed records carry `/tmp/vlm.md` and a `/private/tmp/.../scratchpad`
+  // path that ABS let straight through. Same whole-line drop, three more anchored shapes.
+  //
+  // EMIT-TIME ONLY, stated plainly: `lint-bundle.mjs`'s committed-record backstop still scans
+  // with ABS alone, so this widens what NEW records carry and changes nothing about the two
+  // records already committed (widening the backstop retroactively would turn the gate red on
+  // history nobody can rewrite without the owner). Whether the backstop follows — timestamp-
+  // gated, never, or with those two records hand-amended — is an OPEN OWNER QUESTION, recorded
+  // as Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`.
+  //
+  // The shapes are ANCHORED, and both halves of the anchor are load-bearing:
+  //   - a leading `^` or a non-word, non-`/` character, so `docs/private/notes.md` — a
+  //     repo-relative path with `private` as a plain directory name — is NOT a temp path;
+  //   - a negative lookbehind on `%REPO%`, because `stripRoots` runs FIRST and rewrites every
+  //     in-root path to `%REPO%/…`. Without it a repo that simply has a `tmp/` directory would
+  //     have every line mentioning `%REPO%/tmp/x` dropped from its own attestation.
+  const TEMP = /(?:^|[^\w/])(?<!%REPO%)\/(?:private|tmp|var\/folders)\//;
   const rootList = (roots || [])
     .filter((r) => typeof r === 'string' && r.length)
     .sort((a, b) => b.length - a.length); // longest-first: a worktree prefix before its parent
@@ -733,8 +752,8 @@ function attestationFrom(evidence, ctx, stamps, roots) {
     for (const r of rootList) out = out.split(r).join('%REPO%');
     return out;
   };
-  // strip known roots, then drop any line STILL carrying an absolute path or a
-  // secret-shaped pattern (the safety net) — whole-line drop only, never partial masking.
+  // strip known roots, then drop any line STILL carrying an absolute path, a temp-root path
+  // or a secret-shaped pattern (the safety net) — whole-line drop only, never partial masking.
   // PEM private-key blocks get a RANGE drop: every line from a PEM_BEGIN match through the
   // matching PEM_END (inclusive) is dropped, including the base64 body in between, which
   // matches no single-line SECRET_PATTERNS entry on its own. If PEM_END never appears, the
@@ -748,7 +767,7 @@ function attestationFrom(evidence, ctx, stamps, roots) {
         continue; // every line inside the block, and the END line itself, is dropped
       }
       if (PEM_BEGIN.test(line)) { inPemBlock = true; continue; }
-      if (!ABS.test(line) && !SECRET_PATTERNS.some((re) => re.test(line))) out.push(line);
+      if (!ABS.test(line) && !TEMP.test(line) && !SECRET_PATTERNS.some((re) => re.test(line))) out.push(line);
     }
     return out.join('\n');
   };

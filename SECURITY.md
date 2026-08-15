@@ -270,7 +270,16 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
 
 - absolute paths in any emitted file (`ABS`, `scripts/lint-bundle.mjs:94`) — bundles must be
   portable, resolving the repo root at run time via `$CLAUDE_PROJECT_DIR` with a
-  `git rev-parse --show-toplevel` fallback
+  `git rev-parse --show-toplevel` fallback. **Three shapes, named rather than implied**: a
+  `/Users/` home directory, a `/home/<lowercase>` home directory, and a Windows drive letter
+  (`C:\`, `D:/`). That is a shape list, not a proof that no absolute path survives — an
+  `/opt/…` or `/srv/…` path passes it. Since 2026-08-15 the emitted workflow's **attestation
+  redaction** drops, additionally, any line carrying one of three temp roots (`/tmp/`,
+  `/private/…`, `/var/folders/…`), anchored so that a repo's own `tmp/` or `docs/private/`
+  directory and any in-root `%REPO%/tmp/…` path are untouched. That widening is **emit-time
+  only**: this lint backstop still scans committed records with `ABS` alone, so the records
+  already in `.claude/veriloop/history/` are unaffected, and whether the backstop follows is
+  an open owner question (Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`)
 - harness-forbidden APIs in an emitted workflow (`FORBIDDEN`,
   `scripts/lint-bundle.mjs:124`)
 - secret-shaped lines in a committed attestation record, or in an emitted

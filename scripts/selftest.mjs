@@ -1064,6 +1064,39 @@ function assert(cond, desc) {
   assert(!sentinelOut.json.includes('$REPO'), 'emit: the written record never contains the literal $REPO substring');
   assert(!ABS.test(sentinelOut.json), 'emit: the %REPO%-sentinel record contains no absolute path');
 
+  // (f2) TEMP ROOTS, added 2026-08-15. `ABS` covers home directories and Windows drive
+  //      letters; it never covered `/tmp`, `/private/tmp` or macOS's `/var/folders`, which is
+  //      exactly where an agent's scratch work lives — two records already committed to this
+  //      repo's own history carry such a path, which is how the gap was found. Same whole-line
+  //      drop as every other class. Synthetic input, built inline (rule 3).
+  //
+  //      The three NEGATIVE cases are the point of the anchoring and are asserted in the same
+  //      breath: a repo-relative `docs/private/` directory, a repo-relative `tmp/` directory,
+  //      and — the one that would bite hardest — an in-root `%REPO%/tmp/` path, which reaches
+  //      the test AFTER `stripRoots` has rewritten it and must survive. A pattern that merely
+  //      looked for the substring `/tmp/` would empty the attestation of any repo with a
+  //      `tmp/` directory.
+  const tempSynth = {
+    ...synth,
+    implSummary: [
+      'kept: docs/private/notes.md and tmp/scratch.txt are repo-relative',
+      'kept: %REPO%/tmp/build.log is in-root and survives stripRoots',
+      'dropped: probe written to /private/tmp/claude-501/session/scratchpad/probe.md',
+      'dropped: also wrote /tmp/vlm.md',
+      'dropped: and /var/folders/qz/T/veriloop-emit-x/out.json',
+    ].join('\n'),
+  };
+  const tempOut = attestationFrom(tempSynth, { wt: '/tmp/wt', branch: 'b' }, stamps, ['/tmp/wt']);
+  const tempSummary = JSON.parse(tempOut.json).implSummary;
+  assert(
+    !/\/private\/tmp\//.test(tempSummary) && !/[^%]\/tmp\/vlm/.test(tempSummary) && !/\/var\/folders\//.test(tempSummary),
+    'emit: a record line carrying a temp-root path (/private/tmp, /tmp, /var/folders) is dropped whole-line at EMIT time — ABS never covered the machine\'s scratch directories',
+  );
+  assert(
+    tempSummary.includes('docs/private/notes.md') && tempSummary.includes('%REPO%/tmp/build.log'),
+    'emit: the temp-root drop is ANCHORED — a repo-relative `docs/private/` path and an in-root `%REPO%/tmp/` path both SURVIVE (a bare substring match would empty the attestation of any repo with a tmp/ directory)',
+  );
+
   // (g) dry-run routing: dryRun:true routes the record under history/dry-runs/, never
   //     history/ directly (owner decision — dry runs emit locally, always uncommitted).
   const dryRunSynth = { ...synth, dryRun: true };
@@ -2872,14 +2905,72 @@ function gateFigures(file, re) {
       "lint 8a: the wired line prints the ACTUAL matcher tokens (startup|clear|compact) — a check that vouches for a hook must say what it read",
     );
 
-    // (2) OVERREACH → FAIL. `PreToolUse` is not a SessionStart source at all, so this hook can
+    // (2) OVERREACH → FAIL. `banana` is not a SessionStart source at all, so this hook can
     //     never fire; the pre-change check called it `wired`. Not re-injecting into sources
     //     veriloop does not wire is veriloop's OWN safety property, so it goes red.
-    const overreached = lintWith(settingsWith('PreToolUse'));
-    assert(overreached.status !== 0, 'lint 8a: a settings.json wiring veriloop\'s hook on matcher PreToolUse FAILS the gate — the check that vouches "wired" must be able to go red');
+    //     THE MATCHER HERE WAS `PreToolUse` UNTIL 2026-08-15 and moved to case (2b) below.
+    //     The whitelist tokenizer added that day recognizes lowercase source spellings only,
+    //     so `PreToolUse` is now an UNREADABLE form rather than a readable overreaching one.
+    //     Both are still FAIL and both still name the token, but the overreach path needs a
+    //     matcher the tokenizer can actually READ in order to keep exercising it — hence
+    //     `banana`, a well-formed token that simply is not a source. The case was REPLACED,
+    //     not deleted: (2b) keeps `PreToolUse` red under its new verdict message.
+    const overreached = lintWith(settingsWith('banana'));
+    assert(overreached.status !== 0, 'lint 8a: a settings.json wiring veriloop\'s hook on matcher banana FAILS the gate — the check that vouches "wired" must be able to go red');
     assert(
-      /PreToolUse/.test(overreached.out) && !/routing hook wired: settings\.json/.test(overreached.out),
+      /banana/.test(overreached.out) && !/routing hook wired: settings\.json/.test(overreached.out),
       'lint 8a: the overreach failure NAMES the offending matcher token and withdraws the green "routing hook wired" vouch',
+    );
+    //     CO-FIRE. The uncovered WARN used to print BESIDE this FAIL — an overreaching matcher
+    //     covers none of the three sources, so the check failed the bundle and then advised the
+    //     adopter to WIDEN the very matcher it had just rejected. "Those sessions start with no
+    //     routing table" is a claim about a matcher that was read and accepted; beside a FAIL it
+    //     is noise at best, and beside the unconstrained FAIL it was already suppressed for
+    //     being affirmatively false. Same reasoning, one verdict wider.
+    assert(
+      !/matcher omits/.test(overreached.out),
+      'lint 8a: the uncovered-source WARN does NOT co-fire with the overreach FAIL — a matcher the check just rejected is not one to advise widening',
+    );
+
+    // (2b) UNREADABLE FORM → FAIL, with an honest message. A matcher is a REGEX and this check
+    //      whitelists the spellings it can tokenize; `PreToolUse` (case (2)'s matcher until
+    //      2026-08-15) is not one of them. The whitelist's MISS CASE IS RED, deliberately: a
+    //      soft pass there would be a hole that widens with every unrecognized spelling and the
+    //      check would be back to vouching for a hook nobody read. What changes is the CLAIM —
+    //      "cannot verify this form", not "you wired a source veriloop does not wire".
+    const unreadableForm = lintWith(settingsWith('PreToolUse'));
+    assert(
+      unreadableForm.status !== 0 && /PreToolUse/.test(unreadableForm.out)
+        && /cannot verify this matcher form/.test(unreadableForm.out)
+        && !/routing hook wired: settings\.json/.test(unreadableForm.out),
+      'lint 8a: a matcher spelling the whitelist does not recognize FAILS (never a soft pass), NAMES the string, and says the check could not verify it rather than accusing it of overreach',
+    );
+    assert(
+      !/matcher omits/.test(unreadableForm.out),
+      'lint 8a: the uncovered-source WARN is suppressed for an unreadable matcher form — the tokens it would name were never successfully read',
+    );
+
+    // (2c) The ANCHORED GROUP spelling — `^(startup|clear|compact)$`, the form Claude Code's own
+    //      hook docs use — is GREEN. This is the FALSE POSITIVE the whitelist fixes: the
+    //      unconditional `split('|')` turned a correctly-wired hook into the tokens `^(startup`,
+    //      `clear` and `compact)$`, two of which are not sources, and the gate FAILED a bundle
+    //      that was right. RED on the pre-change tree by construction.
+    for (const spelling of ['^(startup|clear|compact)$', '(startup|clear|compact)', '(?:startup|clear|compact)']) {
+      const anchored = lintWith(settingsWith(spelling));
+      assert(
+        anchored.status === 0 && /routing hook wired:.*matcher: startup\|clear\|compact/.test(anchored.out) && !/matcher omits/.test(anchored.out),
+        `lint 8a: the recognized spelling \`${spelling}\` tokenizes to the three sources and stays GREEN — a regex matcher spelling the harness docs endorse must not read as overreach`,
+      );
+    }
+
+    // (2d) A recognized-LOOKING form that is NOT on the whitelist stays red rather than being
+    //      guessed at. `(startup)|(clear)` is two capture groups, not one alternation: a
+    //      splitter clever enough to accept it is one spelling away from the next silent
+    //      mis-parse, and the honest answer is that this check cannot read it.
+    const twoGroups = lintWith(settingsWith('(startup)|(clear)'));
+    assert(
+      twoGroups.status !== 0 && /cannot verify this matcher form/.test(twoGroups.out) && !/routing hook wired: settings\.json/.test(twoGroups.out),
+      'lint 8a: `(startup)|(clear)` — a form outside the whitelist even though every token in it IS a source — FAILS as unverifiable rather than being token-parsed on a guess',
     );
 
     // (3) UNCOVERED → WARN, never FAIL. settings.json is hand-owned; an adopter running the
@@ -3619,7 +3710,39 @@ function gateFigures(file, re) {
     'depsSetup: a node repo symlinks node_modules and carries NO cargo clause (proves the cargo branch is conditional)',
   );
 
-  for (const d of [rustDir, mixDir, nodeDir]) rmSync(d, { recursive: true, force: true });
+  // (d) node + rust (the napi-rs / neon / wasm-pack shape), added 2026-08-15. The node
+  //     branch RETURNED before the `usesCargo` test the python branch runs, so this repo —
+  //     whose build fills `target/` exactly like a maturin one — got the node_modules
+  //     symlink and NO cargo clause. Both halves are asserted together: the symlink must
+  //     SURVIVE (this is a fix to the node branch, not a replacement of it) and the cargo
+  //     clause must now be there. RED on the pre-change tree by construction, and (c) above
+  //     is what keeps it non-vacuous.
+  const nrDir = mkdtempSync(join(tmpdir(), 'veriloop-deps-noderust-'));
+  const nodeRust = depsSetupOf(nrDir, {
+    'package.json': JSON.stringify({ name: 'p', scripts: { test: 'vitest run', build: 'napi build --release' } }),
+    'Cargo.toml': CARGO_CRATE,
+  });
+  assert(
+    nodeRust.stack.includes('node') && nodeRust.stack.includes('rust'),
+    `depsSetup: a package.json + Cargo.toml repo detects node+rust (stack: ${nodeRust.stack.join('+')})`,
+  );
+  assert(
+    /CARGO_TARGET_DIR/.test(nodeRust.deps) && /node_modules/.test(nodeRust.deps),
+    'depsSetup: a node+rust repo gets BOTH the node_modules symlink and the shared cargo target dir — a native addon fills target/ the same way maturin does',
+  );
+
+  // The instruction RESOLVES the root rather than interpolating a bare `$REPO`: it is
+  // carried out inside the worktree, where re-deriving the toplevel yields the WORKTREE and
+  // silently restores the per-worktree duplication. Pinned on all three cargo branches so a
+  // future edit cannot regress one of them back to `CARGO_TARGET_DIR=$REPO/target`.
+  for (const [label, deps] of [['rust', rust.deps], ['python+rust', mix.deps], ['node+rust', nodeRust.deps]]) {
+    assert(
+      /rev-parse --show-toplevel/.test(deps) && !/CARGO_TARGET_DIR=\$REPO/.test(deps),
+      `depsSetup: the ${label} shared-target instruction RESOLVES the main checkout's root explicitly instead of interpolating a bare $REPO (which re-derives to the worktree at the point of use)`,
+    );
+  }
+
+  for (const d of [rustDir, mixDir, nodeDir, nrDir]) rmSync(d, { recursive: true, force: true });
 }
 
 // --- resolve-to-clean (spec `.claude/veriloop/specs/resolve-to-clean.md`, D9). The fix

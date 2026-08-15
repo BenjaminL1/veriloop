@@ -80,8 +80,36 @@ neither. It is now a key table: `gate_commands`, `budget`, `cross_model`, `resol
 a copy of a generated bundle and requires `lint-bundle` to exit non-zero naming it, so a
 dropped row cannot pass silently the way the four unchecked copies did.
 
+**Three fixes in the gate's own surfaces, from the 2026-08-15 `/review`.** (1) Lint check
+8a's uncovered-source WARN no longer co-fires with a matcher FAIL: an overreaching matcher
+failed the bundle and *then* advised the adopter to widen the very matcher it had just
+rejected. (2) The matcher is read through a **whitelist** of spellings the check can
+tokenize — a bare `|`-list, a group, an anchored group, a non-capturing group — instead of an
+unconditional `split('|')`, which turned `^(startup|clear|compact)$`, the anchored form the
+harness's own docs use and a correctly-wired hook, into tokens like `^(startup` and
+`compact)$` and FAILED a bundle that was right. An unrecognized spelling keeps the **FAIL**
+exit and reports that it *cannot verify the form*: the whitelist's miss case is deliberately
+red, never a soft pass, because a soft pass would be a hole that widens with every new
+spelling. (3) The emitted workflow's attestation redaction now drops lines carrying `/tmp/`,
+`/private/…` or `/var/folders/…`. `ABS` covers home directories and drive letters and never
+covered the machine's scratch roots — where an agent's intermediate work actually lives, and
+two records already in this repo's history carry such a path. The widening is **emit-time
+only**: `lint-bundle`'s committed-record backstop still scans with `ABS` alone, so no
+committed record changes verdict; whether the backstop follows is queued for the owner (Q2
+of `.claude/veriloop/specs/review-remediation-2026-08-15.md`). The drop is anchored, so a
+repo's own `docs/private/` or `tmp/` directory and any in-root `%REPO%/tmp/…` path survive.
+
+**A node+rust repo shares the cargo target dir too.** `buildDepsSetup`'s node branch
+*returned* before the `usesCargo` test the python branch runs, so a napi-rs / neon /
+wasm-pack repo — whose build fills `target/` exactly as a maturin one does — got the
+`node_modules` symlink and no cargo guidance at all. It now gets both. The shared-target
+instruction also resolves the main checkout's root explicitly rather than interpolating a
+bare `$REPO`: the instruction is carried out *inside* the worktree, where re-deriving the
+toplevel answers with the worktree and silently restores the duplication the clause exists
+to prevent.
+
 <!-- veriloop:gate-figure -->
-**Gate count: 481 → 535.** The fix loop had no assertions at all before this change: the
+**Gate count: 481 → 551.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -99,7 +127,11 @@ clean" is a case rather than a comment; the hard-stop branch is required to be g
 on the SHAPE of the emitted expression — its literal must open the expression, with no
 `clean` ternary — because "the paragraph is in the file" was already true of the version
 the ruling replaced. The Land docs-sync prompt's permitted-target list is parsed and
-required not to name the constitution.
+required not to name the constitution. The 2026-08-15 review fixes above supply the last
+sixteen: three recognized matcher spellings green, the unreadable-form and two-capture-group
+FAILs, both co-fire suppressions, the temp-root drop together with the three anchoring
+negatives that keep it from emptying a repo's own attestation, and the node+rust deps case
+with the explicit-root pin held on all three cargo branches.
 
 ## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 

@@ -292,7 +292,7 @@ docstrings, type defs and plans, and explicitly **not** the constitution: those 
 owner-only, by hand.
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 481 → 535: the fix loop had no assertions at all before
+Pinning all of this, the gate went 481 → 551: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,
@@ -302,7 +302,11 @@ three rename shapes and a fix pass deleting lines *this branch* added (which the
 census reports as a falling `added` with `deleted` still 0). The guard's own arming decision
 is sliced and executed too, so "observes in both modes, stops only under clean" is a test
 rather than a comment. Each parity key gets a mutation case: diverge it alone in a copy of a
-generated bundle and `lint-bundle` must go red naming that key.
+generated bundle and `lint-bundle` must go red naming that key. The last sixteen come from
+the 2026-08-15 review fixes: the recognized `SessionStart` matcher spellings that must read
+green, the unrecognized ones that must stay red, the two suppressed co-fires, the emit-time
+temp-path drop with the repo-relative paths it must *not* touch, and a node+rust repo getting
+the shared cargo target dir.
 
 ### Repo-specific gate checks (`extra_checks`)
 

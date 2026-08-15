@@ -63,11 +63,16 @@ function buildDepsSetup(cj) {
   const install = cj.commands.install?.cmd;
   const build = cj.commands.build?.cmd;
   if (cj.stack.includes('node')) {
-    return (
+    const s =
       'symlink the main checkout\'s dependencies into the worktree so checks resolve — ' +
       '`ln -s $REPO/node_modules <wt>/node_modules` at the root and for each workspace that has its own ' +
-      'node_modules' + (install ? `; fall back to \`${install}\` inside the worktree only if a symlink won't resolve.` : '.')
-    );
+      'node_modules' + (install ? `; fall back to \`${install}\` inside the worktree only if a symlink won't resolve.` : '.');
+    // node-PRIMARY is not node-ONLY. A napi-rs / neon / wasm-pack addon is a node package
+    // whose build fills `target/` exactly like a maturin one — and this branch RETURNED, so
+    // the python branch's `usesCargo` test below could never be reached for it. A node+rust
+    // repo therefore got the node_modules symlink and no cargo guidance at all, leaving it
+    // with the very per-worktree duplication the rust and python+rust branches already avoid.
+    return usesCargo(cj) ? s + cargoShare() : s;
   }
   if (cj.stack.includes('python')) {
     let s = install
@@ -696,12 +701,27 @@ main();
 // to a generic branch that never mentioned cargo at all.
 // ---------------------------------------------------------------------------
 
-/** The shared-target instruction. States the lock tradeoff rather than hiding it. */
+/**
+ * The shared-target instruction. States the lock tradeoff rather than hiding it.
+ *
+ * The root is RESOLVED EXPLICITLY, not referenced as a bare `$REPO`. This instruction is
+ * carried out INSIDE the worktree, and that is precisely where the bare form was ambiguous:
+ * `$REPO` is resolved once by the workflow's portability preamble (`${CLAUDE_PROJECT_DIR}`
+ * with a `git rev-parse --show-toplevel` fallback), but an agent re-deriving it from the
+ * worktree's own cwd gets the WORKTREE back — and `CARGO_TARGET_DIR=<worktree>/target` is
+ * exactly the per-worktree duplication this whole clause exists to prevent, silently. Naming
+ * the directory git is asked about (`git -C "$REPO"`) makes the resolution unambiguous at
+ * the point of use, which is the same rule the preamble follows.
+ */
 function cargoShare() {
   return (
-    ' Before any `cargo` or `maturin` command in the worktree, `export CARGO_TARGET_DIR=$REPO/target`' +
-    ' so every worktree SHARES one build directory instead of compiling its own (~1.3 GB apiece) —' +
-    ' cargo locks it, so concurrent worktree builds serialize rather than corrupt each other.'
+    ' Before any `cargo` or `maturin` command in the worktree, point cargo at ONE shared build' +
+    ' directory: `export CARGO_TARGET_DIR="$(git -C "$REPO" rev-parse --show-toplevel)/target"`' +
+    ' — resolved against the MAIN CHECKOUT, never re-derived from inside the worktree (a bare' +
+    ' `git rev-parse --show-toplevel` run there answers with the worktree and hands it its own' +
+    ' `target/` again) — so every worktree SHARES one build directory instead of compiling its' +
+    ' own (~1.3 GB apiece); cargo locks it, so concurrent worktree builds serialize rather' +
+    ' than corrupt each other.'
   );
 }
 
