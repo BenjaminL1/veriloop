@@ -65,7 +65,8 @@ neither. It is now a key table: `gate_commands`, `budget`, `cross_model`, `resol
 a copy of a generated bundle and requires `lint-bundle` to exit non-zero naming it, so a
 dropped row cannot pass silently the way the four unchecked copies did.
 
-**Gate count: 481 → 532.** The fix loop had no assertions at all before this change: the
+<!-- veriloop:gate-figure -->
+**Gate count: 481 → 533.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -887,7 +888,13 @@ Both mutants now fail. The council-block region was also extended past the cross
 and synthesis bullets, which the old terminator excluded while the message claimed to cover
 them.
 
-**Gate count: 253 → 481, deliberately.** Minus the four T12 assertions named above and the
+**Gate count: 253 → 436, deliberately.** *(Corrected 2026-08-15. This CLOSED section published
+`481` — a figure the unreleased commits `7022a3a..1026508` wrote into it, because the gate-figure
+pin they were green under read the FIRST match in each file and so re-pointed at this frozen
+headline instead of at their own. `436` is both what this section's own chain sums to below and
+what `61802bd`, the last commit in the scope it describes, still prints when its selftest is run
+from a clean checkout. The pin is now marker-anchored, so a live figure can no longer be written
+over a closed one.)* Minus the four T12 assertions named above and the
 three accretion-tripwire assertions the owner later ruled out (246), plus 149 new ones covering
 the domain subsystem, the guard wiring, the T2 agreement check, the Tier 1 dependency parser
 and its citation resolution, the rule 7 scrub in both directions, both backstops and their

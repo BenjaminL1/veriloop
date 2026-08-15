@@ -2459,6 +2459,45 @@ function assert(cond, desc) {
   for (const t of [tiTmp, trTmp, arTmp, nsTmp, ijTmp]) rmSync(t, { recursive: true, force: true });
 }
 
+// --- the PUBLISHED gate figure: ONE marker, read from two places ------------
+// Module scope because two separate assertions need the same reader: the pair checks in
+// the published-docs block below, and the FINAL assertion in this file — the only one that
+// can compare a published figure against what this run actually printed.
+//
+// The LIVE figure is addressed by an explicit marker line rather than by "the first match
+// in the file". First-match is what let a CLOSED section be rewritten: two overlapping
+// first-match pins both read the LIVE headline, so nothing at all was pinning the frozen
+// figure below it, and the unreleased routing/session-hook commits re-published the 0.5.0
+// section as 481 while every gate stayed green. That section's own chain sums to 436 and
+// the last commit in its scope prints 436; it is corrected, with a dated note, in
+// CHANGELOG.md. A marker cannot drift onto a neighbouring claim the way "first match" did.
+const GATE_MARKER = '<!-- veriloop:gate-figure -->';
+// The two published spellings of the same number, and the only two places it may appear.
+const GATE_DOCS = [
+  ['README.md', /the gate went (\d+) → (\d+)/],
+  ['CHANGELOG.md', /\*\*Gate count: (\d+) → (\d+)/],
+];
+/**
+ * Split a doc's gate-figure pairs by whether the marker addresses them.
+ *
+ * `live` is the pair on the line DIRECTLY BELOW the sole marker — null when the marker is
+ * absent, duplicated, or followed by a line carrying no figure, each of which is a FAILURE
+ * at the call sites and never a silent skip. `frozen` is every other pair in document
+ * order: closed releases, which have no printed count to pin them to and are pinned to the
+ * other file positionally instead.
+ */
+function gateFigures(file, re) {
+  const lines = readFileSync(join(here, '..', file), 'utf8').split('\n');
+  const markers = lines.reduce((n, l) => n + (l.trim() === GATE_MARKER ? 1 : 0), 0);
+  const liveAt = markers === 1 ? lines.findIndex((l) => l.trim() === GATE_MARKER) + 1 : -1;
+  const pairs = [];
+  lines.forEach((l, i) => {
+    const m = l.match(re);
+    if (m) pairs.push({ at: i, line: i + 1, text: `${m[1]} → ${m[2]}`, to: Number(m[2]) });
+  });
+  return { markers, live: pairs.find((p) => p.at === liveAt) || null, frozen: pairs.filter((p) => p.at !== liveAt) };
+}
+
 // --- self-host CITATION LIVENESS -------------------------------------------
 // The constitution says of itself "every rule cites the enforcing line", and the
 // README calls it "code-cited". Both were FALSE for four of ten rules on
@@ -2588,15 +2627,40 @@ function assert(cond, desc) {
     `published docs: every scripts/*.mjs citation in ${DOC_CITED.join(' + ')} resolves${docDead.length ? ` [${docDead.join('; ')}]` : ` (${docChecked} checked)`}`,
   );
 
-  // The same two files publish the SAME gate figures in two places, and they disagreed:
-  // README said "253 → 297" for a release whose CHANGELOG and commit message both say 307.
-  // A number published about the gate is a claim about this repo's own evidence, so the two
-  // copies are pinned to each other rather than to a literal that would need editing twice.
-  const readmeGate = readFileSync(join(here, '..', 'README.md'), 'utf8').match(/the gate went (\d+) → (\d+)/);
-  const changelogGate = readFileSync(join(here, '..', 'CHANGELOG.md'), 'utf8').match(/\*\*Gate count: (\d+) → (\d+)/);
+  // The same two files publish the SAME gate figures in more than one place, and they
+  // disagreed: README said "253 → 297" for a release whose CHANGELOG and commit message both
+  // say 307. A number published about the gate is a claim about this repo's own evidence, so
+  // the copies are pinned to each other rather than to a literal that would need editing twice.
+  //
+  // RETIRED HERE: the single first-match `readmeGate`/`changelogGate` pin, replaced by the
+  // `GATE_MARKER` reader declared above plus the two assertions below — the marker's own
+  // shape, and the frozen pairs the marker deliberately does not address.
+  const gateDocs = GATE_DOCS.map(([file, re]) => [file, gateFigures(file, re)]);
+  const badMarkers = gateDocs
+    .filter(([, g]) => g.markers !== 1 || !g.live)
+    .map(([file, g]) => `${file}: ${g.markers} marker(s)${g.markers === 1 ? ' but the line below it publishes no gate figure' : ''}`);
   assert(
-    readmeGate && changelogGate && readmeGate[1] === changelogGate[1] && readmeGate[2] === changelogGate[2],
-    `published docs: README and CHANGELOG publish the SAME gate figures (README ${readmeGate ? `${readmeGate[1]} → ${readmeGate[2]}` : 'NOT FOUND'}, CHANGELOG ${changelogGate ? `${changelogGate[1]} → ${changelogGate[2]}` : 'NOT FOUND'})`,
+    badMarkers.length === 0,
+    `published docs: README and CHANGELOG each carry EXACTLY ONE \`${GATE_MARKER}\` line with the LIVE gate figure directly below it${badMarkers.length ? ` [${badMarkers.join('; ')}]` : ` (${gateDocs.map(([f, g]) => `${f} ${g.live.text}`).join(', ')})`}`,
+  );
+  // The pairs the marker does NOT address are the FROZEN ones — closed releases, which have
+  // no printed count left to pin them to. They are pinned POSITIONALLY to each other instead:
+  // the Nth frozen figure in README must equal the Nth in CHANGELOG, so rewriting a closed
+  // section's figure in one file alone turns the gate red. This is the leg that was missing
+  // when 481 was written over 436 in both files by two commits that never touched either
+  // number deliberately.
+  const [readmeFrozen, changelogFrozen] = gateDocs.map(([, g]) => g.frozen);
+  const frozenPairs = Math.max(readmeFrozen.length, changelogFrozen.length);
+  const frozenOff = [];
+  for (let i = 0; i < frozenPairs; i++) {
+    const r = readmeFrozen[i], c = changelogFrozen[i];
+    if (!r || !c || r.text !== c.text) {
+      frozenOff.push(`#${i + 1}: README ${r ? `${r.text} (:${r.line})` : 'MISSING'} vs CHANGELOG ${c ? `${c.text} (:${c.line})` : 'MISSING'}`);
+    }
+  }
+  assert(
+    frozenPairs > 0 && frozenOff.length === 0,
+    `published docs: every FROZEN gate-figure pair — every one the marker does not address — matches POSITIONALLY between README and CHANGELOG (${frozenPairs} compared)${frozenOff.length ? ` [${frozenOff.join('; ')}]` : ''}`,
   );
 
   // The other published number about this repo's own source, and it was stale by a factor of
@@ -4058,20 +4122,29 @@ function assert(cond, desc) {
   );
 }
 
-// --- the PUBLISHED gate figure, pinned to what this run actually PRINTS. The check in the
-//     published-docs block pins README to CHANGELOG — two copies of one number, which agree
-//     perfectly while both are stale, and both were: they said 395 for a gate that had moved.
-//     This is the third leg, and the only one that touches reality. Necessarily the LAST
-//     assertion in the file, and it counts ITSELF: `pass + fail` is every assertion printed
-//     above this line and `+ 1` is this one, so the figure a reader sees at the bottom of the
-//     run is the figure the two documents publish. ---
+// --- the PUBLISHED gate figure, pinned to what this run actually PRINTS. The checks in the
+//     published-docs block pin the two files to each other — copies of one number, which
+//     agree perfectly while every copy is stale, and they did: they said 395 for a gate that
+//     had moved. This is the leg that touches reality. Necessarily the LAST assertion in the
+//     file, and it counts ITSELF: `pass + fail` is every assertion printed above this line
+//     and `+ 1` is this one, so the figure a reader sees at the bottom of the run is the
+//     figure both documents publish beneath their marker.
+//
+//     RETIRED HERE: the first-match `readmePub` read this replaces. It checked README alone
+//     and pointed at whichever gate figure appeared earliest in it — so CHANGELOG's live
+//     figure had no pin to reality at all, and README's pin moved to whatever text was
+//     inserted above it. Both files are now read at their MARKED line. ---
 {
-  const readmePub = readFileSync(join(here, '..', 'README.md'), 'utf8').match(/the gate went (\d+) → (\d+)/);
-  const published = readmePub ? Number(readmePub[2]) : NaN;
   const printed = pass + fail + 1;
+  const off = [];
+  for (const [file, re] of GATE_DOCS) {
+    const g = gateFigures(file, re);
+    if (g.markers !== 1 || !g.live) off.push(`${file}: NOT FOUND (${g.markers} marker(s))`);
+    else if (g.live.to !== printed) off.push(`${file}:${g.live.line} publishes ${g.live.text}`);
+  }
   assert(
-    published === printed,
-    `published docs: the gate figure README and CHANGELOG publish IS the count this run prints — a released number about the gate is a claim about this repo's own evidence (published ${readmePub ? published : 'NOT FOUND'}, printed ${printed})`,
+    off.length === 0,
+    `published docs: the MARKED gate figure in README and in CHANGELOG IS the count this run prints — a released number about the gate is a claim about this repo's own evidence (printed ${printed})${off.length ? ` [${off.join('; ')}]` : ''}`,
   );
 }
 

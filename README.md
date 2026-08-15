@@ -289,7 +289,8 @@ only mode where a confirm pass exists. The **docs-sync** step at Land may update
 docstrings, type defs and plans, and explicitly **not** the constitution: those edits are
 owner-only, by hand.
 
-Pinning all of this, the gate went 481 → 532: the fix loop had no assertions at all before
+<!-- veriloop:gate-figure -->
+Pinning all of this, the gate went 481 → 533: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,
@@ -434,7 +435,7 @@ network for the first time, which retires three published no-network claims; see
 [`SECURITY.md`](./SECURITY.md) §3, which states the new path, the allowlist, the offline
 behavior, and the three known weaknesses. Three length caps came out by owner decision — four
 assertions deleted outright, three narrowed to their surviving trigger-first half, two
-`lint-bundle` WARN checks removed; the gate went 253 → 481 and `CHANGELOG.md` names every
+`lint-bundle` WARN checks removed; the gate went 253 → 436 and `CHANGELOG.md` names every
 removal individually. The one cap the owner later wanted back came back as a **prompt**: a
 re-render of `domain/expert.md` more than 20% longer than the size recorded in
 `veriloop-manifest.json` makes `generate` ask you to re-read the file. It has no ceiling and
