@@ -354,6 +354,26 @@ const VERILOOP = {
       "path": "scripts/selftest.mjs",
       "class": "selftest",
       "deletionsOnly": true
+    },
+    {
+      "path": ".claude/settings.json",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/session-start.mjs",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/session-routing.md",
+      "class": "session-hook",
+      "deletionsOnly": false
     }
   ]
 };

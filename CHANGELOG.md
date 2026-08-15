@@ -21,7 +21,9 @@ measurement veriloop has ever taken of its own lenses' noise rate. Optional inte
 **A protected-path guard, honestly labelled — watching in every mode, stopping only under
 `resolve: "clean"`.** A fix-pass diff touching the constitution, an expert persona or its
 overrides, the interview/gate definitions, `.claude/veriloop/specs/`, the attestation
-history, `fixtures/hostile-ci/`, or *deleting* from the selftest is detected on every run.
+history, `fixtures/hostile-ci/`, the **SessionStart surface** (`.claude/settings.json`,
+`.claude/settings.local.json`, `.claude/veriloop/session-start.mjs`,
+`.claude/veriloop/session-routing.md`), or *deleting* from the selftest is detected on every run.
 On a clean run it **hard-stops**. On a default run it is **observed and attested** — logged
 with its path and class, recorded in the attestation's `guardStops` — and the verdict and
 control flow are untouched, so default-mode verdict semantics still match today exactly
@@ -31,6 +33,19 @@ repo at generate time and rides in the manifest; a class that derives nothing on
 recorded as a null and reported as a coverage GAP, never as coverage. It reads an
 **agent-reported** diff census — the workflow cannot run git — so it is a tripwire, and no
 artifact describes it as more than that; an assertion greps for the overclaim.
+
+**The `session-hook` class, added 2026-08-15.** Finding #2 of that day's `/review` was that
+those four files were uncovered: they decide what every later session in the repo reads
+before it reads anything else, which is the constitution's authority reached through a
+different door. The paths derive from the renderer's own exported constants rather than
+re-typed literals, so a rename in `render.mjs` moves the guard instead of disarming it, and
+`.claude/settings.local.json` is derived as its sibling. The class is **not** deletions-only:
+an edit to the matcher or to the routing payload is the attack, and a deletion is the least
+of it. Each of the four has its own case row, because the per-class coverage loop would stay
+green if three of them stopped deriving. The addition is recorded as a dated addendum in
+`.claude/veriloop/specs/resolve-to-clean.md`, **pending the owner's counter-signature at
+merge** — and the census that feeds the guard is still magnitude-blind, so a count-preserving
+rewrite of one of these files is invisible to it.
 
 **The anti-appeasement contract binds every fix pass, and the constitution leaves the
 docs-sync target list.** Fix prompts in *both* modes carry it: fix the cause, ship the
@@ -66,7 +81,7 @@ a copy of a generated bundle and requires `lint-bundle` to exit non-zero naming 
 dropped row cannot pass silently the way the four unchecked copies did.
 
 <!-- veriloop:gate-figure -->
-**Gate count: 481 → 533.** The fix loop had no assertions at all before this change: the
+**Gate count: 481 → 535.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -74,7 +89,7 @@ value never escalates), confirmed-concern entry, lexicographic halt, pre-existin
 and the owner waiver that now lifts it (plus the mismatched-waiver and mixed-bucket cases
 that keep the waiver a match rather than an amnesty), the script-owned check-fact exemption,
 the reserved concern pass, waived-clean, and one guard case per protected class (the
-class-coverage assertion pins nine of nine, not `>= 8`) plus each of numstat's three rename
+class-coverage assertion pins ten of ten, not `>= 8`) plus each of numstat's three rename
 shapes and the deletions-only class's real attack shape — a fix pass stripping lines *this
 branch* added, which the cumulative census reports as a falling `added` with `deleted` still
 0. The guard's arming decision got its own marker region (`veriloop:guardmode`) and is

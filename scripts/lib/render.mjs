@@ -252,10 +252,10 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `  so every clean run also measures the lenses' own noise rate. A pre-existing finding is never fixed,\n` +
     `  but \`args.waive\` reaches it like any other finding — a waiver can only ever yield WAIVED, never PASS.\n` +
     `  The protected-path guard (the constitution, personas/overrides, interview/gate definitions, specs,\n` +
-    `  history, hostile fixtures, or a deletion from the selftest) watches fix passes in BOTH modes: under\n` +
-    `  \`clean\` a touch HARD-STOPS the run, under \`blockers\` it is logged and recorded in the attestation's\n` +
-    `  \`guardStops\` with the verdict untouched. Either way it is a tripwire over agent-reported diff lists,\n` +
-    `  since this workflow cannot run git itself.\n` +
+    `  history, hostile fixtures, the SessionStart surface, or a deletion from the selftest) watches fix\n` +
+    `  passes in BOTH modes: under \`clean\` a touch HARD-STOPS the run, under \`blockers\` it is logged and\n` +
+    `  recorded in the attestation's \`guardStops\` with the verdict untouched. Either way it is a tripwire\n` +
+    `  over agent-reported diff lists, since this workflow cannot run git itself.\n` +
     `- \`args.posture = "frugal" | "balanced" | "max"\` — the cost dial. Shifts the model + reasoning effort of\n` +
     `  each phase. **It never removes a check, a lens, or the baseline probe** — the exit-code gate is ground\n` +
     `  truth, not a budget line.\n` +

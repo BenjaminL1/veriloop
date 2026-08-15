@@ -137,3 +137,45 @@ follows; these BIND the build:
 4. **Land — the constitution leaves the docs-sync target list.** The Land agent may no
    longer edit the constitution; constitution edits are owner-only, by hand. Closes the
    guard's Land-phase back door.
+
+---
+
+## Addendum — 2026-08-15: session-hook guard class (pending owner counter-signature)
+
+**Status: PROVISIONAL. Written by the implementing drive, not by the owner.** It is a separate
+block by construction: it amends no ratified text above it, including the owner-rulings block,
+and it takes effect as spec only if the owner counter-signs it at merge review.
+
+**What was added.** A tenth protected-path class, `session-hook`, covering four paths:
+`.claude/settings.json`, `.claude/settings.local.json`, `.claude/veriloop/session-start.mjs`,
+`.claude/veriloop/session-routing.md`. They are derived in `generate.mjs`
+(`deriveProtectedPaths`) from the renderer's own exported constants — `CLAUDE_SETTINGS`,
+`SESSION_HOOK_SCRIPT`, `SESSION_ROUTING_DOC`, with `settings.local.json` derived as
+`CLAUDE_SETTINGS`'s sibling — and never from re-typed literals, so a rename in `render.mjs`
+moves the guard instead of silently disarming it. All four are `deletionsOnly: false`: an EDIT
+to the SessionStart matcher or to the routing payload is the attack this class exists for, and
+a deletion is the least of it. Each path carries its own selftest case row, because the
+per-class coverage loop would stay green if three of the four stopped deriving.
+
+**Why.** These four files decide what every later session in this repo reads before it reads
+anything else — the same authority the constitution has, reached through a different door, and
+the one door D6's class list left open.
+
+**Provenance, stated exactly.** The gap is finding #2 of the 2026-08-15 `/review` of this
+branch. That finding appeared verbatim in the review summary the owner endorsed the same day.
+The work was carried out under the owner's delegation of 2026-08-15, quoted in full in
+`.claude/veriloop/specs/review-remediation-2026-08-15.md`, whose D2 scopes this addition. That
+delegation is a chat sentence, not a ratification, which is why this block is worded as
+pending and why the merge review is the ratification point.
+
+**Scope. This addendum carries no further licence.** It records one class addition and nothing
+else. It does not amend D6, it does not extend to a later drive widening the class list, and it
+is not a precedent for agent-authored additions to a ratified spec. The rider's objection to
+that form is carried UNRESOLVED as R1 of `review-remediation-2026-08-15.md` and is part of what
+the owner is being asked to rule on here.
+
+**Against R3.** This addition does not narrow R3's guarantee class and does not pretend to: the
+census reports added/deleted line counts, so a count-preserving rewrite of any of these four
+files produces no delta and stays invisible to the guard — the per-path blob-sha extension that
+would close that hole is deliberately NOT built here and is queued for the owner as Q3 of
+`review-remediation-2026-08-15.md`.

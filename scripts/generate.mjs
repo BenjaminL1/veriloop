@@ -744,7 +744,7 @@ function buildResolveDefault(interview) {
  * instead, which is the same source of truth one step downstream.
  */
 function protectedClasses() {
-  return ['constitution', 'personas', 'overrides', 'interview', 'gate-defs', 'binding-spec', 'history', 'hostile-fixtures', 'selftest'];
+  return ['constitution', 'personas', 'overrides', 'interview', 'gate-defs', 'binding-spec', 'history', 'hostile-fixtures', 'selftest', 'session-hook'];
 }
 
 /**
@@ -770,6 +770,18 @@ function deriveProtectedPaths(repo, config) {
   if (existsSync(join(repo, 'fixtures/hostile-ci'))) add('fixtures/hostile-ci/', 'hostile-fixtures');
   const selftest = resolveSelftestPath(repo, config.gate);
   if (selftest) add(selftest, 'selftest', true);
+  // The SessionStart surface. It decides what every future session in this repo reads before
+  // it reads anything else, so a fix pass editing it edits the next agent's instructions —
+  // the same authority the constitution has, reached by a different door. NOT deletions-only:
+  // an EDIT to the matcher or to the routing payload is the whole attack, and a deletion is
+  // the least of it. Derived from the renderer's own exported constants rather than re-typed,
+  // so a rename in render.mjs moves the guard with it instead of silently disarming it;
+  // `settings.local.json` has no constant of its own and is derived as `CLAUDE_SETTINGS`'s
+  // sibling for exactly that reason.
+  add(CLAUDE_SETTINGS, 'session-hook');
+  add(CLAUDE_SETTINGS.replace(/settings\.json$/, 'settings.local.json'), 'session-hook');
+  add(SESSION_HOOK_SCRIPT, 'session-hook');
+  add(SESSION_ROUTING_DOC, 'session-hook');
   // record every class, including the ones that derived nothing here
   for (const cls of protectedClasses()) {
     if (!found.some((p) => p.class === cls)) found.push({ path: null, class: cls, deletionsOnly: cls === 'selftest' });

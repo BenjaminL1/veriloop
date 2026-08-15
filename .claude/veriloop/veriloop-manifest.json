@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-15T08:37:51.790Z",
+  "generated_at": "2026-08-15T17:48:23.746Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "a9e297177e8acffb9d68fc45093f75f4c8b451df",
+  "repo_sha": "45caf70bc81342bffbf44fd8c226ceb563c6bf39",
   "stack": [
     "node"
   ],
@@ -249,6 +249,26 @@
       "path": "scripts/selftest.mjs",
       "class": "selftest",
       "deletionsOnly": true
+    },
+    {
+      "path": ".claude/settings.json",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/session-start.mjs",
+      "class": "session-hook",
+      "deletionsOnly": false
+    },
+    {
+      "path": ".claude/veriloop/session-routing.md",
+      "class": "session-hook",
+      "deletionsOnly": false
     }
   ],
   "e2e": null,

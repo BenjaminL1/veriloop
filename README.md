@@ -269,17 +269,19 @@ also measures the lenses' own noise rate.
 
 A fix pass that touches a **protected path** (the constitution, the expert
 personas/overrides, the interview and gate definitions, `.claude/veriloop/specs/`, the
-attestation history, `fixtures/hostile-ci/`, or a *deletion* from the selftest) is caught in
-**every mode** — the diff census and the guard run on every fix pass — but the consequence is
-scoped: under `resolve = "clean"` a violation **hard-stops the run**, and under the default
-`blockers` it is **observed and attested**, logged with its path and class and recorded in the
-attestation's `guardStops`, with the verdict and the control flow untouched. Default runs
-therefore keep today's verdict semantics exactly while finally *measuring* how often a fix
-pass reaches for a protected path. The path list is derived per host repo at generate time and
-carried in the manifest, where a generalized parity check pins it — along with `budget`,
-`cross_model` and `resolve_default` — to the copy spliced into the workflow. It is a
-**tripwire, not a lock**: the workflow cannot run git, so the guard reads an agent-reported
-diff census, and when it trips it stops the run and reports rather than reverting anything.
+attestation history, `fixtures/hostile-ci/`, the SessionStart surface — `.claude/settings.json`,
+`.claude/settings.local.json`, the hook script and its routing doc — or a *deletion* from the
+selftest) is caught in **every mode** — the diff census and the guard run on every fix pass —
+but the consequence is scoped: under `resolve = "clean"` a violation **hard-stops the run**,
+and under the default `blockers` it is **observed and attested**, logged with its path and
+class and recorded in the attestation's `guardStops`, with the verdict and the control flow
+untouched. Default runs therefore keep today's verdict semantics exactly while finally
+*measuring* how often a fix pass reaches for a protected path. The path list is derived per
+host repo at generate time and carried in the manifest, where a generalized parity check pins
+it — along with `budget`, `cross_model` and `resolve_default` — to the copy spliced into the
+workflow. It is a **tripwire, not a lock**: the workflow cannot run git, so the guard reads an
+agent-reported diff census, and when it trips it stops the run and reports rather than
+reverting anything.
 
 Every fix prompt, in every mode, carries the **anti-appeasement contract**: fix the cause,
 ship the assertion the constitution's test rule demands, never silence or reword a finding so
@@ -290,7 +292,7 @@ docstrings, type defs and plans, and explicitly **not** the constitution: those 
 owner-only, by hand.
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 481 → 533: the fix loop had no assertions at all before
+Pinning all of this, the gate went 481 → 535: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,

@@ -3898,16 +3898,16 @@ function gateFigures(file, re) {
     'resolve/guard: the emitted hard-stop branch is gated on `guardEnforced` (never on `guardStops` alone), and the observing path logs its stops instead — the mode split is one branch, outside the pure region',
   );
   const classes = [...new Set(protectedPaths.filter((p) => p.path).map((p) => p.class))];
-  // EXACT, not `>=`. The synthetic repo above is built so all NINE classes derive, so a
+  // EXACT, not `>=`. The synthetic repo above is built so all TEN classes derive, so a
   // regression that dropped one to `path: null` must fail HERE — under `>= 8` it passed
   // while the per-class loop below (which skips null paths) also silently stopped
   // covering it: the one assertion between a disarmed guard class and a landed change
   // was satisfied by 8 of 9. The `uncovered` term names the offender in the message.
   const uncovered = protectedPaths.filter((p) => !p.path).map((p) => p.class);
   assert(
-    classes.length === 9 && uncovered.length === 0 &&
+    classes.length === 10 && uncovered.length === 0 &&
       protectedPaths.some((p) => p.class === 'selftest' && p.deletionsOnly === true),
-    `resolve/guard: the generator derives a protected path for EVERY one of the nine classes on a repo that has them all (${classes.length}: ${classes.join(', ')}${uncovered.length ? `; UNCOVERED: ${uncovered.join(', ')}` : ''}), and only the selftest class is deletions-only`,
+    `resolve/guard: the generator derives a protected path for EVERY one of the ten classes on a repo that has them all (${classes.length}: ${classes.join(', ')}${uncovered.length ? `; UNCOVERED: ${uncovered.join(', ')}` : ''}), and only the selftest class is deletions-only`,
   );
   const touched = [];
   for (const p of protectedPaths.filter((x) => x.path)) {
@@ -3925,6 +3925,43 @@ function gateFigures(file, re) {
   assert(
     R.guardViolations([{ path: 'src/widget.ts', added: 40, deleted: 9 }], protectedPaths).length === 0,
     'resolve/guard: an ordinary source file is untouched by the guard — it stops protected paths, not work',
+  );
+  // --- the `session-hook` class (D2, review remediation 2026-08-15). ONE ROW PER PATH, not
+  //     one per class: the coverage loop above walks whatever the manifest happens to carry,
+  //     so three of these four could stop deriving and it would still be green. These rows
+  //     are the only thing that fails when one goes missing.
+  //
+  //     The expected list is built from the RENDERER'S OWN EXPORTED CONSTANTS, which is what
+  //     makes it a derivation check rather than a spelling check: a re-typed literal in
+  //     `deriveProtectedPaths` would keep passing after `render.mjs` renamed the file out
+  //     from under it, and the guard would then be watching a path that no longer exists
+  //     while the manifest still claimed the class was covered. `settings.local.json` has no
+  //     constant of its own and is derived here the same way the generator derives it.
+  const sessionHookExpected = [
+    CLAUDE_SETTINGS,
+    CLAUDE_SETTINGS.replace(/settings\.json$/, 'settings.local.json'),
+    SESSION_HOOK_SCRIPT,
+    SESSION_ROUTING_DOC,
+  ];
+  const sessionHookDerived = protectedPaths.filter((p) => p.class === 'session-hook');
+  assert(
+    JSON.stringify(sessionHookDerived.map((p) => p.path)) === JSON.stringify(sessionHookExpected) &&
+      sessionHookDerived.every((p) => p.deletionsOnly === false),
+    `resolve/guard: the session-hook class derives exactly the four SessionStart paths the renderer exports, in order, none of them deletions-only — an EDIT to the matcher or the routing payload is the attack, not a deletion (${sessionHookDerived.map((p) => p.path).join(', ') || 'NOTHING DERIVED'})`,
+  );
+  // …and each one, individually, trips the guard. `guardViolations` is the OBSERVING path
+  // too: it runs in both modes and only the consequence is gated on `guardEnforced` (owner
+  // ruling 1, executed from the emitted slice above), so one call proves both.
+  const hookMisses = [];
+  for (const path of sessionHookExpected) {
+    const stops = R.guardViolations([{ path, added: 3, deleted: 2 }], protectedPaths);
+    if (stops.length !== 1 || stops[0].class !== 'session-hook') {
+      hookMisses.push(`${path} → ${stops.length ? stops.map((s) => s.class).join('+') : 'NO VIOLATION'}`);
+    }
+  }
+  assert(
+    hookMisses.length === 0,
+    `resolve/guard: EVERY session-hook path trips exactly one violation of class \`session-hook\` on a fix-pass touch — the SessionStart surface decides what the next session reads before it reads anything else${hookMisses.length ? ` [${hookMisses.join('; ')}]` : ` (${sessionHookExpected.length} paths)`}`,
   );
   // RENAMES. `git diff --numstat` prints a move as a COMPOSITE path, and the census
   // prompt asks the agent to report paths exactly as numstat prints them — so a raw
