@@ -1084,6 +1084,7 @@ function assert(cond, desc) {
       'dropped: probe written to /private/tmp/claude-501/session/scratchpad/probe.md',
       'dropped: also wrote /tmp/vlm.md',
       'dropped: and /var/folders/qz/T/veriloop-emit-x/out.json',
+      'dropped: opened file:///tmp/x to read it back',
     ].join('\n'),
   };
   const tempOut = attestationFrom(tempSynth, { wt: '/tmp/wt', branch: 'b' }, stamps, ['/tmp/wt']);
@@ -1095,6 +1096,17 @@ function assert(cond, desc) {
   assert(
     tempSummary.includes('docs/private/notes.md') && tempSummary.includes('%REPO%/tmp/build.log'),
     'emit: the temp-root drop is ANCHORED — a repo-relative `docs/private/` path and an in-root `%REPO%/tmp/` path both SURVIVE (a bare substring match would empty the attestation of any repo with a tmp/ directory)',
+  );
+  //      The anchor class excludes WORD characters only — NOT `/`. While it also excluded `/`
+  //      the one shape it let straight through was a DOUBLED slash (`file:///tmp/x`, and any
+  //      `…//tmp/…`), where the character before `/tmp/` is itself a slash and so failed the
+  //      class. A word character before the slash is what marks a path relative; a second
+  //      slash marks nothing. The `%REPO%` case above is protected by the LOOKBEHIND, not by
+  //      the class, which is why widening the class costs it nothing — it is asserted in the
+  //      same block, so this pair moves together or fails.
+  assert(
+    !/file:\/\/\/tmp\//.test(tempSummary),
+    'emit: a `file:///tmp/x` URL is dropped too — the anchor excludes word characters, not slashes, so a doubled slash is not an escape hatch',
   );
 
   // (g) dry-run routing: dryRun:true routes the record under history/dry-runs/, never
@@ -3739,12 +3751,17 @@ function gateFigures(file, re) {
 
   // The instruction RESOLVES the root rather than interpolating a bare `$REPO`: it is
   // carried out inside the worktree, where re-deriving the toplevel yields the WORKTREE and
-  // silently restores the per-worktree duplication. Pinned on all three cargo branches so a
-  // future edit cannot regress one of them back to `CARGO_TARGET_DIR=$REPO/target`.
+  // silently restores the per-worktree duplication. The directory git is asked about is the
+  // FAIL-LOUD `${REPO:?}`, not `$REPO`: `git -C ""` is a documented no-op, so an unset or
+  // empty root would hand the worktree's own cwd back without a word — the same wrong answer,
+  // reached by a second route. Pinned on all three cargo branches so a future edit cannot
+  // regress one of them back to `CARGO_TARGET_DIR=$REPO/target` OR to the silent `git -C
+  // "$REPO"`. (`deps` is the RAW JSON string body, so its inner quotes read as `\"`.)
   for (const [label, deps] of [['rust', rust.deps], ['python+rust', mix.deps], ['node+rust', nodeRust.deps]]) {
     assert(
-      /rev-parse --show-toplevel/.test(deps) && !/CARGO_TARGET_DIR=\$REPO/.test(deps),
-      `depsSetup: the ${label} shared-target instruction RESOLVES the main checkout's root explicitly instead of interpolating a bare $REPO (which re-derives to the worktree at the point of use)`,
+      /rev-parse --show-toplevel/.test(deps) && !/CARGO_TARGET_DIR=\$REPO/.test(deps) &&
+        /git -C \\"\$\{REPO:\?\}\\"/.test(deps),
+      `depsSetup: the ${label} shared-target instruction RESOLVES the main checkout's root explicitly instead of interpolating a bare $REPO (which re-derives to the worktree at the point of use), and asks git about \`\${REPO:?}\` so an empty or unset root fails loudly instead of resolving to the cwd`,
     );
   }
 
@@ -4065,10 +4082,13 @@ function gateFigures(file, re) {
   //     `deriveProtectedPaths` would keep passing after `render.mjs` renamed the file out
   //     from under it, and the guard would then be watching a path that no longer exists
   //     while the manifest still claimed the class was covered. `settings.local.json` has no
-  //     constant of its own and is derived here the same way the generator derives it.
+  //     constant of its own, and deriving it here the same way the generator derives it made
+  //     THAT row a tautology — both sides computed from `CLAUDE_SETTINGS` by the same rule, so
+  //     nothing would notice if the rule drifted. Its spelling is not veriloop's to choose:
+  //     the HARNESS contract owns it, so it is pinned as a LITERAL.
   const sessionHookExpected = [
     CLAUDE_SETTINGS,
-    CLAUDE_SETTINGS.replace(/settings\.json$/, 'settings.local.json'),
+    '.claude/settings.local.json',
     SESSION_HOOK_SCRIPT,
     SESSION_ROUTING_DOC,
   ];

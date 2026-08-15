@@ -85,7 +85,13 @@ doc concerns — in four commits, with three decisions explicitly QUEUED for the
   hand-amended by the owner.
 - **Q3 — blob-sha census** (closes the guard's magnitude-blindness): a D6 amendment for
   the owner's signature, with the honest note that the sha is agent-reported either way.
-- **Q4 — counter-signatures** on the two spec annotations this drive writes (D2, D4).
+- **Q4 — counter-signatures** on the THREE blocks this drive writes that end "pending owner
+  counter-signature": the `resolve-to-clean.md` addendum recording the `session-hook` guard
+  class (D2), the `auto-merge-dial.md` dated annotation correcting the blockquote's tense
+  (D4), and the `session-hook-compact-delivery.md` pending-owner-decision block recording the
+  third lint verdict (D4). The third's signature is subsumed by answering **Q1** — ruling on
+  the `unconstrained` disposition settles what that block records — if the owner prefers to
+  handle it there rather than sign it separately.
 
 ## Non-goals — binding
 
@@ -110,7 +116,8 @@ doc concerns — in four commits, with three decisions explicitly QUEUED for the
    status; the literal phrase "standing instruction" appears nowhere in text this drive
    writes (correction, 2026-08-15: the rider's "only inside a recorded injection-probe
    header" undercounted — the phrase also lives in render.mjs:396 prose and its emitted
-   advise.md mirror; the prohibition here binds only what this drive authors).
+   advise.md mirror; the prohibition here binds only what this drive authors — outside this
+   criterion's own statement).
 8. Three-lens re-gate on the full delta lands no BLOCKER before push.
 
 ## OPEN RISKS — carried, NOT cleared

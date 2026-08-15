@@ -710,18 +710,22 @@ main();
  * with a `git rev-parse --show-toplevel` fallback), but an agent re-deriving it from the
  * worktree's own cwd gets the WORKTREE back — and `CARGO_TARGET_DIR=<worktree>/target` is
  * exactly the per-worktree duplication this whole clause exists to prevent, silently. Naming
- * the directory git is asked about (`git -C "$REPO"`) makes the resolution unambiguous at
- * the point of use, which is the same rule the preamble follows.
+ * the directory git is asked about pins the resolution to `$REPO` instead of the cwd, which
+ * is the rule the preamble follows — but naming it is NOT sufficient on its own: `git -C ""`
+ * is a documented no-op, so an unset or empty `$REPO` hands the cwd straight back and
+ * restores the duplication just as quietly. The emitted form is therefore `git -C "${REPO:?}"`,
+ * which turns that case into a loud shell failure instead of a quiet wrong answer.
  */
 function cargoShare() {
   return (
     ' Before any `cargo` or `maturin` command in the worktree, point cargo at ONE shared build' +
-    ' directory: `export CARGO_TARGET_DIR="$(git -C "$REPO" rev-parse --show-toplevel)/target"`' +
+    ' directory: `export CARGO_TARGET_DIR="$(git -C "${REPO:?}" rev-parse --show-toplevel)/target"`' +
     ' — resolved against the MAIN CHECKOUT, never re-derived from inside the worktree (a bare' +
     ' `git rev-parse --show-toplevel` run there answers with the worktree and hands it its own' +
-    ' `target/` again) — so every worktree SHARES one build directory instead of compiling its' +
-    ' own (~1.3 GB apiece); cargo locks it, so concurrent worktree builds serialize rather' +
-    ' than corrupt each other.'
+    ' `target/` again; `${REPO:?}` rather than `$REPO` because `git -C ""` is a no-op that would' +
+    ' quietly answer with the worktree too) — so every worktree SHARES one build directory' +
+    ' instead of compiling its own (~1.3 GB apiece); cargo locks it, so concurrent worktree' +
+    ' builds serialize rather than corrupt each other.'
   );
 }
 

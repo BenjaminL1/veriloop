@@ -297,7 +297,7 @@ docstrings, type defs and plans, and explicitly **not** the constitution: those 
 owner-only, by hand.
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 481 → 551: the fix loop had no assertions at all before
+Pinning all of this, the gate went 481 → 552: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,

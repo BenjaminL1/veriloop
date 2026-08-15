@@ -738,12 +738,18 @@ function attestationFrom(evidence, ctx, stamps, roots) {
   // as Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`.
   //
   // The shapes are ANCHORED, and both halves of the anchor are load-bearing:
-  //   - a leading `^` or a non-word, non-`/` character, so `docs/private/notes.md` — a
-  //     repo-relative path with `private` as a plain directory name — is NOT a temp path;
+  //   - a leading `^` or a NON-WORD character, so `docs/private/notes.md` — a repo-relative
+  //     path with `private` as a plain directory name — is NOT a temp path. The class
+  //     deliberately does NOT exclude `/`: excluding it left `file:///tmp/x` and any
+  //     double-slashed `…//tmp/…` through, since the character before `/tmp/` is itself a
+  //     slash there. A word character before the slash is what marks a relative path;
+  //     another slash marks nothing;
   //   - a negative lookbehind on `%REPO%`, because `stripRoots` runs FIRST and rewrites every
   //     in-root path to `%REPO%/…`. Without it a repo that simply has a `tmp/` directory would
-  //     have every line mentioning `%REPO%/tmp/x` dropped from its own attestation.
-  const TEMP = /(?:^|[^\w/])(?<!%REPO%)\/(?:private|tmp|var\/folders)\//;
+  //     have every line mentioning `%REPO%/tmp/x` dropped from its own attestation. The
+  //     lookbehind, not the anchor class, is what protects that case — widening the class
+  //     does not weaken it.
+  const TEMP = /(?:^|[^\w])(?<!%REPO%)\/(?:private|tmp|var\/folders)\//;
   const rootList = (roots || [])
     .filter((r) => typeof r === 'string' && r.length)
     .sort((a, b) => b.length - a.length); // longest-first: a worktree prefix before its parent

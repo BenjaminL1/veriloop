@@ -178,4 +178,10 @@ the owner is being asked to rule on here.
 census reports added/deleted line counts, so a count-preserving rewrite of any of these four
 files produces no delta and stays invisible to the guard — the per-path blob-sha extension that
 would close that hole is deliberately NOT built here and is queued for the owner as Q3 of
-`review-remediation-2026-08-15.md`.
+`review-remediation-2026-08-15.md`. Nor does the class close the SCOPE hole, which is worth
+naming because this class is the one where it bites hardest: the census is `git -C <worktree>
+diff --numstat <base>`, so it sees the worktree only, while the four files it now protects are
+executed from the MAIN CHECKOUT — an absolute-path write from a fix pass to the main checkout's
+copies takes effect on the next session without ever entering the census, which is D6's
+tripwire-not-a-lock guarantee class restated at its sharpest, not a new defect this class
+introduces.

@@ -97,7 +97,9 @@ two records already in this repo's history carry such a path. The widening is **
 only**: `lint-bundle`'s committed-record backstop still scans with `ABS` alone, so no
 committed record changes verdict; whether the backstop follows is queued for the owner (Q2
 of `.claude/veriloop/specs/review-remediation-2026-08-15.md`). The drop is anchored, so a
-repo's own `docs/private/` or `tmp/` directory and any in-root `%REPO%/tmp/…` path survive.
+repo's own `docs/private/` or `tmp/` directory and any in-root `%REPO%/tmp/…` path survive;
+the anchor excludes **word characters, not slashes**, so a doubled slash — `file:///tmp/x` —
+is not an escape hatch from it, and the in-root case is held by the `%REPO%` lookbehind.
 
 **A node+rust repo shares the cargo target dir too.** `buildDepsSetup`'s node branch
 *returned* before the `usesCargo` test the python branch runs, so a napi-rs / neon /
@@ -106,10 +108,12 @@ wasm-pack repo — whose build fills `target/` exactly as a maturin one does —
 instruction also resolves the main checkout's root explicitly rather than interpolating a
 bare `$REPO`: the instruction is carried out *inside* the worktree, where re-deriving the
 toplevel answers with the worktree and silently restores the duplication the clause exists
-to prevent.
+to prevent. The directory git is asked about is `${REPO:?}`, not `$REPO`, because `git -C ""`
+is a documented **no-op** — an unset or empty root would resolve to the cwd and give the same
+wrong answer by a second route, silently. `${REPO:?}` makes that case a loud shell failure.
 
 <!-- veriloop:gate-figure -->
-**Gate count: 481 → 551.** The fix loop had no assertions at all before this change: the
+**Gate count: 481 → 552.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -268,15 +272,18 @@ key at all goes red and loses the vouch.
 `<cwd>/target`, so every per-feature worktree compiled its own copy and nothing ever
 reclaimed it — measured before the fix, four worktrees of one repo held **5.2 GB** of
 duplicate `target/` on top of the main checkout's 1.4 GB, roughly 1.3 GB apiece. The emitted
-worktree-setup instruction now exports a **shared** `CARGO_TARGET_DIR` resolved against the
-main checkout's root — explicitly resolved, not interpolated from a bare `$REPO`, because the
-instruction is carried out inside the worktree, where re-deriving the toplevel answers with
-the worktree and silently restores the duplication. The tradeoff is **stated rather than
-hidden**: cargo locks the shared directory, so concurrent worktree builds serialize instead
-of corrupting one another. *(Entry written 2026-08-15: this change shipped in the routing era
-and was never written up here. The branch in progress closes the last gap it left — a
-node-primary repo with a Rust addon returned from the node branch before the cargo test ran
-and got no shared-target instruction at all; see the resolve-to-clean section above.)*
+worktree-setup instruction gained a **shared** `CARGO_TARGET_DIR` — as shipped, the bare
+`export CARGO_TARGET_DIR=$REPO/target` — so every worktree points at one build directory
+instead of filling its own. The tradeoff is **stated rather than hidden**: cargo locks the
+shared directory, so concurrent worktree builds serialize instead of corrupting one another.
+*(Entry written 2026-08-15: this change shipped in the routing era and was never written up
+here. The branch in progress closes the last two gaps it left, and both belong to that branch,
+not to `15bdf9c`: a node-primary repo with a Rust addon returned from the node branch before
+the cargo test ran and got no shared-target instruction at all; and the root is now RESOLVED
+explicitly — `$(git -C "${REPO:?}" rev-parse --show-toplevel)/target` — because the bare
+`$REPO` form is read inside the worktree, where re-deriving the toplevel answers with the
+worktree and silently restores the duplication, and because `git -C ""` is a no-op that would
+do the same on an unset root. See the resolve-to-clean section above.)*
 
 Built to `.claude/veriloop/specs/session-hook-compact-delivery.md` (RATIFIED — BINDING,
 2026-08-04), which amends the matcher non-goal in `session-routing-redesign.md`.

@@ -19,11 +19,12 @@ so "full autonomy" is truthfully claimable as an opt-in.
 
 *Annotation — 2026-08-15, recorded by the review-remediation drive
 (`.claude/veriloop/specs/review-remediation-2026-08-15.md`, D4). The parenthetical in the
-blockquote above read "it does **not** exist yet". `resolve-to-clean` has since been ratified,
-built and gated, so a present-tense claim written on 2026-08-13 had become false on its face;
-the tense was corrected and anchored to the ratification date it was true of. That phrase is
-the only byte of the ratified blockquote this drive changed, and it changes no decision, no
-risk and no sequencing. **Pending owner counter-signature at merge.***
+blockquote above read "it does not exist yet" (quoted verbatim — no emphasis of ours added).
+`resolve-to-clean` has since been ratified, built and gated, so a present-tense claim written
+on 2026-08-13 had become false on its face; the tense was corrected and anchored to the
+ratification date it was true of. That phrase is the only byte of the ratified blockquote this
+drive changed, and it changes no decision, no risk and no sequencing. **Pending owner
+counter-signature at merge.***
 
 ---
 
