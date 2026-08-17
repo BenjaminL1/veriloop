@@ -199,3 +199,9 @@ auditor-of-faits-accomplis — was carried UNRESOLVED into this merge review, wh
 owner ruled. The three blocks are now signed rather than pending, so the specific instances are
 closed; the general objection is **not** thereby settled, and this block is not a precedent for
 writing the next one unsigned.
+
+> **Amendment — 2026-08-16 (same owner instruction as the RESOLVED block):** Q2's shipped
+> form was refined one commit later (9d927b5) after a security-lens finding verified by
+> execution: unparseable record filenames now fail CLOSED (scanned), since all committed
+> records parse pre-cutoff and fail-open bought nothing. The honest residual bypass is a
+> BACKDATED parseable name, which no parse rule closes; SECURITY.md names it.
