@@ -254,6 +254,38 @@ function main() {
     return secretPatternsCache;
   }
 
+  // 6a. the TEMP-ROOT backstop, TIMESTAMP-GATED (owner ratification, 2026-08-16 — Q2 of
+  //     `.claude/veriloop/specs/review-remediation-2026-08-15.md`). The emitted workflow's
+  //     `redactStr` has dropped temp-root lines since 2026-08-15, but this backstop scanned
+  //     with ABS alone, so the widening covered new records and nothing else. It now covers
+  //     records EMITTED FROM THE CUTOFF ON: a record whose FILENAME timestamp parses to
+  //     >= `TEMP_BACKSTOP_FROM` is additionally whole-line-failed on the temp-root shapes.
+  //     Records emitted before that date — the two already committed here — are scanned
+  //     exactly as before, because a retroactive widening turns the gate red on history
+  //     nobody can rewrite without the owner.
+  //
+  //     THE BYPASS CLASS, NAMED rather than implied: the gate is the record's FILE NAME, and
+  //     a name that does not parse as `<ts>.json` is NOT temp-scanned. The emitter always
+  //     writes `history/<stamps.ts>.json`, so this only reaches hand-placed files — but a
+  //     hand-placed record named anything else skips this check, and that is the price of
+  //     leaving the two pre-cutoff records green without hand-amending them.
+  //
+  //     The regex is a MIRRORED LITERAL, the same convention ABS already uses in its three
+  //     copies (the template's `attestationFrom`, and selftest :980/:1922): lint-bundle is a
+  //     scanner aimed at third-party bundles, so it must be able to scan one whose workflow it
+  //     has not executed. Both halves of the anchor are load-bearing and are documented at the
+  //     source — the non-word class (so `docs/private/notes.md` is not a temp path, while
+  //     `file:///tmp/x` still is) and the `%REPO%` lookbehind (so a repo with its own `tmp/`
+  //     directory does not empty its own attestation).
+  const TEMP = /(?:^|[^\w])(?<!%REPO%)\/(?:private|tmp|var\/folders)\//; // === dev-loop.template.js redactStr TEMP
+  const TEMP_BACKSTOP_FROM = Date.parse('2026-08-16T00:00:00Z');
+  // `2026-08-17T04-05-06Z.json` → the instant it names. NaN for any other shape, and
+  // `NaN >= x` is false, so an unparseable name falls into the bypass class above.
+  const recordInstant = (name) => {
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z\.json$/.exec(name);
+    return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN;
+  };
+
   const histDir = join(args.bundle, '.claude/veriloop/history');
   if (isDir(histDir)) {
     const secretPatterns = getSecretPatterns();
@@ -266,8 +298,10 @@ function main() {
         else if (name.endsWith('.json')) {
           const t = readFileSync(abs, 'utf8');
           const relPath = `.claude/veriloop/history/${rel ? `${rel}/${name}` : name}`;
+          const tempScanned = recordInstant(name) >= TEMP_BACKSTOP_FROM;
           t.split('\n').forEach((line, i) => {
             if (ABS.test(line)) { histHits++; fail(`absolute path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)}`); return; }
+            if (tempScanned && TEMP.test(line)) { histHits++; fail(`temp-root path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)} (records timestamped from 2026-08-16 are scanned for /tmp/, /private/ and /var/folders/ too)`); return; }
             for (const re of secretPatterns) {
               if (re.test(line)) { histHits++; fail(`secret-shaped content in committed attestation record ${relPath}:${i + 1}`); break; }
             }
@@ -276,7 +310,7 @@ function main() {
       }
     };
     walkHist(histDir, '');
-    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns');
+    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns (and, from 2026-08-16 on, temp-root paths)');
   }
 
   // 6b. the domain bundle — the SAME backstop, for the same reason (constitution rule 7).

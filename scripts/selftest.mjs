@@ -1142,6 +1142,31 @@ function assert(cond, desc) {
   const poisonedPemScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(poisonedPemScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a bare PEM END-marker footer line');
   assert(/secret-shaped content in committed attestation record/.test(poisonedPemScan.stdout || ''), 'lint-bundle: the PEM-footer failure names the committed-history secret backstop');
+
+  // (j) the TEMP-ROOT backstop, TIMESTAMP-GATED (owner ratification 2026-08-16 — Q2). The
+  //     emit-time redaction has dropped `/tmp/`, `/private/…` and `/var/folders/…` since
+  //     2026-08-15; the committed-record backstop now follows it FORWARD ONLY. The gate is
+  //     the record's own FILENAME timestamp, so the pair below is the whole contract: the
+  //     SAME line is red in a post-cutoff record and green in a pre-cutoff one. Asserting
+  //     only the red half would pass a backstop that had quietly gone retroactive and turned
+  //     the two records already in this repo's history red.
+  rmSync(join(histDir, 'poisoned-pem-footer.json'));
+  const TEMP_LINE = 'scratch dir was /private/tmp/vl-scratchpad/notes.md';
+  writeFileSync(join(histDir, '2026-08-17T04-05-06Z.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  const postCutoffScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(
+    postCutoffScan.status !== 0 && /temp-root path in committed attestation record/.test(postCutoffScan.stdout || '') &&
+      /2026-08-17T04-05-06Z\.json/.test(postCutoffScan.stdout || ''),
+    'lint-bundle: a committed record timestamped AFTER the 2026-08-16 cutoff FAILS on a /private/tmp/… line, and the failure names the offending record',
+  );
+  rmSync(join(histDir, '2026-08-17T04-05-06Z.json'));
+  writeFileSync(join(histDir, '2026-08-01T04-05-06Z.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  const preCutoffScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(
+    preCutoffScan.status === 0,
+    'lint-bundle: the IDENTICAL line in a record timestamped BEFORE the cutoff stays green — the widening is forward-only, so the records already committed here (2026-07-21, 2026-08-04) do not change verdict',
+  );
+  rmSync(join(histDir, '2026-08-01T04-05-06Z.json'));
 }
 
 // --- rust/cargo detector (m4-plan §§1-4+7): a fixture supplies INPUT (Cargo.toml /
@@ -4160,6 +4185,89 @@ function gateFigures(file, re) {
       R.guardViolations(shrunk, protectedPaths).length === 1 &&
       R.guardViolations(shrunk, protectedPaths)[0].class === 'selftest',
     'resolve/guard: a fix pass that DELETES lines this branch added (cumulative `added` falls, `deleted` stays 0) is a removal and hard-stops the deletions-only selftest class',
+  );
+
+  // --- the CONTENT-HASH rule (Q3, owner ratification 2026-08-16). The census reports a
+  //     `git hash-object` blob sha for protected paths only; the guard reads a moved hash
+  //     over an unmoved line count as a touch. Four cases, and the negative two are the
+  //     load-bearing ones: a rule that fires on everything would have "caught" the swap by
+  //     accident. Everything below is the PURE region executed, not the prompt read.
+  //
+  //     (1) the shape the guard was blind to: an N-for-N rewrite of the constitution.
+  const rewrite = R.diffDelta(
+    [{ path: constPath, added: 12, deleted: 3, hash: '9f1a0c2' }],
+    [{ path: constPath, added: 12, deleted: 3, hash: 'b7e4d51' }],
+  );
+  const rewriteStops = R.guardViolations(rewrite, protectedPaths);
+  assert(
+    rewrite.length === 1 && rewrite[0].added === 0 && rewrite[0].deleted === 0 && rewrite[0].hashChanged === true &&
+      rewriteStops.length === 1 && rewriteStops[0].class === 'constitution' &&
+      /content changed, line counts preserved/.test(rewriteStops[0].reason),
+    'resolve/guard: a COUNT-PRESERVING rewrite of the constitution hard-stops — the blob sha moved while the delta stayed (0,0), which is the magnitude-blindness R3 recorded and the count rule can never see',
+  );
+  //     (2) the binary shape: numstat prints `-`/`-`, the census reports 0/0 forever, so
+  //         the hash is the ONLY field that ever moves for a swapped blob under history/.
+  const histPrefix = protectedPaths.find((p) => p.class === 'history').path;
+  const binSwap = R.diffDelta(
+    [{ path: `${histPrefix}evidence.png`, added: 0, deleted: 0, hash: 'aaa111' }],
+    [{ path: `${histPrefix}evidence.png`, added: 0, deleted: 0, hash: 'bbb222' }],
+  );
+  const binStops = R.guardViolations(binSwap, protectedPaths);
+  assert(
+    binSwap.length === 1 && binStops.length === 1 && binStops[0].class === 'history' &&
+      /content changed, line counts preserved/.test(binStops[0].reason),
+    'resolve/guard: a BINARY swap under the history prefix hard-stops at 0/0 counts — numstat can only print `-` for it, so before this rule a replaced blob reached the guard as no delta at all',
+  );
+  //     (3) untouched: same hash, same counts → nothing. The guard stops changes, not
+  //         presence, and a protected path the IMPLEMENTER touched must not become a
+  //         standing violation for every later fix pass.
+  assert(
+    R.diffDelta(
+      [{ path: constPath, added: 12, deleted: 3, hash: '9f1a0c2' }],
+      [{ path: constPath, added: 12, deleted: 3, hash: '9f1a0c2' }],
+    ).length === 0,
+    'resolve/guard: an UNTOUCHED protected path (identical counts, identical hash) produces no delta and no violation — the hash rule fires on change, not on being watched',
+  );
+  //     (4) the legitimate case the rule must not break: rule 3 says a fix pass may ADD the
+  //         assertion to the selftest. That moves the count AND the hash, and it is still
+  //         allowed — the deletions-only class turns on the count, and the hash rule only
+  //         reaches it when the count did NOT move.
+  const selftestAdd = R.diffDelta(
+    [{ path: selftestPath, added: 300, deleted: 0, hash: 'c0ffee1' }],
+    [{ path: selftestPath, added: 340, deleted: 0, hash: 'c0ffee2' }],
+  );
+  assert(
+    selftestAdd.length === 1 && selftestAdd[0].added === 40 && selftestAdd[0].hashChanged === true &&
+      R.guardViolations(selftestAdd, protectedPaths).length === 0,
+    'resolve/guard: a real selftest ADDITION (+40 lines, hash necessarily moved) still passes the deletions-only class — the hash rule adds a shape, it does not forbid the assertions rule 3 demands',
+  );
+  //     …and the same class's real attack in the new disguise: a zero-count-delta with a
+  //     moved hash is an N-for-N exchange, so the lines this branch wrote were replaced.
+  const selftestSwap = R.diffDelta(
+    [{ path: selftestPath, added: 300, deleted: 0, hash: 'c0ffee1' }],
+    [{ path: selftestPath, added: 300, deleted: 0, hash: 'dec0de2' }],
+  );
+  const swapStops = R.guardViolations(selftestSwap, protectedPaths);
+  assert(
+    swapStops.length === 1 && swapStops[0].class === 'selftest' &&
+      /content changed, line counts preserved/.test(swapStops[0].reason),
+    'resolve/guard: an N-for-N swap inside the DELETIONS-ONLY selftest class hard-stops too — a pure addition moves count and hash together, so a moved hash over an unmoved count is lines removed and replaced',
+  );
+  //     A census carrying NO hashes must behave exactly as it did before this rule existed:
+  //     the field is optional, and a degraded census must degrade to the old behavior
+  //     rather than to a guard that fires on everything or on nothing new.
+  assert(
+    R.diffDelta([{ path: constPath, added: 12, deleted: 3 }], [{ path: constPath, added: 12, deleted: 3 }]).length === 0 &&
+      R.diffDelta([{ path: constPath, added: 12, deleted: 3 }], [{ path: constPath, added: 14, deleted: 3 }]).length === 1,
+    'resolve/guard: a census that reports NO hash field is byte-identical in behavior to the count-only guard — the hash widens what is visible and never changes what already was',
+  );
+  //     The census PROMPT scopes hashing to the protected paths and nowhere else: an
+  //     instruction to hash the whole tree would be one `hash-object` per changed file per
+  //     fix pass, and the emitted text is the only place that scoping exists.
+  assert(
+    /CONTENT HASHES — for these protected paths ONLY, never the whole tree/.test(wf) &&
+      /git -C \$\{ctx\.wt\} hash-object/.test(wf) && /VERILOOP\.protectedPaths \|\| \[\]\)\.filter/.test(wf),
+    'resolve/guard: the emitted census prompt asks for `git hash-object` on the PROTECTED paths only, and builds that list from `VERILOOP.protectedPaths` — the same array the guard matches against, never a second copy (rule 9)',
   );
 
   // GUARANTEE CLASS. The workflow cannot run git, so the guard reads agent-reported

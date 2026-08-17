@@ -43,9 +43,27 @@ re-typed literals, so a rename in `render.mjs` moves the guard instead of disarm
 an edit to the matcher or to the routing payload is the attack, and a deletion is the least
 of it. Each of the four has its own case row, because the per-class coverage loop would stay
 green if three of them stopped deriving. The addition is recorded as a dated addendum in
-`.claude/veriloop/specs/resolve-to-clean.md`, **pending the owner's counter-signature at
-merge** — and the census that feeds the guard is still magnitude-blind, so a count-preserving
-rewrite of one of these files is invisible to it.
+`.claude/veriloop/specs/resolve-to-clean.md`, **counter-signed by the owner on 2026-08-16**
+(the addendum was written pending that signature; the sentence quoting it is in the spec).
+The census's magnitude-blindness against that class — a count-preserving rewrite of one of
+those four files reaching the guard as no delta at all — is closed by the content-hash census
+below, ratified the same day.
+
+**The census reports a content hash on protected paths (owner-ratified, 2026-08-16).** Q3 of
+`.claude/veriloop/specs/review-remediation-2026-08-15.md`. The diff census counted added and
+deleted lines, and two real shapes move zero lines: an **N-for-N rewrite** (a protected file
+rewritten line-for-line nets +0/-0 against the earlier census) and **any binary change**,
+which `numstat` prints as `-`/`-` and the census reports as 0/0 forever. Both reached the
+guard as no delta at all. The census now also runs `git hash-object` — **on the protected
+paths only, never the whole tree**, from the same `protectedPaths` array the guard matches
+against — and a moved blob sha over an unmoved line count is a violation reading *content
+changed, line counts preserved*. It is a violation for the deletions-only selftest class too,
+by arithmetic: a pure addition moves the count and the hash together, so a moved hash over an
+unmoved count is an N-for-N exchange — lines this branch wrote, replaced by others. The
+guarantee class is **unchanged**: the hash is agent-reported like every other census field,
+so this narrows the guard's blind spot and not the tripwire-over-agent-reports limit recorded
+against R3. A census that reports no hashes behaves exactly as the count-only guard did, and
+that degradation has its own case.
 
 **The anti-appeasement contract binds every fix pass, and the constitution leaves the
 docs-sync target list.** Fix prompts in *both* modes carry it: fix the cause, ship the
@@ -93,10 +111,16 @@ red, never a soft pass, because a soft pass would be a hole that widens with eve
 spelling. (3) The emitted workflow's attestation redaction now drops lines carrying `/tmp/`,
 `/private/…` or `/var/folders/…`. `ABS` covers home directories and drive letters and never
 covered the machine's scratch roots — where an agent's intermediate work actually lives, and
-two records already in this repo's history carry such a path. The widening is **emit-time
-only**: `lint-bundle`'s committed-record backstop still scans with `ABS` alone, so no
-committed record changes verdict; whether the backstop follows is queued for the owner (Q2
-of `.claude/veriloop/specs/review-remediation-2026-08-15.md`). The drop is anchored, so a
+two records already in this repo's history carry such a path. The widening shipped
+**emit-time only**, with the backstop question queued as Q2 of
+`.claude/veriloop/specs/review-remediation-2026-08-15.md`; the owner ratified the
+**timestamp-gated** answer on 2026-08-16, so `lint-bundle`'s committed-record backstop now
+fails on the same three temp roots for any record whose **filename timestamp** parses to
+2026-08-16T00:00:00Z or later. The two records already committed here (2026-07-21,
+2026-08-04) are scanned exactly as before and do not change verdict — a retroactive widening
+would turn the gate red on history nobody can rewrite without the owner. The gate is the
+file name, so the **bypass class is named rather than implied**: a hand-placed record not
+named `<ts>.json` is not temp-scanned. The drop is anchored, so a
 repo's own `docs/private/` or `tmp/` directory and any in-root `%REPO%/tmp/…` path survive;
 the anchor excludes **word characters, not slashes**, so a doubled slash — `file:///tmp/x` —
 is not an escape hatch from it, and the in-root case is held by the `%REPO%` lookbehind.
@@ -113,7 +137,7 @@ is a documented **no-op** — an unset or empty root would resolve to the cwd an
 wrong answer by a second route, silently. `${REPO:?}` makes that case a loud shell failure.
 
 <!-- veriloop:gate-figure -->
-**Gate count: 481 → 552.** The fix loop had no assertions at all before this change: the
+**Gate count: 481 → 561.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -131,11 +155,19 @@ clean" is a case rather than a comment; the hard-stop branch is required to be g
 on the SHAPE of the emitted expression — its literal must open the expression, with no
 `clean` ternary — because "the paragraph is in the file" was already true of the version
 the ruling replaced. The Land docs-sync prompt's permitted-target list is parsed and
-required not to name the constitution. The 2026-08-15 review fixes above supply the last
-sixteen: three recognized matcher spellings green, the unreadable-form and two-capture-group
+required not to name the constitution. The 2026-08-15 review fixes above supply sixteen more:
+three recognized matcher spellings green, the unreadable-form and two-capture-group
 FAILs, both co-fire suppressions, the temp-root drop together with the three anchoring
 negatives that keep it from emptying a repo's own attestation, and the node+rust deps case
-with the explicit-root pin held on all three cargo branches.
+with the explicit-root pin held on all three cargo branches. The **last nine** are the
+2026-08-16 ratifications: the content-hash rule's three violation shapes (a count-preserving
+constitution rewrite, a binary swap under `history/`, an N-for-N exchange inside the
+deletions-only class), the three negatives that bound it (an untouched path, a legitimate
+addition, and a hashless census that must behave exactly as the count-only guard did), the
+census prompt's protected-paths-only scoping asserted on the emitted text, and the
+timestamp-gated backstop's **pair** — the same temp-root line red in a post-cutoff record and
+green in a pre-cutoff one, because asserting only the red half would pass a backstop that had
+gone retroactive.
 
 ## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 

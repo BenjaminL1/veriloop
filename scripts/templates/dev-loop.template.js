@@ -243,6 +243,14 @@ const CONFIRM_SCHEMA = {
 // these, differenced in pure JS, are what the protected-path guard reads. The
 // workflow itself cannot run git, so this is an agent REPORT — the guard reading it is
 // a tripwire over agent-reported diff lists, and must never be described as more.
+//
+// `hash` (owner ratification 2026-08-16 — Q3 of the review-remediation spec) is the
+// `git hash-object` blob sha of a PROTECTED path only, `''` when the file is absent, and
+// ABSENT for every other file: line counts alone are blind to a count-preserving rewrite
+// and to any binary change, which numstat prints as `-`/`-`. It is OPTIONAL in the schema
+// on purpose — a census that reports no hashes degrades to exactly the pre-2026-08-16
+// count behavior instead of failing, and the hash is agent-reported like every other field
+// here, so it narrows the guard's BLIND SPOT and not its guarantee class.
 const CENSUS_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['files'],
@@ -252,7 +260,7 @@ const CENSUS_SCHEMA = {
       items: {
         type: 'object', additionalProperties: false,
         required: ['path', 'added', 'deleted'],
-        properties: { path: { type: 'string' }, added: { type: 'number' }, deleted: { type: 'number' } },
+        properties: { path: { type: 'string' }, added: { type: 'number' }, deleted: { type: 'number' }, hash: { type: 'string' } },
       },
     },
   },
@@ -386,13 +394,24 @@ async function runConfirmAll(concerns, ctx, ph) {
 // The protected-path guard's INPUT. Cheap and mechanical, so it rides the `checks`
 // group. Deliberately NOT self-reported by the fixer: the fixer is the party being
 // policed.
+// Step 4 is scoped to the PROTECTED prefixes and nowhere else, deliberately: hashing the
+// whole tree would cost one `git hash-object` per changed file on every fix pass to answer
+// a question the guard only ever asks about the protected paths. The list is read from
+// `VERILOOP.protectedPaths` — the same array `guardViolations` matches against, never a
+// second copy (constitution rule 9), so a class that stops deriving stops being hashed and
+// stops being guarded together rather than drifting apart.
 async function runDiffCensus(ctx, ph) {
+  const hashList = (VERILOOP.protectedPaths || []).filter((p) => p && p.path).map((p) => `\`${p.path}\``).join(', ');
+  const hashStep = hashList
+    ? `4. CONTENT HASHES — for these protected paths ONLY, never the whole tree: ${hashList} (an entry ending in \`/\` is a directory PREFIX — every file under it counts). For each censused entry whose path is one of them or sits under one of those prefixes, ALSO run \`git -C ${ctx.wt} hash-object <path>\` and report its output verbatim as \`hash\`; if the file does not exist (deleted, or moved away), report \`hash\` as the empty string \`""\`. Emit NO \`hash\` field for any other file. Line counts cannot see a rewrite that preserves them, or any binary change at all — this is the field that can.\n`
+    : '';
   return agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `DIFF CENSUS for branch \`${ctx.branch}\` — a mechanical inventory, not a review.\n` +
       `1. Run \`git -C ${ctx.wt} diff --numstat ${ctx.baseBranch}\` and report one entry per file: its REPO-RELATIVE path and the added/deleted line counts, exactly as numstat prints them.\n` +
       `2. Run \`git -C ${ctx.wt} status --porcelain\` and add one entry per UNTRACKED file (\`??\`), with \`added\` = its line count and \`deleted\` = 0.\n` +
       `3. For a binary file numstat prints \`-\` — report 0 and 0 for it, and still list the path.\n` +
+      hashStep +
       `Never emit an absolute path (strip the worktree prefix) and never read or list \`.env*\` contents. Report only; change NOTHING.`,
     { label: 'diff-census', phase: ph, schema: CENSUS_SCHEMA, ...route('checks') },
   );
@@ -605,6 +624,14 @@ function budgetCaps(mode, maxFix) {
 // Per-file delta between two CUMULATIVE censuses. A path that vanishes from the later
 // census is reported as `dropped` — its earlier edits were undone, which is a fix-pass
 // touch like any other and must not be invisible to the guard.
+//
+// `hashChanged` (Q3, 2026-08-16) is what makes a delta of (0, 0) reportable at all. Line
+// counts are blind in two shapes that both land on protected paths: an N-for-N rewrite
+// (the constitution rewritten line-for-line nets +0/-0 against the earlier census) and any
+// binary change, which numstat prints as `-`/`-` and the census reports as 0/0 forever. A
+// census entry carrying NO `hash` compares as unchanged, so a census that reports no hashes
+// leaves this function byte-identical in behavior to the count-only version — the field
+// widens what is visible and never narrows what already was.
 function diffDelta(before, after) {
   const prior = {};
   for (const f of (before || [])) if (f && typeof f.path === 'string') prior[f.path] = f;
@@ -616,7 +643,15 @@ function diffDelta(before, after) {
     const b = prior[f.path] || { added: 0, deleted: 0 };
     const added = (f.added || 0) - (b.added || 0);
     const deleted = (f.deleted || 0) - (b.deleted || 0);
-    if (added !== 0 || deleted !== 0) out.push({ path: f.path, added, deleted });
+    // A protected path ABSENT from the earlier census is a path the fix pass created or
+    // first touched, so its prior hash is the empty string, not "no opinion": a new binary
+    // file under a protected prefix reports 0/0 and would otherwise never reach the guard.
+    const hashChanged = typeof f.hash === 'string' && f.hash !== (typeof b.hash === 'string' ? b.hash : '');
+    if (added !== 0 || deleted !== 0 || hashChanged) {
+      const e = { path: f.path, added, deleted };
+      if (hashChanged) e.hashChanged = true;
+      out.push(e);
+    }
   }
   for (const p of Object.keys(prior)) {
     if (seen[p]) continue;
@@ -656,6 +691,11 @@ function guardViolations(deltaFiles, protectedPaths) {
       if (!p || typeof p.path !== 'string' || !p.path) continue;
       const hit = sides.some((s) => (p.path.slice(-1) === '/' ? s.indexOf(p.path) === 0 : s === p.path));
       if (!hit) continue;
+      // CONTENT CHANGED, LINE COUNTS PRESERVED (Q3, 2026-08-16). The blob sha moved while
+      // the delta is (0, 0): an N-for-N rewrite, or a binary swap numstat can only print
+      // as `-`/`-`. This is the magnitude-blindness the guard carried against R3 — the one
+      // shape a fix pass could take on a protected path and stay invisible.
+      const contentSwap = f.hashChanged === true && (f.added || 0) === 0 && (f.deleted || 0) === 0;
       // A rename is a removal even at +0/-0: the protected file no longer exists there.
       // A NEGATIVE `added` is a removal too. `diffDelta` differences two CUMULATIVE
       // numstat censuses, so a fix pass that deletes lines THIS BRANCH added shows up as
@@ -663,16 +703,24 @@ function guardViolations(deltaFiles, protectedPaths) {
       // deletions, because relative to the base they were never there. Reading only
       // `deleted > 0` therefore let a fix pass silently strip the assertions it had just
       // written back out of the deletions-only selftest class.
-      const removal = renamed || (f.deleted || 0) > 0 || (f.added || 0) < 0 || f.dropped === true;
+      //
+      // A content swap is a removal for the DELETIONS-ONLY class too, and the arithmetic is
+      // why: a pure addition moves the line count AND the hash together, so a moved hash
+      // over an unmoved count is an N-for-N exchange — lines this branch wrote, replaced by
+      // other lines. That is exactly the deletion the class exists to stop, wearing the one
+      // disguise the count rule cannot see through.
+      const removal = renamed || (f.deleted || 0) > 0 || (f.added || 0) < 0 || f.dropped === true || contentSwap;
       if (p.deletionsOnly && !removal) continue;
       out.push({
         path: f.path,
         class: p.class,
         reason: renamed
           ? `a fix pass RENAMED or MOVED a protected '${p.class}' path (${f.path}) — moving one out from under the guard is a removal, never an allowed edit`
-          : p.deletionsOnly
-            ? `a fix pass REMOVED lines from a protected '${p.class}' path (+${f.added || 0}/-${f.deleted || 0}) — additions there are allowed, removals never are`
-            : `a fix pass touched a protected '${p.class}' path (+${f.added || 0}/-${f.deleted || 0})`,
+          : contentSwap
+            ? `a fix pass rewrote a protected '${p.class}' path (${f.path}) — content changed, line counts preserved (+0/-0 with a different blob sha: an N-for-N rewrite, or a binary change numstat can only print as -/-)`
+            : p.deletionsOnly
+              ? `a fix pass REMOVED lines from a protected '${p.class}' path (+${f.added || 0}/-${f.deleted || 0}) — additions there are allowed, removals never are`
+              : `a fix pass touched a protected '${p.class}' path (+${f.added || 0}/-${f.deleted || 0})`,
       });
       break;
     }
@@ -730,12 +778,14 @@ function attestationFrom(evidence, ctx, stamps, roots) {
   // actually lives: two committed records carry `/tmp/vlm.md` and a `/private/tmp/.../scratchpad`
   // path that ABS let straight through. Same whole-line drop, three more anchored shapes.
   //
-  // EMIT-TIME ONLY, stated plainly: `lint-bundle.mjs`'s committed-record backstop still scans
-  // with ABS alone, so this widens what NEW records carry and changes nothing about the two
-  // records already committed (widening the backstop retroactively would turn the gate red on
-  // history nobody can rewrite without the owner). Whether the backstop follows — timestamp-
-  // gated, never, or with those two records hand-amended — is an OPEN OWNER QUESTION, recorded
-  // as Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`.
+  // THE BACKSTOP FOLLOWS THIS, FORWARD ONLY (owner ratification 2026-08-16 — Q2 of
+  // `.claude/veriloop/specs/review-remediation-2026-08-15.md`, which this drop shipped ahead
+  // of, emit-time only, while the question was open). `lint-bundle.mjs`'s committed-record
+  // scan now applies the SAME three shapes to any record whose FILENAME timestamp parses to
+  // 2026-08-16T00:00:00Z or later; records before the cutoff — the two already committed
+  // here — are still scanned with ABS alone, because widening it retroactively would turn the
+  // gate red on history nobody can rewrite without the owner. This routine is unchanged by
+  // that ruling: it has dropped these lines since 2026-08-15 and still does.
   //
   // The shapes are ANCHORED, and both halves of the anchor are load-bearing:
   //   - a leading `^` or a NON-WORD character, so `docs/private/notes.md` — a repo-relative

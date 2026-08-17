@@ -285,10 +285,14 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   `/opt/…` or `/srv/…` path passes it. Since 2026-08-15 the emitted workflow's **attestation
   redaction** drops, additionally, any line carrying one of three temp roots (`/tmp/`,
   `/private/…`, `/var/folders/…`), anchored so that a repo's own `tmp/` or `docs/private/`
-  directory and any in-root `%REPO%/tmp/…` path are untouched. That widening is **emit-time
-  only**: this lint backstop still scans committed records with `ABS` alone, so the records
-  already in `.claude/veriloop/history/` are unaffected, and whether the backstop follows is
-  an open owner question (Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`)
+  directory and any in-root `%REPO%/tmp/…` path are untouched. Since 2026-08-16 (owner
+  ratification of Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`) this lint
+  backstop follows it **forward only**: a committed record whose filename timestamp parses to
+  **2026-08-16T00:00:00Z or later** is failed on those same three temp roots, records
+  timestamped before the cutoff are scanned with `ABS` alone exactly as they always were —
+  the two already in `.claude/veriloop/history/` do not change verdict — and the cutoff being
+  a **file name** is a bypass class named rather than implied: a hand-placed record not named
+  `<ts>.json` is not temp-scanned at all
 - harness-forbidden APIs in an emitted workflow (`FORBIDDEN`,
   `scripts/lint-bundle.mjs:124`)
 - secret-shaped lines in a committed attestation record, or in an emitted

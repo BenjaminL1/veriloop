@@ -284,9 +284,12 @@ untouched. Default runs therefore keep today's verdict semantics exactly while f
 *measuring* how often a fix pass reaches for a protected path. The path list is derived per
 host repo at generate time and carried in the manifest, where a generalized parity check pins
 it — along with `budget`, `cross_model` and `resolve_default` — to the copy spliced into the
-workflow. It is a **tripwire, not a lock**: the workflow cannot run git, so the guard reads an
-agent-reported diff census, and when it trips it stops the run and reports rather than
-reverting anything.
+workflow. On those protected paths **only**, the census also reports a **content hash**, so a
+rewrite that preserves the line counts, and a binary change — which `numstat` can print only
+as `-` — are violations as well; line counts alone were blind to both. It is a **tripwire, not
+a lock**: the workflow cannot run git, so the guard reads an agent-reported diff census —
+hashes included — and when it trips it stops the run and reports rather than reverting
+anything.
 
 Every fix prompt, in every mode, carries the **anti-appeasement contract**: fix the cause,
 ship the assertion the constitution's test rule demands, never silence or reword a finding so
@@ -297,7 +300,7 @@ docstrings, type defs and plans, and explicitly **not** the constitution: those 
 owner-only, by hand.
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 481 → 552: the fix loop had no assertions at all before
+Pinning all of this, the gate went 481 → 561: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,
@@ -311,7 +314,13 @@ generated bundle and `lint-bundle` must go red naming that key. The last sixteen
 the 2026-08-15 review fixes: the recognized `SessionStart` matcher spellings that must read
 green, the unrecognized ones that must stay red, the two suppressed co-fires, the emit-time
 temp-path drop with the repo-relative paths it must *not* touch, and a node+rust repo getting
-the shared cargo target dir.
+the shared cargo target dir. The last nine come from the owner's 2026-08-16 ratifications: the
+content-hash rule's three violation shapes (a count-preserving constitution rewrite, a binary
+swap under `history/`, an N-for-N exchange inside the deletions-only selftest class), the three
+negatives that keep it honest (an untouched path, a legitimate addition, and a census reporting
+no hashes at all — which must behave exactly as the count-only guard did), the census prompt's
+protected-paths-only scoping, and the timestamp-gated backstop's red/green pair: the same
+temp-root line, red in a post-cutoff record and green in a pre-cutoff one.
 
 ### Repo-specific gate checks (`extra_checks`)
 

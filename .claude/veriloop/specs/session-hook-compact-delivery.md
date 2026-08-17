@@ -271,4 +271,48 @@ surprise at merge.)
    as an adopter's supported choice.
 
 Option 3 is the only one that changes shipped behavior. Whichever is chosen, the disposition
-belongs in this spec, not in a code comment. **Pending owner counter-signature at merge.**
+belongs in this spec, not in a code comment. **Counter-signed — owner instruction, 2026-08-16:
+*"just go ahead with your recommended paths for the merge review docket, then merge."*** The
+disposition that instruction ratified is recorded in the block below.
+
+---
+
+## Resolved — 2026-08-16 (owner ratification)
+
+**Authority, quoted verbatim.** The owner wrote, 2026-08-16, in response to the merge-review
+docket that queued Q1–Q4 of `.claude/veriloop/specs/review-remediation-2026-08-15.md`:
+*"just go ahead with your recommended paths for the merge review docket, then merge."* The
+recommended path for Q1 was **option 1 — amend the spec**. That sentence is the authority for
+this block and for nothing else; every line above the "Pending owner decision" heading remains
+byte-unchanged, and the ratified text of Changes A–D is untouched except as amended here.
+
+**The amendment.** Change B's verdict table is amended, as a dated amendment and not a
+rewrite, to name a **third** verdict:
+
+| matcher under test | verdict |
+|---|---|
+| a token veriloop does not wire (**overreach**) | **FAIL** |
+| a source veriloop wires that the file omits (**uncovered**) | **WARN, never FAIL** |
+| an **empty or absent** matcher (`unconstrained`) | **FAIL** *(added 2026-08-16)* |
+
+This ratifies what already ships: `scripts/lint-bundle.mjs`, the branch whose message begins
+*"wires the SessionStart routing hook on an EMPTY (or absent) matcher"* — cited by its message
+and not by a line number, which the block above already does and which this file's own Change C
+gives the reason for. **No code change was required or made:** the FAIL was retained as the
+fail-safe when the discrepancy was recorded, it is covered by its own case, and ratification
+moves the spec to the code rather than the code to the spec.
+
+**Rationale — fail-safe, and the exposure is the reason.** An unconstrained matcher is not one
+more misspelling; it fires on **every** `SessionStart` source, including the two this spec
+deliberately excludes (`resume` and `fork`) and every source added to the harness in future.
+The WARN reading prescribed by the literal ratified text would therefore green-light the
+single **highest-exposure** spelling in the space — re-injecting the full-strength payload
+into exactly the sessions Change A's own reasoning says must not receive it, or, in the
+match-none reading, blessing a hook that can never fire. A verdict that is ignorable by design
+is the wrong instrument for the one case both readings of the harness make red.
+
+**What this does NOT do.** It does not create a verdict class for the fourth branch — an
+unrecognized matcher *spelling* still reuses the FAIL exit with its "cannot verify this
+matcher form" message, exactly as recorded above, and is not a fourth row in this table. It
+does not touch the `uncovered → WARN` ruling, whose judgment-call status stays recorded as
+RISK 4. It carries no licence beyond this table.

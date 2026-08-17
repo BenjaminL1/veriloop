@@ -257,7 +257,9 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `  The protected-path guard (the constitution, personas/overrides, interview/gate definitions, specs,\n` +
     `  history, hostile fixtures, the SessionStart surface, or a deletion from the selftest) watches fix\n` +
     `  passes in BOTH modes: under \`clean\` a touch HARD-STOPS the run, under \`blockers\` it is logged and\n` +
-    `  recorded in the attestation's \`guardStops\` with the verdict untouched. Either way it is a tripwire\n` +
+    `  recorded in the attestation's \`guardStops\` with the verdict untouched. On the protected paths only, the\n` +
+    `  census also reports a CONTENT HASH, so a rewrite that preserves line counts — and a binary change, which\n` +
+    `  numstat can print only as \`-\` — is a violation too. Either way it is a tripwire\n` +
     `  over agent-reported diff lists, since this workflow cannot run git itself.\n` +
     `- \`args.posture = "frugal" | "balanced" | "max"\` — the cost dial. Shifts the model + reasoning effort of\n` +
     `  each phase. **It never removes a check, a lens, or the baseline probe** — the exit-code gate is ground\n` +

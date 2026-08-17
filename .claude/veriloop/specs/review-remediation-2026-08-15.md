@@ -5,7 +5,13 @@
 figures, add the SessionStart surface to the protected-path guard, and burn down the live
 doc concerns — in four commits, with three decisions explicitly QUEUED for the owner.
 
-**Status:** PROVISIONAL — EXECUTED UNDER OWNER DELEGATION, RATIFICATION REQUESTED AT MERGE.
+**Status:** RATIFIED — owner instruction 2026-08-16 (quoted in Q4); Q1-Q4 resolved as recorded
+in the amended specs.
+*(This line replaced "PROVISIONAL — EXECUTED UNDER OWNER DELEGATION, RATIFICATION REQUESTED AT
+MERGE" when the ratification arrived, and is the ONLY line above the resolution block that
+changed. The delegation quote, D1-D5, the queue and the open risks stand byte-for-byte as
+written on 2026-08-15; every resolution is appended below, never spliced into the question it
+answers.)*
 
 > Authority, stated exactly: the owner wrote, 2026-08-15, in direct response to the /review
 > summary proposing this work: *"go ahead and plan the highest leverage sequence, once
@@ -141,3 +147,55 @@ doc concerns — in four commits, with three decisions explicitly QUEUED for the
 - **R4 — the delegation's scope reading is mine.** If the owner meant less than the
   endorsed-summary reading, the remedy is cheap (revert unmerged commits), and the
   disagreement itself becomes a recorded calibration point for future delegations.
+
+---
+
+## RESOLVED — 2026-08-16 (owner ratification)
+
+**Authority, quoted verbatim.** The owner wrote, 2026-08-16, in response to the merge-review
+docket that queued the four questions above: *"just go ahead with your recommended paths for
+the merge review docket, then merge."* That sentence ratifies exactly the four dispositions
+below and the three counter-signatures in Q4 — nothing wider. Every line above this block is
+as written on 2026-08-15, except the Status line, which is annotated where it changed.
+
+- **Q1 — `unconstrained` disposition: RESOLVED, option 1 (amend the spec).** `unconstrained →
+  FAIL` is ratified as a third verdict in Change B's table, recorded as a dated amendment in
+  `.claude/veriloop/specs/session-hook-compact-delivery.md` ("Resolved — 2026-08-16"). Rationale
+  recorded there: fail-safe. An unconstrained matcher fires on **every** `SessionStart` source
+  including `resume` and `fork`, so the literal WARN reading would green-light the
+  highest-exposure spelling in the space. **No code change** — the FAIL already ships and is
+  case-covered; ratification moves the spec to the code, not the code to the spec. The fourth
+  branch (unrecognized matcher *spelling*) remains the FAIL exit with its cannot-verify
+  message and is still **not** a verdict class.
+- **Q2 — redaction backstop: RESOLVED, ts-gated forward coverage.** `lint-bundle.mjs`'s
+  committed-record scan now also whole-line-FAILs on the three temp roots, for records whose
+  **filename timestamp** parses to `2026-08-16T00:00:00Z` or later. The two records already
+  committed (2026-07-21, 2026-08-04) are unchanged in behavior, so no history is hand-amended
+  and no gate turns red on a record nobody can rewrite. The bypass class is **named**: the gate
+  is a file name, so a hand-placed record not named `<ts>.json` is not temp-scanned. Recorded in
+  `SECURITY.md`'s redaction paragraph with the cutoff date. Acceptance criterion 5's second
+  clause is superseded by this ruling for post-cutoff records only; the 532-era records it
+  names stay green, which is what it was protecting.
+- **Q3 — blob-sha census: RESOLVED, built.** D6 is amended by a dated, ratified addendum in
+  `.claude/veriloop/specs/resolve-to-clean.md` ("Addendum — 2026-08-16: content-hash census").
+  The census reports `git hash-object` for protected prefixes only; a moved sha over an
+  unmoved (added, deleted) delta is a violation reading *content changed, line counts
+  preserved*, covering the N-for-N rewrite and the binary case, and it reaches the
+  deletions-only class too. **The honest note stands and is recorded in the addendum:** the sha
+  is agent-reported like every other census field, so the guarantee class is unchanged and R3
+  of `resolve-to-clean.md` stays open. What it closes is the **magnitude-blindness** recorded
+  against R3 on 2026-08-15. The SCOPE hole (census sees the worktree, not the main checkout)
+  is untouched. This supersedes the second clause of the non-goal "no census schema change
+  (Q3)" — which was scoped to the drive that wrote it, pending exactly this answer.
+- **Q4 — counter-signatures: GRANTED on all three blocks.** The owner's sentence is recorded
+  verbatim as the signature in each: the `resolve-to-clean.md` session-hook addendum (D2), the
+  `auto-merge-dial.md` dated annotation (D4), and the `session-hook-compact-delivery.md`
+  pending-decision block (D4) — whose signature is, as anticipated, subsumed by the Q1 ruling
+  and also recorded separately there.
+
+**R1 is answered by ratification, not dissolved.** The rider's objection — that agent-authored
+addenda to ratified specs teach later agents the form is legitimate, and that the owner becomes
+auditor-of-faits-accomplis — was carried UNRESOLVED into this merge review, which is where the
+owner ruled. The three blocks are now signed rather than pending, so the specific instances are
+closed; the general objection is **not** thereby settled, and this block is not a precedent for
+writing the next one unsigned.

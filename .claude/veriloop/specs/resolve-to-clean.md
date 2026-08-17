@@ -140,11 +140,16 @@ follows; these BIND the build:
 
 ---
 
-## Addendum — 2026-08-15: session-hook guard class (pending owner counter-signature)
+## Addendum — 2026-08-15: session-hook guard class (owner counter-signed 2026-08-16)
 
-**Status: PROVISIONAL. Written by the implementing drive, not by the owner.** It is a separate
-block by construction: it amends no ratified text above it, including the owner-rulings block,
-and it takes effect as spec only if the owner counter-signs it at merge review.
+**Counter-signed — owner instruction, 2026-08-16: *"just go ahead with your recommended paths
+for the merge review docket, then merge."*** Written by the implementing drive, not by the
+owner, and PROVISIONAL until that sentence; it is a separate block by construction — it amends
+no ratified text above it, including the owner-rulings block — and it takes effect as spec from
+the counter-signature recorded here. The signature is Q4 of
+`.claude/veriloop/specs/review-remediation-2026-08-15.md`. Every word below this line is left
+exactly as the drive wrote it on 2026-08-15, including its closing note against R3; the hole
+that note names is closed by the dated addendum BELOW this block, not by editing it here.
 
 **What was added.** A tenth protected-path class, `session-hook`, covering four paths:
 `.claude/settings.json`, `.claude/settings.local.json`, `.claude/veriloop/session-start.mjs`,
@@ -185,3 +190,50 @@ executed from the MAIN CHECKOUT — an absolute-path write from a fix pass to th
 copies takes effect on the next session without ever entering the census, which is D6's
 tripwire-not-a-lock guarantee class restated at its sharpest, not a new defect this class
 introduces.
+
+---
+
+## Addendum — 2026-08-16: content-hash census (owner-ratified)
+
+**Authority, quoted verbatim.** The owner wrote, 2026-08-16, in response to the merge-review
+docket that queued Q1–Q4 of `.claude/veriloop/specs/review-remediation-2026-08-15.md`:
+*"just go ahead with your recommended paths for the merge review docket, then merge."* The
+recommended path for **Q3** was to build the per-path content hash. This block is that
+amendment, ratified — not a provisional note this time — and it amends **D6** and nothing else.
+
+**The D6 amendment.** D6's census is extended: for files under the **protected path prefixes
+only**, the census also reports a content hash (`git hash-object <file>`; the empty string when
+the file is absent). The guard reads it as follows — the logic is pure JS in the emitted
+workflow's `veriloop:resolve` region, executed by the selftest like the rest of the predicate:
+
+1. A protected path whose blob sha differs while its (added, deleted) delta is **(0, 0)** is a
+   violation, reason *"content changed, line counts preserved"*. This is the **N-for-N rewrite**.
+2. The same rule covers the **binary** case with no separate branch: `numstat` prints `-`/`-`
+   for a binary file and the census reports 0/0 for it forever, so the hash is the only field
+   that can ever move.
+3. It is a violation for the **deletions-only** class (the selftest) too, and the arithmetic is
+   the argument: a pure addition moves the line count and the hash together, so a moved hash
+   over an unmoved count is an N-for-N exchange — lines this branch wrote, replaced by others.
+   A genuine addition (+N, hash necessarily moved) still passes, and has its own case.
+4. Hashes are requested for the protected prefixes and **never for the whole tree**, from the
+   same `protectedPaths` array `guardViolations` matches against (rule 9 — a class that stops
+   deriving stops being hashed and stops being guarded together, rather than drifting apart).
+5. The `hash` field is **optional** in `CENSUS_SCHEMA`: a census that reports none leaves the
+   guard byte-identical in behavior to the count-only version. That degradation has its own case.
+
+**Honest about what this is — the guarantee class does NOT change.** The hash is
+**agent-reported**, exactly like every other census field: the workflow cannot run git — the
+same harness constraint D6 names — so it never computes a sha itself and cannot verify the one
+it is handed.
+An agent that reports a stale or invented hash defeats this rule the same way an agent that
+reports a stale line count already defeats the counts. D6's guarantee class — *a strong
+tripwire over agent-reported diff lists, never to be documented as "deterministic enforcement"*
+— stands verbatim and **R3 stays open**.
+
+**What it does close.** The **magnitude-blindness** recorded against R3 on 2026-08-15 — in the
+session-hook addendum above ("the census reports added/deleted line counts, so a
+count-preserving rewrite of any of these four files produces no delta and stays invisible to
+the guard") and queued as Q3. That is now a violation on every protected path, not only the
+four. The **SCOPE** hole named in the same paragraph is NOT closed and is not addressed here:
+the census still runs against the worktree, so a write to the main checkout's copies still
+never enters it.

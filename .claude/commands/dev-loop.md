@@ -68,7 +68,9 @@ It **STOPS before merge/deploy** — that is the owner gate.
   The protected-path guard (the constitution, personas/overrides, interview/gate definitions, specs,
   history, hostile fixtures, the SessionStart surface, or a deletion from the selftest) watches fix
   passes in BOTH modes: under `clean` a touch HARD-STOPS the run, under `blockers` it is logged and
-  recorded in the attestation's `guardStops` with the verdict untouched. Either way it is a tripwire
+  recorded in the attestation's `guardStops` with the verdict untouched. On the protected paths only, the
+  census also reports a CONTENT HASH, so a rewrite that preserves line counts — and a binary change, which
+  numstat can print only as `-` — is a violation too. Either way it is a tripwire
   over agent-reported diff lists, since this workflow cannot run git itself.
 - `args.posture = "frugal" | "balanced" | "max"` — the cost dial. Shifts the model + reasoning effort of
   each phase. **It never removes a check, a lens, or the baseline probe** — the exit-code gate is ground
