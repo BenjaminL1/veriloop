@@ -2,6 +2,8 @@ node_modules/
 .DS_Store
 *.log
 .veriloop-tmp/
+# per-machine harness overrides; repo policy lives in the committed settings.json
+.claude/settings.local.json
 
 # <<< veriloop:auto:start >>>
 .claude/veriloop/.backups/
