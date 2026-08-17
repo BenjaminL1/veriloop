@@ -743,7 +743,9 @@ D1 kept (both `name` and `description` retained). D2 kept — `skills/veriloop/`
 D3 done as a doc correction, **not** by deleting stamps: `plugin.json` is canonical, all six
 agree, the selftest enforces it. D4 documented in both README and `SECURITY.md`; actual
 tagging is M6 and **tags currently stop at `veriloop-v0.3.1`, 21 releases behind** — stated
-rather than implied. D5 recorded here as an evaluated decision with no implementation work:
+rather than implied. *(Superseded 2026-08-17: `veriloop-v0.4.0`, `v0.5.0` and `v0.6.0` are now
+annotated tags — the first two created retroactively that day — so tagging no longer lags from
+v0.4.0 on; the seventeen stamps 0.1.0–0.3.22 stay untagged.)* D5 recorded here as an evaluated decision with no implementation work:
 cross-tool install adapters are the approach superpowers takes (11 harness manifests over one
 skill directory); veriloop remains Claude-Code-only and hard-depends on a workflow harness
 providing `agent()`/`parallel()`/`phase()` plus `.claude/commands`.

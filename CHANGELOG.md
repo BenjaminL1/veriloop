@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased — resolve-to-clean: a SHOULD-FIX counts only if it survives independent confirmation
+## 0.6.0 — 2026-08-17
+
+Routing was measured at **72/72** across fresh, depth (~56k and ~129k tokens) and
+post-compact probes, all served by `claude-fable-5` against the frozen payload — a
+CEILING-only result, which says nothing about the floor. The natural floor-check window is
+open to **2026-08-24**, and its window-close memo appends to
+`.claude/veriloop/specs/routing-measurement.md`, which now also carries the frozen exclusion
+ledger the memo's counts are computed against.
+
+### resolve-to-clean: a SHOULD-FIX counts only if it survives independent confirmation
 
 Ratified spec: `.claude/veriloop/specs/resolve-to-clean.md`. The measured baseline it was
 written against: six recorded runs, concern counts 5/2/1/14/18/6, **zero PASS ever**, and one
@@ -181,7 +190,7 @@ comparison with `NaN` is false. It fails closed now, and the pair that shipped i
 survived review — two green cases can both hold while the predicate leaks on everything
 neither of them names.
 
-## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
+### routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 
 **Motivated by probe evidence, not review taste.** Three routing probes were run against the
 emitted payload on 2026-08-01, each given the payload verbatim plus one owner message. The

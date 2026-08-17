@@ -24,7 +24,7 @@ import { renderExpert, renderOverrides, renderConstitution, renderCommand, rende
 import { collectDomainFacts, buildReferences, renderDomainAudit, renderDomainExpert, renderDomainOverrides, readDomainInput } from './lib/domain.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VERILOOP_VERSION = '0.5.0';
+const VERILOOP_VERSION = '0.6.0';
 
 // Markers for the one machine-owned block veriloop maintains inside an
 // owner-owned shared file (.gitignore / .prettierignore). Hash comments — valid

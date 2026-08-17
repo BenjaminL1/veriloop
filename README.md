@@ -125,14 +125,17 @@ install a tag or a commit SHA rather than tracking a branch — a tool that runs
 should not change under you silently:
 
 ```bash
-npx skills add BenjaminL1/veriloop#veriloop-v0.5.0
+npx skills add BenjaminL1/veriloop#veriloop-v0.6.0
 ```
 
 The version in `.claude-plugin/plugin.json` is canonical (it wins over marketplace-entry
 versions at install time); `package.json`, both `marketplace.json` fields, `VERILOOP_VERSION`
-in `scripts/generate.mjs`, and the top `CHANGELOG.md` heading are kept in lockstep, and the
-self-test fails if they disagree. Tagging currently lags the version stamps — the CHANGELOG
-is authoritative.
+in `scripts/generate.mjs`, `veriloop_version` in
+`.claude/veriloop/veriloop-manifest.json`, and the topmost **versioned** `CHANGELOG.md`
+heading — seven stamps in all — are kept in lockstep, and the self-test fails if they
+disagree. Every release from `v0.4.0` on is tagged (`v0.4.0` and `v0.5.0` retroactively,
+stated in their annotations); the seventeen stamps from 0.1.0 through 0.3.22 remain
+untagged — pin those by commit SHA. The CHANGELOG stays the authoritative record.
 
 Then, in the repo you want to set up:
 

@@ -1,9 +1,9 @@
 {
-  "veriloop_version": "0.5.0",
-  "generated_at": "2026-08-17T00:38:31.089Z",
+  "veriloop_version": "0.6.0",
+  "generated_at": "2026-08-17T08:37:44.255Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "30bb12cc48050a7ac852486c66bd1b70cc33434f",
+  "repo_sha": "e739ba1770749e62181c5c34ffdf871cf5fd9c5d",
   "stack": [
     "node"
   ],

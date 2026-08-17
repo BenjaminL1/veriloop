@@ -393,10 +393,12 @@ leading `## Unreleased` section is skipped rather than compared.
 For a reproducible install, pin by tag or by commit SHA rather than tracking a branch:
 
 ```bash
-npx skills add BenjaminL1/veriloop#veriloop-v0.5.0
+npx skills add BenjaminL1/veriloop#veriloop-v0.6.0
 ```
 
-Tagging currently lags the version stamps — see the CHANGELOG for the authoritative version.
+Every release from **`v0.4.0`** on is tagged (`v0.4.0` and `v0.5.0` retroactively, stated in
+their annotations); the seventeen stamps from 0.1.0 through 0.3.22 remain untagged — pin
+those by commit SHA. The CHANGELOG stays the authoritative record.
 
 ### Refreshing veriloop's own CI action pins
 
