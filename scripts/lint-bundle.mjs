@@ -258,17 +258,27 @@ function main() {
   //     `.claude/veriloop/specs/review-remediation-2026-08-15.md`). The emitted workflow's
   //     `redactStr` has dropped temp-root lines since 2026-08-15, but this backstop scanned
   //     with ABS alone, so the widening covered new records and nothing else. It now covers
-  //     records EMITTED FROM THE CUTOFF ON: a record whose FILENAME timestamp parses to
-  //     >= `TEMP_BACKSTOP_FROM` is additionally whole-line-failed on the temp-root shapes.
-  //     Records emitted before that date — the two already committed here — are scanned
-  //     exactly as before, because a retroactive widening turns the gate red on history
-  //     nobody can rewrite without the owner.
+  //     every record EXCEPT the ones the cutoff exempts: a record whose FILENAME timestamp
+  //     parses to a moment BEFORE `TEMP_BACKSTOP_FROM` is scanned with ABS alone, exactly as
+  //     it always was — that exemption is what keeps the two temp-carrying records already
+  //     committed here (2026-07-21, 2026-08-04) green, since a retroactive widening turns the
+  //     gate red on history nobody can rewrite without the owner. Everything else is
+  //     additionally whole-line-failed on the temp-root shapes.
   //
-  //     THE BYPASS CLASS, NAMED rather than implied: the gate is the record's FILE NAME, and
-  //     a name that does not parse as `<ts>.json` is NOT temp-scanned. The emitter always
-  //     writes `history/<stamps.ts>.json`, so this only reaches hand-placed files — but a
-  //     hand-placed record named anything else skips this check, and that is the price of
-  //     leaving the two pre-cutoff records green without hand-amending them.
+  //     FAIL-CLOSED ON AN UNPARSEABLE NAME. The predicate is written `!(instant < CUTOFF)`
+  //     rather than `instant >= CUTOFF` because EVERY comparison with NaN is false: the `>=`
+  //     spelling silently exempted any record whose name is not `<ts>.json` — `notes.json`,
+  //     `restored.json` — which is the wrong side to fail toward, since a hand-placed file is
+  //     exactly the case this backstop exists for. Only a name that PARSES, to a moment
+  //     before the cutoff, is exempt. That costs nothing here: all six committed records
+  //     parse and parse pre-cutoff, so none of them change verdict.
+  //
+  //     THE RESIDUAL BYPASS, NAMED rather than implied: the gate is still the record's own
+  //     FILE NAME, so a record BACKDATED to a parseable pre-cutoff stamp —
+  //     `2020-01-01T00-00-00Z.json` — is exempted exactly as a genuine pre-cutoff record is.
+  //     No parse fix closes that; it is what gating on a self-reported name means. Closing it
+  //     needs a different gate (the commit date, or scanning every record and hand-amending
+  //     the two), which is an owner call and not a lint tweak.
   //
   //     The regex is a MIRRORED LITERAL, the same convention ABS already uses in its three
   //     copies (the template's `attestationFrom`, and selftest :980/:1922): lint-bundle is a
@@ -279,8 +289,9 @@ function main() {
   //     directory does not empty its own attestation).
   const TEMP = /(?:^|[^\w])(?<!%REPO%)\/(?:private|tmp|var\/folders)\//; // === dev-loop.template.js redactStr TEMP
   const TEMP_BACKSTOP_FROM = Date.parse('2026-08-16T00:00:00Z');
-  // `2026-08-17T04-05-06Z.json` → the instant it names. NaN for any other shape, and
-  // `NaN >= x` is false, so an unparseable name falls into the bypass class above.
+  // `2026-08-17T04-05-06Z.json` → the instant it names. NaN for any other shape, and NaN
+  // compares false against everything — so the exemption below is spelled as a NEGATED
+  // `<`, which puts an unparseable name on the SCANNED side rather than the exempt one.
   const recordInstant = (name) => {
     const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z\.json$/.exec(name);
     return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN;
@@ -298,10 +309,10 @@ function main() {
         else if (name.endsWith('.json')) {
           const t = readFileSync(abs, 'utf8');
           const relPath = `.claude/veriloop/history/${rel ? `${rel}/${name}` : name}`;
-          const tempScanned = recordInstant(name) >= TEMP_BACKSTOP_FROM;
+          const tempScanned = !(recordInstant(name) < TEMP_BACKSTOP_FROM); // NaN ⇒ scanned
           t.split('\n').forEach((line, i) => {
             if (ABS.test(line)) { histHits++; fail(`absolute path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)}`); return; }
-            if (tempScanned && TEMP.test(line)) { histHits++; fail(`temp-root path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)} (records timestamped from 2026-08-16 are scanned for /tmp/, /private/ and /var/folders/ too)`); return; }
+            if (tempScanned && TEMP.test(line)) { histHits++; fail(`temp-root path in committed attestation record ${relPath}:${i + 1} → ${line.trim().slice(0, 80)} (every record is scanned for /tmp/, /private/ and /var/folders/ unless its filename timestamp parses to before 2026-08-16)`); return; }
             for (const re of secretPatterns) {
               if (re.test(line)) { histHits++; fail(`secret-shaped content in committed attestation record ${relPath}:${i + 1}`); break; }
             }
@@ -310,7 +321,7 @@ function main() {
       }
     };
     walkHist(histDir, '');
-    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns (and, from 2026-08-16 on, temp-root paths)');
+    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns (and for temp-root paths, except where the filename timestamp parses to before 2026-08-16)');
   }
 
   // 6b. the domain bundle — the SAME backstop, for the same reason (constitution rule 7).

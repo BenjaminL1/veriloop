@@ -300,7 +300,7 @@ docstrings, type defs and plans, and explicitly **not** the constitution: those 
 owner-only, by hand.
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 481 → 561: the fix loop had no assertions at all before
+Pinning all of this, the gate went 481 → 562: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
 unrecognized `resolve` value never escalates), confirmed-concern entry, lexicographic halt,
@@ -320,7 +320,11 @@ swap under `history/`, an N-for-N exchange inside the deletions-only selftest cl
 negatives that keep it honest (an untouched path, a legitimate addition, and a census reporting
 no hashes at all — which must behave exactly as the count-only guard did), the census prompt's
 protected-paths-only scoping, and the timestamp-gated backstop's red/green pair: the same
-temp-root line, red in a post-cutoff record and green in a pre-cutoff one.
+temp-root line, red in a post-cutoff record and green in a pre-cutoff one. The last one is
+that pair's missing third case — a record whose name does not parse as a timestamp at all,
+which the shipped `>=` predicate exempted, because every comparison with `NaN` is false. It
+now fails closed, and the residual bypass is a *backdated* parseable name, which no parse fix
+closes.
 
 ### Repo-specific gate checks (`extra_checks`)
 

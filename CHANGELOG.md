@@ -118,9 +118,17 @@ two records already in this repo's history carry such a path. The widening shipp
 fails on the same three temp roots for any record whose **filename timestamp** parses to
 2026-08-16T00:00:00Z or later. The two records already committed here (2026-07-21,
 2026-08-04) are scanned exactly as before and do not change verdict — a retroactive widening
-would turn the gate red on history nobody can rewrite without the owner. The gate is the
-file name, so the **bypass class is named rather than implied**: a hand-placed record not
-named `<ts>.json` is not temp-scanned. The drop is anchored, so a
+would turn the gate red on history nobody can rewrite without the owner. The exemption is
+spelled as a **negated `<`**, not a `>=`: every comparison with `NaN` is false, so the `>=`
+form that first shipped failed **open** on any record whose name does not parse as
+`<ts>.json` — `notes.json` skipped the temp scan entirely, on precisely the hand-placed file
+the backstop exists for. Only a name that parses, to a moment before the cutoff, is exempt
+now, and that costs nothing: all six committed records parse and parse pre-cutoff. The gate is
+still a self-reported file name, so the **residual bypass is named rather than implied**: a
+record *backdated* to a parseable pre-cutoff stamp (`2020-01-01T00-00-00Z.json`) is exempted
+exactly as a genuine pre-cutoff record is, and no parse fix closes that — a different gate
+(the commit date, or scanning every record) would, and that is an owner call. The drop is
+anchored, so a
 repo's own `docs/private/` or `tmp/` directory and any in-root `%REPO%/tmp/…` path survive;
 the anchor excludes **word characters, not slashes**, so a doubled slash — `file:///tmp/x` —
 is not an escape hatch from it, and the in-root case is held by the `%REPO%` lookbehind.
@@ -137,7 +145,7 @@ is a documented **no-op** — an unset or empty root would resolve to the cwd an
 wrong answer by a second route, silently. `${REPO:?}` makes that case a loud shell failure.
 
 <!-- veriloop:gate-figure -->
-**Gate count: 481 → 561.** The fix loop had no assertions at all before this change: the
+**Gate count: 481 → 562.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the
 default mode, the mode derivation itself (`veriloop:resolvemode` — an unrecognized `resolve`
@@ -167,7 +175,11 @@ addition, and a hashless census that must behave exactly as the count-only guard
 census prompt's protected-paths-only scoping asserted on the emitted text, and the
 timestamp-gated backstop's **pair** — the same temp-root line red in a post-cutoff record and
 green in a pre-cutoff one, because asserting only the red half would pass a backstop that had
-gone retroactive.
+gone retroactive. The **last one** is that pair's missing third case: a record named
+`notes.json`, which the shipped `>=` predicate exempted from the temp scan because every
+comparison with `NaN` is false. It fails closed now, and the pair that shipped is why the hole
+survived review — two green cases can both hold while the predicate leaks on everything
+neither of them names.
 
 ## Unreleased — routing redesign: three rows, a no-route row for reads, and `/dev-loop` is no longer a destination
 

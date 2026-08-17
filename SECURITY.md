@@ -287,12 +287,16 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   `/private/…`, `/var/folders/…`), anchored so that a repo's own `tmp/` or `docs/private/`
   directory and any in-root `%REPO%/tmp/…` path are untouched. Since 2026-08-16 (owner
   ratification of Q2 in `.claude/veriloop/specs/review-remediation-2026-08-15.md`) this lint
-  backstop follows it **forward only**: a committed record whose filename timestamp parses to
-  **2026-08-16T00:00:00Z or later** is failed on those same three temp roots, records
-  timestamped before the cutoff are scanned with `ABS` alone exactly as they always were —
-  the two already in `.claude/veriloop/history/` do not change verdict — and the cutoff being
-  a **file name** is a bypass class named rather than implied: a hand-placed record not named
-  `<ts>.json` is not temp-scanned at all
+  backstop follows it **forward only**: a committed record is failed on those same three temp
+  roots **unless** its filename timestamp parses to a moment before
+  **2026-08-16T00:00:00Z**, in which case it is scanned with `ABS` alone exactly as it always
+  was — the two temp-carrying records already in `.claude/veriloop/history/` do not change
+  verdict. The exemption is fail-**closed** on a name that does not parse (`notes.json` is
+  temp-scanned, not skipped; the predicate is a negated `<`, since every comparison with `NaN`
+  is false). The residual bypass is named rather than implied: the gate is a **self-reported
+  file name**, so a record *backdated* to a parseable pre-cutoff stamp is exempted exactly as
+  a genuine pre-cutoff record is, and no parse fix closes that — only a different gate (the
+  commit date, or scanning every record) would
 - harness-forbidden APIs in an emitted workflow (`FORBIDDEN`,
   `scripts/lint-bundle.mjs:124`)
 - secret-shaped lines in a committed attestation record, or in an emitted

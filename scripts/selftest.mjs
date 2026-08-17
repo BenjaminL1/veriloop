@@ -1146,10 +1146,12 @@ function assert(cond, desc) {
   // (j) the TEMP-ROOT backstop, TIMESTAMP-GATED (owner ratification 2026-08-16 — Q2). The
   //     emit-time redaction has dropped `/tmp/`, `/private/…` and `/var/folders/…` since
   //     2026-08-15; the committed-record backstop now follows it FORWARD ONLY. The gate is
-  //     the record's own FILENAME timestamp, so the pair below is the whole contract: the
-  //     SAME line is red in a post-cutoff record and green in a pre-cutoff one. Asserting
-  //     only the red half would pass a backstop that had quietly gone retroactive and turned
-  //     the two records already in this repo's history red.
+  //     the record's own FILENAME timestamp, so the cases below are the whole contract: the
+  //     SAME line is red in a post-cutoff record, green in a pre-cutoff one, and red again in
+  //     a record whose name does not parse as a timestamp at all. Asserting only the first
+  //     would pass a backstop that had quietly gone retroactive and turned the two records
+  //     already in this repo's history red; asserting only the first two — which is what
+  //     shipped — passed one that failed OPEN on every unparseable name.
   rmSync(join(histDir, 'poisoned-pem-footer.json'));
   const TEMP_LINE = 'scratch dir was /private/tmp/vl-scratchpad/notes.md';
   writeFileSync(join(histDir, '2026-08-17T04-05-06Z.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
@@ -1167,6 +1169,20 @@ function assert(cond, desc) {
     'lint-bundle: the IDENTICAL line in a record timestamped BEFORE the cutoff stays green — the widening is forward-only, so the records already committed here (2026-07-21, 2026-08-04) do not change verdict',
   );
   rmSync(join(histDir, '2026-08-01T04-05-06Z.json'));
+  // The THIRD case, and the one the pair above cannot see: a name that does not parse at all.
+  // The gate was `recordInstant(name) >= CUTOFF`, and every comparison with NaN is false, so
+  // `notes.json` skipped the temp scan entirely — the check failed OPEN on precisely the
+  // hand-placed file it exists to catch. The predicate is now the negated `<`, so an
+  // unparseable name is SCANNED. The residual bypass is a BACKDATED parseable name, which no
+  // parse fix closes and which is named in the source comment rather than covered here.
+  writeFileSync(join(histDir, 'notes.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  const unparseableScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
+  assert(
+    unparseableScan.status !== 0 && /temp-root path in committed attestation record/.test(unparseableScan.stdout || '') &&
+      /notes\.json/.test(unparseableScan.stdout || ''),
+    'lint-bundle: a committed record whose name does not parse as a timestamp (`notes.json`) is temp-scanned and FAILS — the cutoff exempts only names that PARSE to before it, so the NaN case fails CLOSED',
+  );
+  rmSync(join(histDir, 'notes.json'));
 }
 
 // --- rust/cargo detector (m4-plan §§1-4+7): a fixture supplies INPUT (Cargo.toml /
