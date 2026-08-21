@@ -143,3 +143,32 @@ refused until a ratified upgrade amendment exists.
 - **R5 — cost inversion.** Maximum fan-out (council + rider + confirm agents + full
   lenses) lands at the point of minimum oversight, against the owner's own usage-limit
   policy; a failed overnight run pays it all for a parked docket.
+
+---
+
+## Amendment — 2026-08-21 (owner approvals: build rulings + routing extension)
+
+**Build rulings counter-signed.** The owner approved all six implementation rulings made
+under the 2026-08-20 delegation (positive-RATIFIED DRAFT guard with mode-split ambiguity
+parking; file-text-only refusal scanning; the `SlashCommand(/dev-loop:*)` scoped grant
+with its disclosed prose-gated residual; interactive ratification stamping the spec;
+counts-only docket attestation; the 0.7.0→Unreleased version revert). The branch as
+pushed (`bb11fae`) stands.
+
+**Routing extension approved — WIDER triggers, amending this spec's "no routing-table
+changes" non-goal.** When the owner's own message requests a build in plain text AND
+signals the mode — an explicit phrase ("overnight mode", "auto mode", "headless") OR an
+absence-signaling intent phrase attached to the build request ("while I sleep", "while
+I'm out", and close variants) — the session routes to `/dev-plan mode=overnight`
+directly. Unspecified always defaults to the normal interactive loop. **Recorded
+tradeoff, owner-chosen over the explicit-only recommendation:** intent inference is a
+judgment call by the routing session; a misread phrase can launch an overnight run the
+owner did not want. Bounded blast radius: the run produces a docket and a preview at
+most — the mode grants no merge authority, and every park/refusal mechanism of this spec
+applies unchanged. The mode signal remains OWNER-TYPED PROSE — this loosens the token
+shape of D1, never its file-text prohibition.
+
+**Sequencing:** the routing payload is frozen until 2026-08-24 (routing-measurement.md
+non-goals). The payload/generator implementation of this extension lands only after the
+window closes and its memo is written. Until then, `mode=overnight` typed in the
+invocation remains the only trigger.
