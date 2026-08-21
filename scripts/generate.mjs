@@ -440,6 +440,7 @@ function main() {
   // line numbers the constitution and both hand-owned `*.overrides.md` cite in this file
   // (`:303 backup`, `:313 machine`, `:325 spliceBlock`, `:351 handOnce`) do not move.
   config.resolveDefault = buildResolveDefault(interview);
+  assertAutonomyNotRaisedByFile(interview);
   config.protectedPaths = deriveProtectedPaths(args.repo, config);
   const meta = buildMeta(repoName, cj.has_ui);
   // Tier 1 (declared dependencies) and Tier 3 (file census) facts for the domain
@@ -550,7 +551,12 @@ function main() {
   // shared owner files: veriloop keeps one marked block in each.
   // .gitignore — the rolling backups of clobbered machine files are local state, and so
   // are dry-run attestation records (owner decision: dry runs emit locally but never commit).
-  w.spliceBlock(P('.gitignore'), ['.claude/veriloop/.backups/', '.claude/veriloop/history/dry-runs/'], { createIfMissing: true });
+  // `history/parks/` joins them for the same reason: a PRE-BUILD park (headless-autonomy D4)
+  // fires before any worktree exists, so its record is the one thing the workflow writes into
+  // the OWNER'S checkout — and `.claude/veriloop/history/` is a tracked, protected-path
+  // directory, where an untracked file would sit waiting for a later `git add -A` to sweep it
+  // into an unrelated commit.
+  w.spliceBlock(P('.gitignore'), ['.claude/veriloop/.backups/', '.claude/veriloop/history/dry-runs/', '.claude/veriloop/history/parks/'], { createIfMissing: true });
   // .prettierignore — machine-owned files are EXEMPT from the repo's style, not
   // formatted to it: the generator rewrites them on every re-run, so any
   // repo-style pass over them is undone and the repo's format check flaps back
@@ -755,6 +761,44 @@ function buildResolveDefault(interview) {
     throw new Error(`interview.resolve_default: '${v}' is not one of blockers | clean`);
   }
   return v;
+}
+
+/**
+ * headless-autonomy D1 — FILE TEXT CAN NEVER RAISE AUTONOMY.
+ *
+ * `interview.json` may set `interactive` as a default and nothing else. Any other value —
+ * `overnight`, `headless`, or a typo — FAILS THE BUILD, naming the rule and the offending
+ * value. That is the "REFUSED AND SURFACED" half a script can own: it is a fact, not a
+ * judgment (constitution rule 2). `mode=overnight` is honored ONLY from the owner-typed
+ * `/dev-loop` / `/dev-plan` invocation, which no file can reach.
+ *
+ * This generalizes the auto-merge dial's D2 (args may LOWER, never RAISE) one layer down,
+ * to the file layer, and closes the fix-pass / hostile-PR laundering path.
+ *
+ * DELIBERATELY EMITS NOTHING INTO THE WORKFLOW. No `config` field, no `VERILOOP.*` entry,
+ * no manifest<->workflow parity row (rule 9): an inert key that can only ever hold one value
+ * is dead weight, and it re-opens the laundering path the moment someone wires it through.
+ * The emitted loop therefore has NO config channel for autonomy at all — the
+ * `veriloop:autonomy` region in `templates/dev-loop.template.js` takes `VERILOOP` as a
+ * parameter and never reads it, so the guarantee is proved by execution rather than asserted
+ * in a comment.
+ *
+ * BE EXACT ABOUT THE MANIFEST, because it is not silent: `main()` writes the whole interview
+ * back as `interview_answers`, so an ACCEPTED `autonomy: "interactive"` does land there,
+ * verbatim, exactly as every other interview key does. That is the re-read path — a re-run
+ * without `--interview` reads `pm.interview_answers` back in as `interview` and this assert
+ * runs against it again, so a value raised in the manifest by hand fails the next build. What
+ * is absent is the WORKFLOW-side channel, and that is the half that closes the laundering
+ * path; claiming "no manifest key" overstated it.
+ */
+function assertAutonomyNotRaisedByFile(interview) {
+  const v = interview.autonomy;
+  if (v === undefined || v === null || v === 'interactive') return;
+  throw new Error(
+    `interview.autonomy: '${v}' is REFUSED — file text can never raise autonomy ` +
+      `(.claude/veriloop/specs/headless-autonomy.md, D1). 'interactive' is the only value a ` +
+      `file may set; mode=overnight is accepted ONLY from the owner-typed invocation.`,
+  );
 }
 
 /**

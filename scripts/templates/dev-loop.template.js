@@ -60,8 +60,198 @@ const MAX_FIX = 3;
 // behavior, not a new one. The generator hard-fails the BUILD on the same typo in
 // `interview.resolve_default` (generate.mjs `buildResolveDefault`); here there is no
 // build to fail, so the safe fallback stands in for it.
+// headless-autonomy (`.claude/veriloop/specs/headless-autonomy.md`, RATIFIED — BINDING).
+// Shape B, overnight-prep: the overnight stretch is unattended, every fork arrives at
+// wake-up as ONE batched docket, and the owner takes every decision. Shape A
+// (`mode=headless`) is RESERVED until a ratified upgrade amendment exists.
+//
+// D1 — THE OWNER-TYPED INVOCATION IS THE ONLY CHANNEL THAT CAN RAISE AUTONOMY.
+// This region takes `VERILOOP` as a parameter and NEVER READS IT, so "file text can never
+// raise autonomy" is proved by EXECUTION — the selftest slices this region out and runs it
+// with a `VERILOOP` that claims overnight — and not by a comment. There is no autonomy key
+// in the emitted config for it to read either: `generate.mjs assertAutonomyNotRaisedByFile`
+// fails the BUILD on any `interview.autonomy` other than `interactive`, so the laundering
+// path is closed at both ends.
+//
+// D6 — under `overnight` this run has NO merge authority: the future auto-merge dial is
+// forced to effective OFF via its own D2 `min()` (that dial does not exist in code yet —
+// this is a documented obligation on it, not an enforced one, and the /dev-loop docs say
+// so in exactly those words); waivers stay human-only, which is already structural because
+// `args.waive` is owner-supplied and no agent can set it; and stop-before-merge is
+// untouched (constitution rule 10).
+//
+// There is NO TIMEOUT anywhere in this file — not here, not at any park point. Absence is
+// never converted into consent (binding non-goal). That is asserted by ABSENCE.
+// <<< veriloop:autonomy:start >>>
+// `mode=overnight` is the ONLY accepted value. Anything unrecognized — `'headless'`,
+// `true`, `''`, `'Overnight'`, a typo — resolves to `interactive`: NEVER ESCALATE, the
+// same safe direction as the `resolve` typo rule below.
+const autonomyMode = (a && typeof a === 'object' && a.mode === 'overnight') ? 'overnight' : 'interactive';
+
+// Every `mode=overnight` / `mode=headless` token found in FILE TEXT — the spec body, and by
+// extension anything an `interview.json`, a PR body or a hostile fixture could launder into
+// it — is REFUSED AND SURFACED: recorded here, logged, carried into the attestation, and
+// never honored.
+//
+// `args.feature` is NOT scanned, DELIBERATELY. It is `$ARGUMENTS` — the owner's typed
+// invocation, the one channel D1 designates as trusted — so the literal `mode=overnight` the
+// owner typed is necessarily inside it. Scanning it recorded a refusal of the run's OWN mode
+// on 100% of legitimate overnight runs: a demonstrably false statement written into the
+// durable attestation and presented to the owner as a caught laundering attempt. A control
+// that fires on every normal run cannot mark the abnormal one. Nothing is lost by not
+// scanning it: the mode is honored only from `args.mode`, which the `/dev-loop` command sets
+// ONLY from the typed invocation, so a `mode=` string sitting in `args.feature` raises
+// nothing on its own.
+//
+// THE KEY MAY BE QUOTED. `{"mode": "overnight"}` is the spelling a laundered `interview.json`
+// or a JSON fixture pasted into a spec body actually has, and the first cut's bare `mode\s*[=:]`
+// walked past it — the one shape most likely to arrive from a machine was the one shape not
+// scanned. The optional quote characters sit on BOTH sides of the key, so `mode=`, `mode:`,
+// `"mode":` and `'mode' =` all surface the same refusal.
+//
+// Refusals are DEDUPED per (source, claimed). A spec that merely DOCUMENTS the mode — this
+// repo's own `headless-autonomy.md` names it several times — yields ONE entry, not one per
+// occurrence. The claim is surfaced either way; repetition adds no information and buys
+// alarm fatigue. An ordinary run produces an EMPTY array, so there is no log line and no
+// behavior delta (acceptance 1).
+function autonomyRefusals(texts) {
+  const out = [];
+  const seen = new Set();
+  for (const t of (texts || [])) {
+    if (!t || typeof t.text !== 'string' || !t.text) continue;
+    const re = /["'`]?mode["'`]?\s*[=:]\s*["'`]?(overnight|headless)\b/gi;
+    let m;
+    while ((m = re.exec(t.text)) !== null) {
+      const claimed = m[1].toLowerCase();
+      const key = `${t.source}\x00${claimed}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        source: t.source,
+        claimed,
+        reason: `a \`mode=${claimed}\` value found in ${t.source} is REFUSED — file text can never raise autonomy; mode is honored ONLY from the owner-typed invocation`,
+      });
+    }
+  }
+  return out;
+}
+
+// D5 — `/dev-loop` builds a spec ONLY when its `Status:` line SAYS SO. The predicate is
+// POSITIVE, and the inversion is the whole point: the first cut asked "does this look like a
+// DRAFT?", and a negative test has to enumerate every way English can mean "not ratified".
+// It missed the first one it met — `**Status:** DRAFT — NOT RATIFIED`, the verbatim status
+// line of this repo's own only real draft, BUILT, because the predicate excused any line that
+// also said RATIFIED. A positive test only has to recognize the ONE phrasing that means
+// ratified, which is the phrasing `/dev-plan`'s ratification tap writes.
+//
+// BUILDABLE  ⇔  the FIRST NON-BLOCKQUOTED `Status:` line LEADS with the state token
+// `RATIFIED` and does not also say DRAFT. Everything else is one of two refusals:
+//
+//   - `'unratified'` — a status line exists and does not say RATIFIED. A `DRAFT`, a
+//     `DRAFT (not yet RATIFIED)`, a `PENDING RATIFICATION`, an `EXECUTED UNDER DELEGATION`,
+//     a typo — all the same answer. REFUSED IN EVERY MODE: D5's words are "any spec still
+//     marked DRAFT", not "any spec in an overnight run". Interactive refuses too, and the
+//     reason is presented; `/dev-plan` Step 3.3 now rewrites the line to RATIFIED at the
+//     ratification tap, so this only bites a spec that genuinely was never stamped.
+//
+//   - `'absent'` — NO status line at all. This is the one decision that SPLITS BY MODE:
+//     an overnight run PARKS (unattended ambiguity fails safe — there is nobody to ask),
+//     while an interactive or `mode`-absent run PROCEEDS EXACTLY AS TODAY. Eight of this
+//     repo's eighteen specs predate the convention and carry no status line; refusing them
+//     interactively would break acceptance 1 ("mode absent ⇒ byte-identical").
+//
+// BLOCKQUOTED LINES ARE NOT STATUS LINES. `>` is excluded from the leading class, so a decoy
+// (`> Status: RATIFIED (example)`) quoted anywhere above the real line is not a candidate and
+// the scan walks past it to the real one. The earlier leading class ACCEPTED `>`, which is
+// what made the decoy a status line in the first place.
+//
+// THE COST, recorded rather than discovered: a genuinely RATIFIED spec whose status line also
+// mentions a past draft parks, and one word fixes it. That is the direction to be wrong in —
+// the same safe direction as the `resolve` typo rule ("unrecognized NEVER escalates").
+//
+// RESIDUAL, recorded: "first" is taken literally, and the leading class is DELIBERATELY
+// permissive about markdown furniture — so a non-blockquoted `Status: RATIFIED` sitting in a
+// FENCED, BULLETED, OR COMMENT-INTERIOR LINE above the real one is read as the status line.
+// Fences are not parsed, `- Status:` is an accepted bullet, and a ` * Status:` continuation
+// inside a block comment is indistinguishable from one. Only `>` is excluded. `/dev-plan`
+// writes the status line into the head of the file, which is what keeps that theoretical
+// rather than live.
+function specStatus(specText) {
+  if (typeof specText !== 'string' || !specText.trim()) return 'absent';
+  const re = /^[ \t]*(?:[-*+][ \t]+)?[*_]{0,2}Status[*_]{0,2}[ \t]*:[ \t]*(.+)$/gim;
+  const m = re.exec(specText);
+  if (!m) return 'absent';
+  const line = m[1].trim();
+  // `**Status:** X` puts the closing emphasis in the CAPTURE, so strip it before reading the
+  // leading state token — `RATIFIED` must lead the state, not merely appear in the line.
+  const lead = line.replace(/^[*_\s]+/, '');
+  return (/^RATIFIED\b/i.test(lead) && !/\bDRAFT\b/i.test(line)) ? 'ratified' : 'unratified';
+}
+
+// Acceptance 4 — the DOCKET DECISION RECORD, carried from the ratification tap into the
+// durable attestation. The spec names the measured OVERRIDE RATE as the evidence — and the
+// ONLY evidence — a later Shape-A upgrade may stand on, so it has to reach the machine-
+// readable record instead of stopping at prose inside a spec file. Same shape as the
+// resolve-to-clean D8 fields (`resolveMode` / `rawConcerns` / `confirmedConcerns`): a future
+// upgrade predicate READS this; it must never re-derive it.
+//
+// COUNTS ONLY, never the question text: the docket's content is model-drafted prose and this
+// is a measurement, not a transcript. Anything malformed — a non-object, a negative, more
+// overrides than entries — degrades to `null`, an ABSENT measurement, never a fabricated
+// zero. `overrideRate` is null on an empty docket for the same reason: no decisions taken is
+// not a zero override rate.
+function docketRecord(d) {
+  if (!d || typeof d !== 'object') return null;
+  const int = (v) => (Number.isInteger(v) && v >= 0 ? v : null);
+  const entries = int(d.entries);
+  const overrides = int(d.overrides);
+  if (entries === null || overrides === null || overrides > entries) return null;
+  return {
+    entries,
+    overrides,
+    mustItems: int(d.mustItems),
+    acceptedAll: d.acceptedAll === true,
+    overrideRate: entries === 0 ? null : overrides / entries,
+  };
+}
+
+const modeRefusals = autonomyRefusals([{ source: 'the spec text', text: spec }]);
+const specState = specStatus(spec);
+const docket = docketRecord((a && typeof a === 'object') ? a.docket : null);
+// <<< veriloop:autonomy:end >>>
+
+// <<< veriloop:parkgates:start >>>
+// D4/D5/D6 — the PARK DECISIONS, as pure predicates so the CONTROL FLOW itself is pinned.
+// Before this they were expressions inline at their call sites, and a refactor that dropped
+// the mode condition or reordered the Land branches stayed green: the resolve-to-clean
+// precedent (`shouldFix` / `progressed` sliced and executed) is the shape this needed.
+//
+// PRE-BUILD: which park, if any, fires BEFORE the plan phase — no worktree, no branch, no
+// agents. `status` is `specStatus`'s verdict. The un-ratified refusal is checked FIRST and is
+// UNCONDITIONAL by mode; D5 says "any spec still marked DRAFT", not "any spec in an overnight
+// run". The two `'absent'` outcomes are ordered no-spec-before-no-status so a spec-less run
+// reports the reason it actually has: an empty spec is `'absent'` too.
+function preBuildPark(mode, status, hasSpec) {
+  if (status === 'unratified') return 'draft';
+  if (mode === 'overnight' && !hasSpec) return 'no-spec';
+  if (mode === 'overnight' && status === 'absent') return 'no-status';
+  return null;
+}
+// RUN-TIME: a final `FAIL` or a no-progress halt is a PARK-TERMINAL — under `mode=overnight`
+// ONLY. An interactive run keeps today's Land behavior exactly (acceptance 1).
+function isParkTerminal(mode, effectiveVerdict, noProgress) {
+  return mode === 'overnight' && (effectiveVerdict === 'FAIL' || noProgress === true);
+}
+// <<< veriloop:parkgates:end >>>
+
 // <<< veriloop:resolvemode:start >>>
-const resolveDefault = VERILOOP.resolveDefault === 'clean' ? 'clean' : 'blockers';
+// D6 (headless-autonomy): `mode=overnight` implies `resolve=clean` BY DEFAULT. An explicit
+// `resolve` arg still wins and may still LOWER the run to `blockers` — the arg layer keeps
+// its may-lower-never-raise shape, and nothing about autonomy can raise a run the owner
+// typed down. With `mode` absent this line is byte-equivalent to the pre-feature one.
+const resolveDefault = autonomyMode === 'overnight'
+  ? 'clean'
+  : (VERILOOP.resolveDefault === 'clean' ? 'clean' : 'blockers');
 const resolveArg = (typeof a === 'object' && a) ? a.resolve : undefined;
 const resolveMode = (resolveArg === undefined || resolveArg === null)
   ? resolveDefault
@@ -881,6 +1071,29 @@ function attestationFrom(evidence, ctx, stamps, roots) {
     waivedConcerns: evidence.waivedConcerns || [],
     guardStops: evidence.guardStops || [],
     budgetExhaustedAt: evidence.budgetExhaustedAt || null,
+    // headless-autonomy D4/D6 + acceptance 4 — NULLABLE, alongside `resolveMode` /
+    // `budgetExhaustedAt` (the resolve-to-clean precedent). `autonomyMode` says which mode
+    // produced this record. `parked` carries the serialized PARK: state, the pending
+    // question, its context, and `recordSerialized` — whether this park's OWN record was
+    // written, which is false exactly at the loud attestation park, whose reason for
+    // existing is that the write could not be confirmed. `terminalState` is the TOP-LEVEL,
+    // greppable answer to "did this run park?": the record's `verdict` deliberately stays
+    // the GATE's verdict (a PARK-TERMINAL record honestly says FAIL), so without this field
+    // a reader grepping history for a parked run would find only the pre-build parks. It is
+    // DERIVED from `parked` rather than passed in, so the two can never disagree.
+    // `modeRefusals` is the surfaced half of "a file value can never raise autonomy".
+    // `docket` is the docket DECISION RECORD — entry count, override count and the derived
+    // rate — which the spec names as the only evidence a later Shape-A upgrade may stand on;
+    // a future upgrade predicate READS it and must never re-derive it.
+    // All of them ride the SAME recursive redactor as every other field, so a park's context
+    // strings are stripped of absolute paths and secret-shaped lines exactly like a lens
+    // summary is. `attestationFrom` stays fs/Date/closure-free, so the selftest can slice
+    // this region out and execute it against a synthetic parked evidence object.
+    autonomyMode: evidence.autonomyMode || 'interactive',
+    terminalState: evidence.parked ? 'PARKED' : null,
+    parked: evidence.parked || null,
+    modeRefusals: evidence.modeRefusals || [],
+    docket: evidence.docket || null,
     // free-text evidence rides along — all named redaction targets in the spec
     waived: evidence.waived || [],
     filesChanged: evidence.filesChanged || [],
@@ -897,7 +1110,15 @@ function attestationFrom(evidence, ctx, stamps, roots) {
   // dry runs still emit — LOCALLY, uncommitted, into a dry-run-specific subdirectory
   // (owner decision: dry-run records are never committed, but redaction/defense applies
   // identically regardless of commit status).
-  const relPath = `.claude/veriloop/history/${evidence.dryRun ? 'dry-runs/' : ''}${stamps.ts}.json`;
+  //
+  // A PRE-BUILD park has no worktree to write into — it fires before one exists — so its
+  // record is the one thing this workflow writes into the OWNER'S checkout. It goes under
+  // `parks/`, which the generator adds to the machine-owned `.gitignore` block for exactly
+  // the reason `dry-runs/` is there: `.claude/veriloop/history/` is a TRACKED, protected-path
+  // directory, and a park must not leave an untracked file for a later `git add -A` to sweep
+  // into an unrelated commit.
+  const sub = evidence.dryRun ? 'dry-runs/' : (evidence.preBuildPark ? 'parks/' : '');
+  const relPath = `.claude/veriloop/history/${sub}${stamps.ts}.json`;
   return { relPath, json: JSON.stringify(redacted, null, 2) };
 }
 // <<< veriloop:emit:end >>>
@@ -943,6 +1164,142 @@ async function gate(ctx, ph) {
 }
 
 const digest = (g) => ({ verdict: g.verdict, blockers: g.blockers.length, concerns: g.concerns.length, waived: g.waived.length });
+
+// ---------------- 0. Autonomy gates (headless-autonomy D4 / D5 / D6) ----------------
+// Both gates PARK BEFORE the plan phase: no worktree, no branch, no agents spawned, and
+// nothing built. A park is a run that produced a decision, so it SERIALIZES a redacted
+// record — under `history/parks/` here, since there is no worktree — and a dead session
+// loses nothing.
+
+// D4 — the ONE park shape, used at every park point.
+//
+// `recordSerialized` is EXPLICIT at every call site and is the answer to "was this park's
+// own record written?": true for the pre-build parks and for the PARK-TERMINAL (which rides
+// the run's ordinary attestation), FALSE for the loud attestation park — whose entire reason
+// for existing is that the write could NOT be confirmed. The presenter reads this instead of
+// asserting a serialization that may not have happened.
+//
+// There is deliberately NO `answeredEntries` field and no resume state of any kind. A park
+// is TERMINAL: this workflow has no resume path, and re-invoking is a fresh run. "Answered
+// docket entries are never re-opened" holds because the owner's answers live in the RATIFIED
+// SPEC the docket tap produced — a re-invocation reads that spec, not a park record. An
+// always-empty array here documented a mechanism that does not exist.
+function parkedState(reason, question, context, recordSerialized) {
+  return {
+    state: 'PARKED',
+    reason,
+    question: question || null,
+    context: context || '',
+    recordSerialized: recordSerialized === true,
+  };
+}
+
+// D1's surfaced half. Empty on an ordinary run ⇒ no log line, no behavior delta.
+for (const r of modeRefusals) log(`Autonomy REFUSED: ${r.reason}`);
+
+// Serializes a PRE-BUILD park. There is no worktree yet, so the emit agent gets NO
+// `wt(...)` clause: this is the ONE path in this workflow that writes into the owner's
+// checkout, and the `/dev-loop` docs name it as the single exception to "never the owner's
+// main checkout". The record lands under the machine-IGNORED `history/parks/` (see
+// `attestationFrom`'s path routing), so the park never dirties `git status` inside a tracked
+// protected-path directory. It then WAITS: there is no clock here, and no timeout that could
+// turn the owner's absence into consent.
+async function parkBeforeBuild(parked) {
+  phase('Park');
+  log(`PARKED: ${parked.reason}`);
+  const parkEvidence = {
+    feature,
+    repo: VERILOOP.repoName,
+    tier: null,
+    verdict: 'PARKED',
+    autonomyMode,
+    parked,
+    modeRefusals,
+    docket,
+    resolveMode,
+    // routes the record to `history/parks/` — the only write this workflow makes into the
+    // owner's checkout, and the reason that directory is machine-ignored.
+    preBuildPark: true,
+    blockers: [],
+    concerns: [],
+    waived: [],
+    fixPasses: 0,
+    dryRun,
+  };
+  const att = attestationFrom(
+    parkEvidence,
+    null,
+    { ts: '__VERILOOP_TS__', baseSha: '__VERILOOP_BASE_SHA__', headSha: '__VERILOOP_HEAD_SHA__' },
+    [],
+  );
+  await agent(
+    `${RESOLVE}\n` +
+      `Write this run's PARK RECORD into the owner's checkout at $REPO — this run PARKED before any worktree existed, so there is nowhere else to put it. This ONE ignored file is your ENTIRE write budget in the owner's checkout. The JSON is ALREADY REDACTED and final: do NOT edit, reformat, re-key, or add fields; only substitute the runtime tokens and write the exact bytes.\n` +
+      `1. Compute: \`ts=$(date -u +%Y-%m-%dT%H-%M-%SZ)\`; \`headSha=$(git -C $REPO rev-parse HEAD)\`. Use $headSha for the base sha too — nothing was branched.\n` +
+      `2. Replace every \`__VERILOOP_TS__\` with $ts, and \`__VERILOOP_HEAD_SHA__\` / \`__VERILOOP_BASE_SHA__\` with $headSha. Change NOTHING else, and leave the inert \`%REPO%\` sentinel exactly as it is.\n` +
+      `3. Target path: \`$REPO/${att.relPath}\`, with its own \`__VERILOOP_TS__\` substituted the same way. \`mkdir -p\` its parent and write exactly one file, with a NON-INTERPOLATING write (a single-quoted heredoc, e.g. \`cat > path <<'EOF'\`, or a file-write tool) so the shell's own \`$REPO\` can never re-expand the sentinel. Verify it parses as JSON.\n` +
+      `4. That directory is MACHINE-IGNORED (veriloop's \`.gitignore\` block lists \`.claude/veriloop/history/parks/\`) precisely so a park never dirties the owner's working tree. Confirm it: run \`git -C $REPO status --porcelain\` and check the file does NOT appear. If it DOES appear, the ignore block is missing — report that plainly and do NOT commit, stage or delete anything.\n` +
+      `5. Do NOT commit, push, stage, branch, plan, or edit ANY other file in the owner's checkout. Never stage or echo \`.env*\`; never put an absolute path or the literal \`$REPO\` back into the record.\n\n` +
+      `RECORD JSON (write verbatim, tokens substituted):\n${att.json}`,
+    { label: 'emit-park', phase: 'Park', ...route('land') },
+  );
+  return {
+    feature,
+    repo: VERILOOP.repoName,
+    spec: spec || null,
+    autonomyMode,
+    modeRefusals,
+    docket,
+    parked,
+    terminalState: 'PARKED',
+    finalVerdict: 'PARKED',
+    dryRun,
+    // NO `brief` — this is the one park shape that produced no gate evidence to compress.
+    ownerGate:
+      `PARKED — nothing was planned, built, or pushed. ${parked.question || parked.reason} ` +
+      `Answer it and re-invoke; no timeout will answer it for you.`,
+  };
+}
+
+// The pre-build park decision, taken by the sliced-and-pinned `preBuildPark` predicate.
+//   'draft'     — D5: the spec's `Status:` line does not say RATIFIED, in EVERY mode. Today
+//                 the loop adopts any on-disk spec as BINDING, so an un-stamped one launders
+//                 un-ratified text into the binding corpus. This PARKS rather than
+//                 downgrading the spec to "absent", because silently building the feature
+//                 WITHOUT its spec reaches the same wrong outcome by the other road.
+//   'no-spec'   — D6: an overnight run with NO spec PARKS; it never builds spec-less.
+//                 PRECEDENCE, stated here and in the /dev-loop docs: this SUPERSEDES the
+//                 `args.interview = false` skip. That skip can buy an INTERACTIVE run a
+//                 spec-less build; it can never buy an overnight one.
+//   'no-status' — D5, the mode-split half: a spec with NO `Status:` line is unattended
+//                 ambiguity, so an overnight run PARKS on it. An interactive run does NOT —
+//                 it proceeds exactly as it always has (acceptance 1), because it has an
+//                 owner to ask and an overnight run does not.
+const preBuild = preBuildPark(autonomyMode, specState, !!spec);
+if (preBuild === 'draft') {
+  return await parkBeforeBuild(parkedState(
+    'the spec\'s Status: line does not say RATIFIED — /dev-loop never builds an un-ratified spec',
+    'Ratify the spec (or send it back) before this feature is built.',
+    'Take it back through /dev-plan: the ratification tap is what flips DRAFT to RATIFIED, and that tap is the injection-channel sever. /dev-plan rewrites the Status line to `RATIFIED — BINDING (owner, <date>)` when you ratify; a spec whose file says anything else was never stamped.',
+    true,
+  ));
+}
+if (preBuild === 'no-spec') {
+  return await parkBeforeBuild(parkedState(
+    'mode=overnight with no spec — an overnight run never builds spec-less',
+    'Run /dev-plan to produce a spec for this feature, ratify it, then re-invoke.',
+    'args.interview = false does NOT apply here: under mode=overnight the no-spec park supersedes that skip.',
+    true,
+  ));
+}
+if (preBuild === 'no-status') {
+  return await parkBeforeBuild(parkedState(
+    'mode=overnight on a spec with NO Status: line — an unattended run cannot ask, so ambiguity fails safe',
+    'Give the spec a `Status: RATIFIED — BINDING (owner, <date>)` line — or re-ratify it through /dev-plan, which writes one — then re-invoke.',
+    'Only mode=overnight parks here. An INTERACTIVE run builds a status-less spec exactly as it always has: eight of this repo\'s own eighteen specs predate the convention, and refusing them interactively would change mode-absent behavior.',
+    true,
+  ));
+}
 
 // ---------------- 1. Plan (+ constitution + triage) ----------------
 phase('Plan');
@@ -1025,6 +1382,9 @@ const guardStops = [];
 // On an ENFORCING run the same condition breaks the loop instead, so this stays false.
 let guardBlind = false;
 let budgetExhaustedAt = null;
+// D6 — set when the fix loop halts because it stopped making progress. Under
+// `mode=overnight` that halt is a PARK-TERMINAL (below), never an autonomous re-plan.
+let noProgressHalt = false;
 let census = null;
 let fixPass = 0;
 let blockerPasses = 0;
@@ -1094,6 +1454,7 @@ while (shouldFix(state, resolveMode) && fixPass < caps.total) {
   log(`After fix ${fixPass}: ${state.effectiveVerdict} (${next.blockers} blockers, ${next.fixable} fixable concerns)`);
   if (shouldFix(state, resolveMode) && !progressed(prev, next)) {
     log(`No progress ((${prev.blockers},${prev.fixable}) -> (${next.blockers},${next.fixable})) — escalating to owner.`);
+    noProgressHalt = true;
     break;
   }
 }
@@ -1125,8 +1486,17 @@ if (guardEnforced && guardStops.length) {
 // ---------------- 5. Land (docs sync + push preview; NO merge/deploy) ----------------
 phase('Land');
 let land = null;
+// D4/D6 — the run-time park. `parked` is null on every ordinary run, so nothing below it
+// changes when `mode` is absent (acceptance 1).
+let parked = null;
+// D6 — under `mode=overnight`, a FAIL **or** a no-progress halt is a PARK-TERMINAL: the
+// worktree is PRESERVED, nothing lands, there is no autonomous re-plan, and the answered
+// docket entries are never re-opened. Nothing here waits on a clock.
+const parkTerminal = isParkTerminal(autonomyMode, state.effectiveVerdict, noProgressHalt);
 if (state.effectiveVerdict === 'FAIL') {
   log('Final verdict FAIL after fix budget — NOT landing. Returning for owner triage.');
+} else if (parkTerminal) {
+  log(`Final verdict ${state.effectiveVerdict}, but the fix loop stopped making progress — NOT landing under mode=overnight.`);
 } else if (dryRun) {
   log(`DRY RUN — gate ${state.effectiveVerdict}. Branch ${ctx.branch} left in the worktree ${ctx.wt}; NOT pushed, docs NOT synced. Review, then re-run without dryRun to land a preview.`);
 } else {
@@ -1146,6 +1516,25 @@ if (state.effectiveVerdict === 'FAIL') {
   );
 }
 
+if (parkTerminal) {
+  parked = parkedState(
+    // The guard's hard stop REWRITES the verdict to FAIL, so an unbranched reason attests the
+    // fix budget as the cause of a park the budget had nothing to do with — a false fact in the
+    // durable record, on exactly the run an owner reads hardest. The branch matches the
+    // condition that actually moved the verdict (`guardEnforced && guardStops.length`), so an
+    // OBSERVING run, whose guardStops never touch the verdict, still reports the real cause.
+    (guardEnforced && guardStops.length)
+      ? `the protected-path guard hard-stopped the run on ${guardStops.length} protected path(s)`
+      : state.effectiveVerdict === 'FAIL'
+        ? "the gate's final verdict is FAIL after the fix budget"
+        : 'the fix loop stopped making progress',
+    'How should this run proceed? Nothing was landed, and no autonomous re-plan will run.',
+    'The feature worktree and branch are PRESERVED for triage. This park rides the run\'s ordinary attestation record, which carries the full gate history — and the brief is returned with it.',
+    true,
+  );
+  log(`PARK-TERMINAL: ${parked.reason} — the worktree is preserved and no autonomous re-plan will run.`);
+}
+
 // ---------------- 6. Report (compress the run; no new judgments) ----------------
 phase('Report');
 const evidence = {
@@ -1157,6 +1546,10 @@ const evidence = {
   concerns: g.concerns,
   waived: g.waived,
   resolveMode,
+  autonomyMode,
+  parked,
+  modeRefusals,
+  docket,
   rawConcerns: state.rawConcerns,
   confirmedConcerns: state.confirmedConcerns,
   preExistingConcerns: state.preExisting,
@@ -1215,7 +1608,16 @@ const brief = await agent(
     roots,
   );
   const landedNow = !dryRun && !!(land && land.pushed);
-  await agent(
+  // D6 — "a run that cannot write its attestation PARKS LOUDLY" (the 529 precedent). The
+  // confirmation is REQUESTED, and checked, only under `mode=overnight`: attaching a schema
+  // to this agent on an ordinary run would change how it is invoked, and a mode-absent run
+  // must stay byte-identical to today (acceptance 1).
+  const ATT_WRITE_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['written', 'path'],
+    properties: { written: { type: 'boolean' }, path: { type: 'string' } },
+  };
+  const attWrite = await agent(
     `${RESOLVE}\n${wt(ctx.wt)}\n` +
       `Write this run's ATTESTATION RECORD. The JSON is ALREADY REDACTED and final — do NOT edit, reformat, re-key, or add fields; only substitute the three runtime tokens and write the exact bytes.\n` +
       `Steps (run in the worktree):\n` +
@@ -1225,10 +1627,35 @@ const brief = await agent(
       (landedNow
         ? `4. This run LANDED — commit the record on branch \`${ctx.branch}\` with a conventional message (e.g. \`chore(veriloop): attestation record for ${ctx.branch}\`), NO AI co-author trailer, then \`git push\`. Leave \`git status\` clean.\n`
         : `4. This run did NOT land (or is a dry run) — do NOT commit or push. Leave the record in the worktree for owner triage.\n`) +
-      `HARD LIMITS: never stage or echo \`.env*\`; never add an absolute path or the literal \`$REPO\` back into the record; the record is runtime output — do NOT add it to the manifest's emitted_files.\n\n` +
+      `HARD LIMITS: never stage or echo \`.env*\`; never add an absolute path or the literal \`$REPO\` back into the record; the record is runtime output — do NOT add it to the manifest's emitted_files.\n` +
+      (autonomyMode === 'overnight'
+        ? `Report \`written\` = true ONLY if the file really exists on disk afterwards and parses as JSON, and \`path\` = the repo-relative path you wrote. If anything stopped you, report \`written\` = false — this run is unattended and a false confirmation is worse than a park.\n`
+        : '') +
+      `\n` +
       `RECORD JSON (write verbatim, tokens substituted):\n${att.json}`,
-    { label: 'emit-attestation', phase: 'Report', ...route('land') },
+    {
+      label: 'emit-attestation', phase: 'Report',
+      ...(autonomyMode === 'overnight' ? { schema: ATT_WRITE_SCHEMA } : {}),
+      ...route('land'),
+    },
   );
+  if (autonomyMode === 'overnight' && !(attWrite && attWrite.written === true)) {
+    // This park fires AFTER Land, so it can sit on top of a run that really did push a
+    // preview. The context says which, in words, because the presenter reads it out: telling
+    // the owner a preview does not exist when it does is a worse failure than the missing
+    // record. `recordSerialized` is FALSE here by construction — the reason for this park IS
+    // that the write could not be confirmed, so nothing may claim it was serialized.
+    parked = parkedState(
+      'the attestation record was not confirmed written — an unattended run that leaves no record of what it decided is not a finished run',
+      'Check the worktree for this run\'s attestation record and write it by hand if it is missing.',
+      (landedNow
+        ? `THIS RUN DID LAND: the branch was pushed and the docs were synced. The preview EXISTS — only the record is missing. `
+        : `Nothing was pushed on this run. `) +
+        `Expected at ${att.relPath} (the timestamp token is substituted at write time).`,
+      false,
+    );
+    log(`PARKED (loud): ${parked.reason}`);
+  }
 }
 
 const GROUPS = ['plan', 'implement', 'review', 'checks', 'fix', 'land', 'report'];
@@ -1250,6 +1677,16 @@ return {
   concerns: g.concerns,
   waived: g.waived,
   resolveMode,
+  autonomyMode,
+  modeRefusals,
+  docket,
+  parked,
+  // D4 — a PARK is a TERMINAL state, not a pause the loop resumes by itself. Note that a
+  // RUN-TIME park (PARK-TERMINAL, or the loud attestation park) still returns `brief`,
+  // `gateHistory`, `blockers`, `concerns`, `branch`, `worktree` and `land` alongside this —
+  // the evidence the owner needs to triage. Only `parkBeforeBuild` returns without a brief,
+  // because only it ran no gate.
+  terminalState: parked ? 'PARKED' : null,
   rawConcerns: state.rawConcerns,
   confirmedConcerns: state.confirmedConcerns,
   preExistingConcerns: state.preExisting,
@@ -1263,7 +1700,16 @@ return {
   worktree: ctx.wt,
   dryRun,
   land,
-  ownerGate: dryRun
-    ? 'DRY RUN — nothing pushed. Review the diff + gate in the worktree; re-run without dryRun to land a preview.'
-    : 'Loop stopped before merge/deploy. Review the preview and give explicit sign-off to merge/deploy.',
+  // A run-time park sits on top of whatever Land already did, so this states the LAND FACT
+  // rather than implying nothing happened: `land.pushed` is the ground truth, and the loud
+  // attestation park in particular can follow a real preview push.
+  ownerGate: parked
+    ? `PARKED — ${parked.reason}. No merge or deploy happened (this loop never does either), the worktree ${ctx.wt} and branch ${ctx.branch} are PRESERVED for triage, and no autonomous re-plan will run. ` +
+      (land && land.pushed
+        ? `A PREVIEW WAS PUSHED on ${ctx.branch} before this park — it exists. `
+        : 'Nothing was pushed. ') +
+      `${parked.question || ''} Answer it and re-invoke; no timeout will answer it for you.`
+    : dryRun
+      ? 'DRY RUN — nothing pushed. Review the diff + gate in the worktree; re-run without dryRun to land a preview.'
+      : 'Loop stopped before merge/deploy. Review the preview and give explicit sign-off to merge/deploy.',
 };

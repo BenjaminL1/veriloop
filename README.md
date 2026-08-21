@@ -294,6 +294,93 @@ a lock**: the workflow cannot run git, so the guard reads an agent-reported diff
 hashes included — and when it trips it stops the run and reports rather than reverting
 anything.
 
+### Overnight-prep mode (`mode=overnight`)
+
+`/dev-plan` and `/dev-loop` accept **`mode=overnight`** — and **only** from the owner's typed
+invocation. A `mode=` value found in **file text** (a spec body, `interview.json`, a PR body) is
+**refused and surfaced**, never honored: file text can never raise autonomy. `args.feature` is
+*not* file text and is deliberately not scanned — it is `$ARGUMENTS`, the owner's typed
+invocation, so scanning it made every legitimate overnight run record a false refusal of its own
+mode. `interview.autonomy` may say `interactive` and nothing else; any other value fails the
+build. `mode=headless` — true headless — is reserved until a ratified upgrade amendment exists.
+**With `mode` absent both commands behave as they did before**, with two disclosed exceptions.
+First, `/dev-plan`'s launch grant lives in frontmatter, which cannot see the mode, so
+`SlashCommand(/dev-loop:*)` — scoped to that one command — is present on every invocation and is
+held inert before the docket answer by prose, not by a mechanism. The command says so in those
+words. Second, the DRAFT refusal is **mode-independent by design**: `/dev-loop` refuses a spec
+whose `Status:` line does not say RATIFIED in *every* mode, `mode`-absent included, so a run that
+would once have built an un-ratified spec now parks on it. D5's words are "any spec still marked
+DRAFT", not "any spec in an overnight run"; `/dev-plan`'s ratification stamp is what keeps that
+refusal off the ordinary hand-off.
+
+Under `mode=overnight` the recon, probe test, council and premise-rider run **unattended and
+ask nothing mid-run**. Every fork is *prepared* into a docket entry carrying its options, the
+recommender, a one-line rationale, and an enumeration of every ratified text consulted with an
+explicit none-contradicts line per text — auditable *coverage*, not conclusions. At wake-up it
+all arrives as **one batched question set** with an `ACCEPT ALL RECOMMENDATIONS` option, so the
+common case is still one tap; six **MUST-ESCALATE** items are rendered separately and cannot be
+bundled into accept-all, and a question cap can never remove them. Every decision stays
+owner-taken, and each docket records the owner's **override rate** — the measured evidence a
+later fully-headless mode would have to stand on. That rate is carried into `/dev-loop` as
+`args.docket` (counts only) and written into the attestation as `docket`, with the derived
+`overrideRate`, so the evidence is machine-readable rather than prose inside a spec file.
+
+The spec is written `Status: DRAFT`, and **`/dev-loop` builds a spec only when its `Status:`
+line says it is ratified** (in every mode). Ratification — the interactive tap or the docket
+answer — rewrites the file's `Status:` line to `RATIFIED — BINDING (owner, <date>)`; under
+`mode=overnight` that answer *is* also the launch trigger. The predicate is **positive**, and
+that is the point: it asks "does this say RATIFIED?", not "does this look like a draft?". A
+negative test has to enumerate every way English can mean *not ratified*, and the first cut
+missed the first one it met — `DRAFT — NOT RATIFIED`, the verbatim status line of this repo's
+own only real draft, BUILT, because the predicate excused any line that also said RATIFIED.
+Buildable now means: the **first non-blockquoted** `Status:` line **leads with `RATIFIED`** and
+does not also say DRAFT. A `DRAFT`, a `PENDING RATIFICATION`, a `SUPERSEDED` or a typo are all
+the same answer — refused, in every mode. A blockquoted `> Status: RATIFIED` decoy is not a
+status line at all, so it can neither shield a real draft below it nor satisfy the predicate by
+itself. Two costs, recorded rather than left to be found: a genuinely ratified spec whose status
+line also mentions a past draft parks (one word fixes it — the direction to be wrong in), and
+"first" is literal and the leading class is permissive about markdown furniture, so a `Status:`
+line sitting in fenced, bulleted, or comment-interior text above the real one is not
+distinguished from it (only `>` is excluded). A
+spec with **no** `Status:` line at all is the one decision that splits by mode: an overnight run
+parks on it (unattended ambiguity fails safe), while an interactive run builds it exactly as
+before — eight of this repo's eighteen specs predate the convention. The run then defaults to
+`resolve = "clean"`, has **no merge authority** (the future auto-merge dial is forced to
+effective OFF — a documented obligation on a dial that does not exist in code yet, not an
+enforced one), keeps waivers human-only, and **parks** rather than guessing: no spec ⇒ park
+(this supersedes the `args.interview = false` skip); a spec whose `Status:` line does not say
+RATIFIED ⇒ park, in every mode; a spec with no `Status:` line ⇒ park, under `mode=overnight`
+only; `FAIL` or a no-progress halt ⇒ **park-terminal** with the worktree preserved and no
+autonomous re-plan; an unconfirmed attestation write ⇒ a loud park.
+
+A park is **terminal** — there is no resume path, so re-invoking is a fresh run, and answered
+docket entries are never re-opened because the answers live in the ratified spec. What gets
+serialized differs by shape, and the docs say which rather than promising one rule: a
+**pre-build** park runs before any worktree exists, so its record goes to the owner's checkout
+under the machine-ignored `.claude/veriloop/history/parks/` (the loop's one and only write into
+the main checkout); a **park-terminal** rides the run's ordinary `history/<ts>.json`, which keeps
+the *gate's* verdict at top level and reports `terminalState: "PARKED"` beside it; the **loud
+attestation park** serializes nothing, by construction, and says so via
+`parked.recordSerialized: false`. **No timeout anywhere converts absence into consent.**
+
+<!-- veriloop:gate-figure -->
+Pinning all of this, the gate went 562 → 627: the mode derivation is sliced out of a generated
+workflow and executed (a config claiming overnight still yields `interactive`; the owner-typed
+arg yields `overnight`; `headless` and every unrecognized value fall back; a `mode=` token in
+the spec body is refused with one deduped refusal per claim, while the canonical typed
+`mode=overnight` invocation yields the mode with **zero** refusals, and an ordinary run records
+zero), the status predicate runs all three verdicts plus the five "DRAFT — NOT RATIFIED"-style
+phrasings the first cut BUILT, five that say *neither* word (the inversion's own delta), the
+recorded cost, a blockquoted decoy in both directions, the mode split on a status-less spec, and
+the repo's whole real 18-spec corpus, the park **control flow**
+itself is executed (which park fires, in which mode), the docket record derives its override rate
+and degrades to `null` rather than a fabricated zero, the build-time refusal is a real child
+process judged by exit code in both directions, the cap carve-out is asserted on the capped *and*
+the uncapped branch, a park is serialized through the real `attestationFrom` including redaction
+of its context and its routing to `parks/`, and the no-timeout non-goal is a construct scan over
+both commands and the workflow. Four previously pinned interview assertions were **re-pinned** to
+the mode branch rather than deleted.
+
 Every fix prompt, in every mode, carries the **anti-appeasement contract**: fix the cause,
 ship the assertion the constitution's test rule demands, never silence or reword a finding so
 that it stops being reported. Only its closing sentence — that re-running the lenses is not
@@ -302,7 +389,6 @@ only mode where a confirm pass exists. The **docs-sync** step at Land may update
 docstrings, type defs and plans, and explicitly **not** the constitution: those edits are
 owner-only, by hand.
 
-<!-- veriloop:gate-figure -->
 Pinning all of this, the gate went 481 → 562: the fix loop had no assertions at all before
 this change, and its predicate is now sliced out of a generated workflow and executed against
 an inline case table — pass-through under the default mode, the mode derivation itself (an
@@ -429,7 +515,7 @@ for code. Note the condition, because the intuitive guess is backwards: the fetc
 of the *skill*, not anything in `scripts/`, and it runs when `.claude/veriloop/domain.json` is
 **absent** (a first install) or `--refresh` is asked for. An existing `domain.json` is what
 suppresses it. One reader's note: `selftest.mjs` is
-the outlier at ~4,100 lines. It is a flat sequence of independent assertion blocks with
+the outlier at ~5,200 lines. It is a flat sequence of independent assertion blocks with
 section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
 for the behavior you care about.
 
@@ -539,14 +625,18 @@ guarantees worth stating up front:
 - **Absent evidence never passes.** If a gate job (checks, a review lens, the
   screenshot) dies or is skipped, the loop FAILS closed — a verification that
   did not run cannot vouch for anything. Only a human waiver can downgrade it.
-- **It asks before it builds — but only what it can't work out itself.** `/dev-plan`
-  recons the code first, then conducts an interleaved spec interview (no fixed cap by
-  default — a repo may bake one via `interview.question_cap`, and `questions=<N>` caps a
-  single run; skipped entirely when nothing is genuinely ambiguous) about scope, design forks, and
-  acceptance criteria, convenes an expert council that pressure-tests the design, and
-  leaves a spec you ratify as BINDING. The reviewers treat a silent deviation from an
-  explicit decision as a blocker. `/dev-loop` detects or confirms the spec; the spec
-  is upstream of the build loop.
+- **It asks before it builds — but only what it can't work out itself, and not always
+  mid-run.** `/dev-plan` recons the code first, then conducts an interleaved spec interview
+  (no fixed cap by default — a repo may bake one via `interview.question_cap`, and
+  `questions=<N>` caps a single run; skipped entirely when nothing is genuinely ambiguous)
+  about scope, design forks, and acceptance criteria, convenes an expert council that
+  pressure-tests the design, and leaves a spec you ratify as BINDING. Under `mode=overnight`
+  the same work runs **unattended** and the questions arrive as one batched docket at
+  wake-up instead — the asking moves, it does not disappear, and a question cap can never
+  remove a MUST-ESCALATE item or the ratification tap. The reviewers treat a silent
+  deviation from an explicit decision as a blocker. `/dev-loop` detects or confirms the
+  spec — and refuses to build one still marked `Status: DRAFT`; the spec is upstream of the
+  build loop.
 - **The run summarizes itself, losslessly.** A final Report phase compresses the whole
   run *inside the loop* — deduplicating findings by **root cause** rather than repeating
   each one per reviewer, so three lenses converging on one bug reads as one finding with

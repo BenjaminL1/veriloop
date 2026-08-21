@@ -1660,7 +1660,16 @@ function assert(cond, desc) {
   // (g) council protocol: anti-sycophancy mandate + read-only council + owner ratifies BINDING
   assert(/attack rather than concede/i.test(devPlan) && /not\s+blindly agree/i.test(devPlan), '/dev-plan: the council protocol carries the anti-sycophancy mandate (attack, do not blindly agree)');
   assert(/subagents are \*\*read-only\*\*/i.test(devPlan) && /only the main\s+session writes/i.test(devPlan), '/dev-plan: the council subagents are read-only — only the main session writes');
-  assert(/owner ratifies it as BINDING/i.test(devPlan) && /AskUserQuestion/.test(devPlan), '/dev-plan: the owner ratifies the spec as BINDING via AskUserQuestion (only the owner stamps BINDING)');
+  // RE-PINNED to the mode-branch copy (headless-autonomy D5): the ratification tap is now
+  // also the DRAFT→RATIFIED flip and, under `mode=overnight`, the launch trigger. Pinning
+  // only the old half would stay green through a build that silently dropped the DRAFT
+  // discipline — the exact shape of stale pin this file has been bitten by before.
+  assert(
+    /owner ratifies it as BINDING/i.test(devPlan) && /AskUserQuestion/.test(devPlan) &&
+      /with \*\*`Status: DRAFT`\*\*/.test(devPlan) &&
+      devPlan.includes('**builds a spec only when its `Status:` line LEADS with `RATIFIED`**'),
+    '/dev-plan: the owner ratifies the spec as BINDING via AskUserQuestion (only the owner stamps BINDING), the spec is WRITTEN as Status: DRAFT, and /dev-loop builds one only when its Status line LEADS with RATIFIED',
+  );
   assert(/council=auto\|always\|off/.test(devPlan) && /high_risk_areas/.test(devPlan), '/dev-plan: the council firing rule keys off recon-touched files vs high_risk_areas, not request phrasing');
 
   // (g2) premise-rider (v0.3.18): ALWAYS-firing pre-mortem + argue-the-other-side, DECOUPLED from the
@@ -1672,7 +1681,13 @@ function assert(cond, desc) {
   assert(dpFlat.includes('on **every** `/dev-plan`') && dpFlat.includes('even `council=off`'), '/dev-plan: the premise-rider fires on every /dev-plan — even council=off / when auto fires nothing');
   assert(/Pre-mortem \(REQUIRED\)/.test(devPlan), '/dev-plan: premise-rider runs a REQUIRED pre-mortem');
   assert(/Argue the other side/.test(devPlan), '/dev-plan: premise-rider argues the OPPOSITE direction (dialectic)');
-  assert(/CHALLENGES/.test(devPlan) && /never\b[^.]{0,40}\bcleared/i.test(dpFlat), '/dev-plan: premise challenges are surfaced at ratification, NEVER framed as "cleared" (anti-laundering)');
+  // RE-PINNED (headless-autonomy D7/R1): the same anti-laundering discipline now also has to
+  // hold for the RESIDUAL risk the unabridged-ledger mitigation itself carries.
+  assert(
+    /CHALLENGES/.test(devPlan) && /never\b[^.]{0,40}\bcleared/i.test(dpFlat) &&
+      /RESIDUAL RISK, recorded not cleared/.test(dpFlat),
+    '/dev-plan: premise challenges are surfaced at ratification, NEVER framed as "cleared" (anti-laundering) — and the ratification tap\'s own residual rubber-stamp-pressure risk is RECORDED under the same rule',
+  );
   assert(devPlan.includes('default `auto`'), '/dev-plan: council DEFAULT stays `auto` (owner chose auto-council + always-rider, not always-council)');
   assert(!/steelman/i.test(devPlan), '/dev-plan: steelman deliberately NOT ported (collides with anti-sycophancy; /advise needed a careful framing this command does not)');
 
@@ -1690,7 +1705,14 @@ function assert(cond, desc) {
   assert(/BETTER route than the one asked for/.test(devPlan) && /most\s+expensive kind of deference/.test(dpFlat), '/dev-plan: a better ALTERNATIVE route must be proposed, not silently dropped in favour of the owner\'s vision');
 
   // interview: NO fixed question cap; owner may set an optional questions=<N> budget
-  assert(/NO fixed cap/i.test(devPlan) && /questions=<N>/.test(devPlan), '/dev-plan: the interview has no fixed question cap and documents the optional owner-set questions=<N> budget');
+  // RE-PINNED (headless-autonomy D4): the cap copy is exactly where a PARK could be
+  // converted into a default, so the carve-out is pinned in the same assertion as the cap.
+  assert(
+    /NO fixed cap/i.test(devPlan) && /questions=<N>/.test(devPlan) &&
+      /a cap can NEVER convert a PARK into a default/.test(dpFlat) &&
+      /are EXEMPT from every cap and are ALWAYS\s+asked/.test(devPlan),
+    '/dev-plan: the interview has no fixed question cap and documents the optional owner-set questions=<N> budget — and the cap copy carves the MUST-ESCALATE items and the ratification tap OUT of every cap',
+  );
 
   // HARD LIMITS: NO VERDICTS + ownership covenant (hand-owned, git-tracked, never regenerated)
   assert(/NO VERDICTS/.test(devPlan) && /never PASS/i.test(devPlan.replace(/\n/g, ' ')), '/dev-plan: HARD LIMITS state NO VERDICTS (verdicts belong to /dev-loop)');
@@ -1706,7 +1728,15 @@ function assert(cond, desc) {
   assert(/treat it as \*\*BINDING\*\*/.test(devLoop2), '/dev-loop: spec-present branch — a provided/on-disk spec is BINDING');
   assert(/Confirm-and-go/.test(devLoop2) && /NOT a second interview/.test(devLoop2), '/dev-loop: trivial branch is confirm-and-go, NOT a second interview');
   assert(/point the owner to `\/dev-plan`/.test(devLoop2), '/dev-loop: non-trivial branch stops and points to /dev-plan');
-  assert(/args\.interview = false/.test(devLoop2), '/dev-loop: the unattended / args.interview=false passthrough is preserved');
+  // RE-PINNED (headless-autonomy D6): the passthrough survives, and its PRECEDENCE against
+  // `mode=overnight` is stated in the same place — an overnight run with no spec PARKS, and
+  // `args.interview = false` cannot buy it a spec-less build.
+  assert(
+    /args\.interview = false/.test(devLoop2) &&
+      /PRECEDENCE — `mode=overnight` overrides that skip/.test(devLoop2) &&
+      /overnight run with \*\*no spec PARKS\*\*/.test(devLoop2),
+    '/dev-loop: the unattended / args.interview=false passthrough is preserved, and the mode branch states its precedence — under mode=overnight a run with NO SPEC parks instead of building, and the skip cannot override that',
+  );
 
   // (d) the .prettierignore machine-block lists the new command path
   const pi = readFileSync(join(tmp, '.prettierignore'), 'utf8');
@@ -3441,6 +3471,18 @@ function gateFigures(file, re) {
       && /`\/advise` is read-only and `\/dev-plan` writes only a spec the owner ratifies/.test(routing.replace(/\n/g, ' ')),
     'session routing: the reason for announcing the route is TRUE of the routes that exist — neither writes code, so the owner gets a turn before anything is built (the retired "so the owner can redirect you before you spend tokens" was false for the /dev-loop route it was written for)',
   );
+  // RE-PINNED under the mode branch (headless-autonomy, binding non-goal: "no routing-table
+  // or payload changes"). `mode=overnight` gives /dev-plan a SlashCommand grant that can
+  // launch /dev-loop — so the payload's "neither route writes code, so the owner gets a turn
+  // before anything is built" is a claim the new mode could have falsified. It does not: the
+  // grant is TAP-GATED and inert until the owner answers the docket, so the owner's turn is
+  // exactly the thing that launches the build. Asserted as a pair — the payload byte-frozen,
+  // and the reason it stays true stated in the command that could have broken it.
+  assert(
+    !/mode\s*=\s*(overnight|headless)/i.test(routing) &&
+      readFileSync(join(here, '..', '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ').includes('tap-gated grant — INERT until the answer'),
+    'session routing: the mode branch moved NO routing-payload byte (binding non-goal) and did not falsify "neither route writes code" — /dev-plan\'s launch grant is TAP-GATED and inert until the owner answers, so the owner\'s turn is still what precedes any build',
+  );
   // The overkill red flag, rewritten. Under the two-row table triviality IS decided — by
   // `/dev-plan`, with a cited danger surface — so "You are not the one who decides that"
   // forbade a thought that now has a correct destination. Probe 3 hit exactly this: the model
@@ -3841,9 +3883,26 @@ function gateFigures(file, re) {
   // feeds. Until this case existed, the arg-parsing line where the mode is actually
   // chosen was pinned by nothing, and its comment could promise anything.
   const MS = '// <<< veriloop:resolvemode:start >>>', ME = '// <<< veriloop:resolvemode:end >>>';
+  const AS = '// <<< veriloop:autonomy:start >>>', AE = '// <<< veriloop:autonomy:end >>>';
+  const PS = '// <<< veriloop:parkgates:start >>>', PE = '// <<< veriloop:parkgates:end >>>';
   assert(wf.includes(MS) && wf.includes(ME), 'template: emitted workflow carries the veriloop:resolvemode markers');
+  assert(wf.includes(AS) && wf.includes(AE), 'template: emitted workflow carries the veriloop:autonomy markers');
+  assert(wf.includes(PS) && wf.includes(PE), 'template: emitted workflow carries the veriloop:parkgates markers');
+  const autonomyRegion = wf.slice(wf.indexOf(AS) + AS.length, wf.indexOf(AE));
+  const parkGatesRegion = wf.slice(wf.indexOf(PS) + PS.length, wf.indexOf(PE));
   const modeRegion = wf.slice(wf.indexOf(MS) + MS.length, wf.indexOf(ME));
-  const deriveMode = new Function('VERILOOP', 'a', `${modeRegion}; return resolveMode;`);
+  // headless-autonomy: `resolveDefault` now reads `autonomyMode`, so the regions are sliced
+  // and EXECUTED TOGETHER — the same composition the verdict+resolve regions already use.
+  // All three are closure-free; `spec` and `feature` arrive as PARAMETERS, never as module
+  // state, so the composition stays pure and no fixture supplies the input (rule 3). The
+  // park-gate predicates come back as FUNCTIONS so the park CONTROL FLOW is executed too,
+  // not just the value derivations.
+  const mkMode = (VERILOOP, a, spec = '', feature = '') =>
+    new Function(
+      'VERILOOP', 'a', 'spec', 'feature',
+      `${autonomyRegion}\n${parkGatesRegion}\n${modeRegion}; return { autonomyMode, resolveMode, modeRefusals, specState, docket, preBuildPark, isParkTerminal };`,
+    )(VERILOOP, a, spec, feature);
+  const deriveMode = (VERILOOP, a) => mkMode(VERILOOP, a).resolveMode;
   assert(
     deriveMode({ resolveDefault: 'blockers' }, {}) === 'blockers' &&
       deriveMode({}, {}) === 'blockers' &&
@@ -4406,6 +4465,653 @@ function gateFigures(file, re) {
     rBad.status !== 0 && /resolve_default/.test(rBad.stderr || ''),
     'resolve: an unknown interview.resolve_default FAILS THE BUILD, naming the key (fail fast, not mid-run)',
   );
+
+  // =========================================================================
+  // headless autonomy — spec `.claude/veriloop/specs/headless-autonomy.md`
+  // (RATIFIED — BINDING, owner, 2026-08-20). Shape B: overnight-prep.
+  //
+  // ONE CONTIGUOUS BLOCK, and every case builds its OWN synthetic input inline — no
+  // `fixtures/` file supplies the evidence under test (constitution rule 3). The pure
+  // regions are SLICED out of a freshly generated workflow and EXECUTED, the build-time
+  // refusal is a real child process judged by its exit code, and the copy assertions read
+  // the emitted commands rather than the renderer source.
+  // =========================================================================
+
+  // --- ARTIFACT HYGIENE: NO CONTROL BYTES outside \t \n \r, in the TEMPLATE or the EMITTED
+  //     workflow. A literal 0x00 rode into the template inside the `autonomyRefusals` dedupe-key
+  //     template string and SHIPPED through a green gate: `node --check` accepts it, the bundle
+  //     linter accepts it, every one of the other assertions in this file accepts it — and
+  //     `grep` silently reclassifies the whole file as BINARY, which is precisely how it hid
+  //     from every text-based check the gate runs. The escape `\x00` is byte-identical at run
+  //     time and greppable at rest. The blindspot was that nothing here ever looked at the
+  //     BYTES; this is the check that fix ships with (rule 3).
+  {
+    const CTRL_OK = new Set([9, 10, 13]);
+    const ctrlHits = (label, text) => {
+      const hits = [];
+      for (let i = 0; i < text.length; i += 1) {
+        const c = text.charCodeAt(i);
+        if (c < 32 && !CTRL_OK.has(c)) hits.push(`${label}@${i}:0x${c.toString(16).padStart(2, '0')}`);
+      }
+      return hits;
+    };
+    const templateSrc = readFileSync(join(here, '..', 'scripts/templates/dev-loop.template.js'), 'utf8');
+    const bad = [...ctrlHits('template', templateSrc), ...ctrlHits('emitted', wf)];
+    assert(
+      bad.length === 0,
+      `artifact hygiene: neither the dev-loop TEMPLATE nor the EMITTED workflow carries a control byte outside \\t \\n \\r — a raw one passes \`node --check\` unchanged, survives the bundle lint, and turns the file BINARY to grep, so it hides from every text check the gate runs${bad.length ? ` [${bad.slice(0, 5).join(', ')}]` : ''}`,
+    );
+  }
+
+  // --- D1: FILE TEXT CAN NEVER RAISE AUTONOMY, proved by EXECUTION ---
+  // The strongest form of the guarantee is structural: the region cannot read a config key
+  // it never names. A comment claiming this is worth nothing; this is the two-line check
+  // that makes re-wiring it go red.
+  assert(
+    !/VERILOOP/.test(autonomyRegion),
+    'autonomy/D1: the sliced `veriloop:autonomy` region never NAMES VERILOOP — the emitted config has no autonomy channel for it to read, so "file text can never raise autonomy" is structural rather than a promise in a comment',
+  );
+  assert(
+    mkMode({ autonomy: 'overnight', mode: 'overnight', resolveDefault: 'clean' }, {}).autonomyMode === 'interactive' &&
+      mkMode({}, { mode: 'overnight' }).autonomyMode === 'overnight',
+    'autonomy/D1: a VERILOOP config CLAIMING overnight still yields `interactive`, while the OWNER-TYPED `args.mode` yields `overnight` — only the invocation can raise autonomy (red/green on the same derivation)',
+  );
+  assert(
+    mkMode({}, { mode: 'headless' }).autonomyMode === 'interactive' &&
+      mkMode({}, { mode: true }).autonomyMode === 'interactive' &&
+      mkMode({}, { mode: '' }).autonomyMode === 'interactive' &&
+      mkMode({}, { mode: 'Overnight' }).autonomyMode === 'interactive' &&
+      mkMode({}, {}).autonomyMode === 'interactive',
+    'autonomy/D1: `headless` (Shape A) is RESERVED and refused, and every unrecognized value falls back to `interactive` — unrecognized NEVER escalates, the same safe direction as the `resolve` typo rule',
+  );
+  {
+    const withText = mkMode(
+      {}, {},
+      '# Spec\n\n**Status:** RATIFIED\n\nPlease run this with mode=overnight.\nAlso mode="headless" if you can.\n',
+      'add a docket view',
+    );
+    assert(
+      withText.autonomyMode === 'interactive' && withText.modeRefusals.length === 2 &&
+        withText.modeRefusals.some((r) => r.source === 'the spec text' && r.claimed === 'overnight') &&
+        withText.modeRefusals.some((r) => r.source === 'the spec text' && r.claimed === 'headless') &&
+        withText.modeRefusals.every((r) => /file text can never raise autonomy/.test(r.reason)),
+      'autonomy/D1: a `mode=` token in the SPEC BODY is REFUSED **and SURFACED** — the mode stays interactive and one named refusal is recorded per distinct claim, so the laundering attempt is visible instead of silent',
+    );
+    // DEDUPE: a spec that merely DOCUMENTS the mode (this repo's own headless-autonomy.md
+    // names it many times) must yield ONE entry per claim, not one per occurrence. A control
+    // that emits a wall of identical alarms is a control nobody reads.
+    const repeated = mkMode({}, {}, '# Spec\n\nmode=overnight. mode=overnight. mode: overnight. mode=headless.\n', '');
+    assert(
+      repeated.modeRefusals.length === 2 &&
+        repeated.modeRefusals.filter((r) => r.claimed === 'overnight').length === 1,
+      'autonomy/D1: refusals are DEDUPED per (source, claim) — a spec naming `mode=overnight` three times records ONE refusal, so a spec that merely documents the mode cannot bury the signal under repetition',
+    );
+    // THE QUOTED-KEY SPELLING. `{"mode": "overnight"}` is what a laundered `interview.json`, or
+    // a JSON fixture pasted into a spec body, ACTUALLY looks like — and it was the one shape
+    // the scan could not see, because the retired `mode\s*[=:]` required the colon to follow the
+    // key immediately and a `"` sits between them. The shape most likely to arrive from a
+    // machine was the shape not scanned. The retired pattern is exhibited FAILING on the same
+    // input below, so the widening is demonstrably not vacuous.
+    const quoted = mkMode(
+      {}, {},
+      '# Spec\n\n```json\n{ "mode": "overnight" }\n```\n\nand `\'mode\' = headless` further down.\n',
+      '',
+    );
+    assert(
+      quoted.autonomyMode === 'interactive' && quoted.modeRefusals.length === 2 &&
+        quoted.modeRefusals.some((r) => r.claimed === 'overnight') &&
+        quoted.modeRefusals.some((r) => r.claimed === 'headless') &&
+        !/mode\s*[=:]\s*["'`]?(overnight|headless)\b/i.test('{ "mode": "overnight" }'),
+      'autonomy/D1: the QUOTED-KEY spelling is REFUSED and SURFACED too — `{"mode": "overnight"}` and `\'mode\' = headless` each record one refusal, and the retired bare `mode\\s*[=:]` is shown failing on the same JSON, so the widened pattern is not a vacuous change',
+    );
+    // THE FALSE-ALARM REGRESSION, pinned red/green. `args.feature` IS `$ARGUMENTS` — the
+    // owner's typed invocation, the one channel D1 trusts — so it necessarily contains the
+    // literal `mode=overnight` the owner typed. Scanning it made EVERY legitimate overnight
+    // run record a refusal of its own mode and write that falsehood into the attestation.
+    // This is the canonical happy-path call: the mode is honored AND nothing is refused.
+    const typed = mkMode(
+      {}, { mode: 'overnight', feature: 'add a docket view mode=overnight' },
+      '# Spec\n\n**Status:** RATIFIED\n\nordinary prose.\n',
+      'add a docket view mode=overnight',
+    );
+    assert(
+      typed.autonomyMode === 'overnight' && typed.modeRefusals.length === 0,
+      'autonomy/D1: `args.feature` is NOT scanned as file text — the canonical overnight invocation (`mode=overnight` typed, and therefore present in $ARGUMENTS) yields `overnight` with ZERO refusals, so the control no longer fires on its own happy path and a recorded refusal still means something',
+    );
+    const clean = mkMode({}, {}, '# Spec\n\n**Status:** RATIFIED\n\nordinary prose.\n', 'ordinary feature');
+    assert(
+      clean.modeRefusals.length === 0 && clean.autonomyMode === 'interactive',
+      'autonomy/acceptance 1: an ordinary run records ZERO refusals — no log line, no behavior delta',
+    );
+  }
+
+  // --- D6: overnight implies resolve=clean BY DEFAULT; an explicit arg may still LOWER ---
+  assert(
+    mkMode({}, { mode: 'overnight' }).resolveMode === 'clean' &&
+      mkMode({ resolveDefault: 'blockers' }, { mode: 'overnight' }).resolveMode === 'clean' &&
+      mkMode({ resolveDefault: 'blockers' }, { mode: 'overnight', resolve: 'blockers' }).resolveMode === 'blockers' &&
+      mkMode({ resolveDefault: 'blockers' }, { mode: 'overnight', resolve: 'nonsense' }).resolveMode === 'blockers',
+    'autonomy/D6: `mode=overnight` flips the resolve DEFAULT to clean, while an explicit `resolve` arg still wins and may still LOWER the run to blockers (may-lower-never-raise survives)',
+  );
+
+  // --- D5: the spec STATUS predicate, all three verdicts ---
+  // The predicate is POSITIVE — buildable IFF the first non-blockquoted `Status:` line leads
+  // with RATIFIED and does not also say DRAFT. The three verdicts are `ratified` (build),
+  // `unratified` (park in EVERY mode) and `absent` (park under overnight ONLY).
+  assert(
+    mkMode({}, {}, '# Spec\n\n**Status:** DRAFT\n', '').specState === 'unratified' &&
+      mkMode({}, {}, '# Spec\n\nStatus: DRAFT — awaiting the docket\n', '').specState === 'unratified' &&
+      mkMode({}, {}, '# Spec\n\n**Status:** RATIFIED — BINDING (owner, 2026-08-20)\n', '').specState === 'ratified' &&
+      mkMode({}, {}, '- **Status:** RATIFIED — BINDING\n', '').specState === 'ratified' &&
+      mkMode({}, {}, '', '').specState === 'absent',
+    'autonomy/D5: `specStatus` returns `ratified` only for a status line that LEADS with RATIFIED, `unratified` for a DRAFT one, and `absent` for no spec at all — the refusal fires on a draft and cannot fire on a ratified spec',
+  );
+  // THE FAIL-OPEN THE FIRST CUT SHIPPED, pinned red/green. The predicate used to ASK "does
+  // this look like a DRAFT?" and excuse any status line that ALSO contained the word
+  // RATIFIED, so the most natural phrasing of a draft — "DRAFT — NOT RATIFIED" — was BUILT.
+  // Every case here returns FALSE (i.e. builds) under the old negative form. The last one is
+  // not hypothetical: it is the verbatim status line of the only real draft in this repo's
+  // own corpus, `specs/constitution-enforcer-partition.md`.
+  {
+    const DRAFT_PHRASINGS = [
+      '**Status:** DRAFT — not yet ratified',
+      '**Status:** DRAFT (not yet RATIFIED)',
+      'Status: DRAFT / pending RATIFIED stamp',
+      '**Status:** DRAFT (to be ratified 2026)',
+      '**Status:** DRAFT — NOT RATIFIED. Two premise challenges below are UNRESOLVED.',
+    ];
+    const built = DRAFT_PHRASINGS.filter((line) => mkMode({}, {}, `# Spec\n\n${line}\n`, '').specState !== 'unratified');
+    assert(
+      built.length === 0,
+      `autonomy/D5: a status line saying DRAFT is un-ratified even when it also says RATIFIED — "DRAFT — NOT RATIFIED", "DRAFT (not yet RATIFIED)", "DRAFT (to be ratified 2026)" all PARK. Ambiguity resolves toward the refusal, the same safe direction as the resolve typo rule${built.length ? ` [BUILT anyway: ${built.length}]` : ''}`,
+    );
+    // THE INVERSION'S OWN DELTA, and the reason a negative test could not be patched into
+    // correctness: a status line that says NEITHER word. Under "does it look like a DRAFT?"
+    // every one of these BUILT, because none of them contains the word DRAFT. Under "does it
+    // say RATIFIED?" every one of them parks. The third is not constructed — it is the
+    // verbatim status line of `specs/resolution-pass-2026-08-17.md`, sitting in this repo's
+    // corpus today.
+    const NEITHER = [
+      '**Status:** PENDING RATIFICATION',
+      '**Status:** proposed — awaiting the council',
+      '**Status:** EXECUTED UNDER OWNER DELEGATION (sentence above, quoted verbatim), disclosed',
+      '**Status:** SUPERSEDED by specs/auto-merge-dial.md',
+      '**Status:** RTAIFIED — BINDING (owner, 2026-08-20)',
+    ];
+    const slipped = NEITHER.filter((line) => mkMode({}, {}, `# Spec\n\n${line}\n`, '').specState !== 'unratified');
+    assert(
+      slipped.length === 0,
+      `autonomy/D5 (the inversion): a status line that says NEITHER "DRAFT" nor "RATIFIED" — "PENDING RATIFICATION", "SUPERSEDED", a typo'd "RTAIFIED", the verbatim "EXECUTED UNDER OWNER DELEGATION" of this repo's resolution-pass spec — is un-ratified and PARKS. Every one of these BUILT under the negative "does it look like a draft?" form, which is why the predicate is positive${slipped.length ? ` [BUILT anyway: ${slipped.join(' | ')}]` : ''}`,
+    );
+    // THE COST OF THE POSITIVE FORM, asserted rather than described: a genuinely RATIFIED
+    // spec whose status line ALSO mentions a past draft parks. One word fixes it, and this is
+    // the direction to be wrong in.
+    assert(
+      mkMode({}, {}, '# Spec\n\n**Status:** RATIFIED — BINDING, superseding the DRAFT of 2026-08-01\n', '').specState === 'unratified',
+      'autonomy/D5 (the recorded cost): a RATIFIED status line that also says DRAFT parks — the positive form errs toward the refusal, and the fix is one word in the spec',
+    );
+    // A BLOCKQUOTED DECOY IS NOT A STATUS LINE. `>` is excluded from the leading class, so the
+    // decoy is skipped and the scan continues to the real line — pinned in BOTH directions:
+    // it cannot shield a real DRAFT below it, and it cannot SATISFY the predicate on its own.
+    assert(
+      mkMode({}, {}, '# Spec\n\n> Status: RATIFIED (example)\n\nbody\n\n**Status:** DRAFT\n', '').specState === 'unratified' &&
+        mkMode({}, {}, '# Spec\n\n> Status: RATIFIED (example)\n\nbody with no real status line\n', '').specState === 'absent',
+      'autonomy/D5: a blockquoted `> Status: RATIFIED` decoy neither shields a real `**Status:** DRAFT` below it NOR satisfies the predicate by itself — quoted text is not a status line, so the decoy leaves the document status-less',
+    );
+    // THE MODE SPLIT, and the only place the two modes disagree. A spec with NO status line is
+    // not marked anything: an INTERACTIVE run proceeds on it exactly as it always has
+    // (acceptance 1 — eight of this repo's eighteen specs predate the convention), while an
+    // OVERNIGHT run PARKS, because unattended ambiguity has nobody to ask and must fail safe.
+    // The earlier description claimed the guard "cannot be dodged by omitting the line" while
+    // asserting the opposite two lines above it; the split is what makes the claim true where
+    // it matters and honestly false where it does not.
+    {
+      const noStatus = '# Spec\n\nno status line at all\n';
+      const m = mkMode({}, {}, noStatus, '');
+      assert(
+        m.specState === 'absent' &&
+          m.preBuildPark('overnight', 'absent', true) === 'no-status' &&
+          m.preBuildPark('interactive', 'absent', true) === null,
+        'autonomy/D5 (mode split): a spec with NO `Status:` line PARKS an overnight run (`no-status` — unattended ambiguity fails safe) and does NOT touch an interactive one, which builds it exactly as before. Omitting the line is a dodge only while somebody is awake to catch it',
+      );
+    }
+    // THE CORPUS ITSELF: run the shipped predicate over every spec this repo actually has.
+    // Non-vacuity in all three directions on real text rather than constructed strings — and
+    // the two refusals are named, because `resolution-pass-2026-08-17.md` is the file the
+    // INVERSION newly parks and that is a consequence worth being unable to forget.
+    const specDir = join(here, '..', '.claude/veriloop/specs');
+    const corpus = readdirSync(specDir).filter((f) => f.endsWith('.md'))
+      .map((f) => [f, mkMode({}, {}, readFileSync(join(specDir, f), 'utf8'), '').specState]);
+    const byState = (st) => corpus.filter(([, v]) => v === st).map(([f]) => f);
+    const unratified = byState('unratified');
+    assert(
+      corpus.length === 18 && byState('ratified').length === 8 && byState('absent').length === 8 &&
+        unratified.join(',') === 'constitution-enforcer-partition.md,resolution-pass-2026-08-17.md',
+      `autonomy/D5 (corpus): over this repo's REAL 18-spec corpus the predicate reads 8 RATIFIED, 8 status-LESS and exactly 2 un-ratified — the genuine draft ("DRAFT — NOT RATIFIED", which the fail-open BUILT) and the resolution-pass record, whose "EXECUTED UNDER OWNER DELEGATION" line the inversion newly refuses${unratified.length !== 2 ? ` [un-ratified: ${unratified.join(', ') || 'none'}]` : ''}`,
+    );
+    // THE PROSE COUNT IS THE MEASURED COUNT. The owner-facing park context and the comment
+    // above the predicate both spell that number out in words, and both said "nine" while the
+    // corpus said eight — a number no reader could check and no check ever read. Deriving the
+    // word from `byState('absent').length` makes the two unable to drift apart again.
+    const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+    const absentWord = WORDS[byState('absent').length];
+    // The sentence lives inside a single-quoted JS string in the emitted workflow, so its
+    // apostrophe arrives as `\'`. Un-escape before matching — otherwise the pin passes for the
+    // wrong reason (never matching anything) and the drift it exists to catch walks straight through.
+    const wfProse = wf.replace(/\\'/g, "'");
+    const wrongWords = WORDS.filter((w) => w !== absentWord && new RegExp(`\\b${w} of this repo`, 'i').test(wfProse));
+    assert(
+      new RegExp(`\\b${absentWord} of this repo's own eighteen specs predate the convention`, 'i').test(wfProse) &&
+        wrongWords.length === 0,
+      `autonomy/D5 (the count is not decoration): the EMITTED workflow's owner-facing park context spells the status-LESS spec count as the word the corpus scan just measured ('${absentWord}'), and no other number appears in that sentence — the shipped text said "nine" over a corpus of eight, which is the kind of claim a reader trusts precisely because nothing checks it${wrongWords.length ? ` [also found: ${wrongWords.join(', ')}]` : ''}`,
+    );
+  }
+
+  // --- park CONTROL FLOW: the gates themselves, executed (acceptance 3) ---
+  // The park BRANCHES, not just the values they read. Before this the pre-build gates and
+  // the PARK-TERMINAL expression were inline at their call sites, so a refactor that dropped
+  // the mode condition or reordered the Land branches stayed green.
+  {
+    const { preBuildPark, isParkTerminal } = mkMode({}, {});
+    assert(
+      preBuildPark('overnight', 'unratified', true) === 'draft' &&
+        preBuildPark('interactive', 'unratified', true) === 'draft' &&
+        preBuildPark('interactive', 'unratified', false) === 'draft' &&
+        preBuildPark('overnight', 'absent', false) === 'no-spec' &&
+        preBuildPark('overnight', 'absent', true) === 'no-status' &&
+        preBuildPark('interactive', 'absent', false) === null &&
+        preBuildPark('interactive', 'absent', true) === null &&
+        preBuildPark('overnight', 'ratified', true) === null &&
+        preBuildPark('interactive', 'ratified', true) === null,
+      'autonomy/D5+D6 (control flow): the un-ratified park fires in EVERY mode (D5 is unconditional) and is checked FIRST; `no-spec` beats `no-status` so a spec-less overnight run reports the reason it actually has; both fire ONLY under overnight, and an interactive run builds a spec-less or status-less feature exactly as before — `args.interview = false` keeps its meaning everywhere except overnight',
+    );
+    assert(
+      isParkTerminal('overnight', 'FAIL', false) === true &&
+        isParkTerminal('overnight', 'CONCERNS', true) === true &&
+        isParkTerminal('overnight', 'PASS', false) === false &&
+        isParkTerminal('interactive', 'FAIL', true) === false &&
+        isParkTerminal('interactive', 'CONCERNS', true) === false,
+      'autonomy/D6 (control flow): a final FAIL or a no-progress halt is a PARK-TERMINAL under `mode=overnight` ONLY — an interactive FAIL keeps today\'s Land behavior exactly (acceptance 1), and a passing overnight run never parks',
+    );
+    // THE PARK'S ATTESTED CAUSE. The protected-path guard REWRITES the verdict to FAIL, so an
+    // unbranched reason attested "the gate's final verdict is FAIL after the fix budget" on a
+    // park the fix budget had nothing to do with — a false cause in the durable record, on the
+    // one run an owner reads hardest. The branch is keyed on `guardEnforced && guardStops.length`,
+    // the SAME condition that moved the verdict, so an OBSERVING run — whose guardStops never
+    // touch the verdict — still reports the budget when the budget really is the cause.
+    assert(
+      wf.includes('(guardEnforced && guardStops.length)') &&
+        wf.includes('? `the protected-path guard hard-stopped the run on ${guardStops.length} protected path(s)`') &&
+        wf.includes('"the gate\'s final verdict is FAIL after the fix budget"') &&
+        wf.includes("'the fix loop stopped making progress'"),
+      'autonomy/D6 (the attested cause): a PARK-TERMINAL the PROTECTED-PATH GUARD caused names the GUARD, not the fix budget — the guard rewrites the verdict to FAIL, so an unbranched reason writes a false cause into the durable record, and the branch is keyed on the same condition that moved the verdict',
+    );
+  }
+
+  // --- acceptance 4: the DOCKET DECISION RECORD, derived and carried ---
+  assert(
+    JSON.stringify(mkMode({}, { mode: 'overnight', docket: { entries: 4, overrides: 1, mustItems: 2, acceptedAll: false } }).docket)
+      === JSON.stringify({ entries: 4, overrides: 1, mustItems: 2, acceptedAll: false, overrideRate: 0.25 }) &&
+      mkMode({}, { mode: 'overnight', docket: { entries: 4, overrides: 0, acceptedAll: true } }).docket.overrideRate === 0 &&
+      mkMode({}, { mode: 'overnight', docket: { entries: 4, overrides: 0, acceptedAll: true } }).docket.acceptedAll === true,
+    'autonomy/acceptance 4: `args.docket` derives the measured OVERRIDE RATE from the counts the ratification tap reports — the spec names that rate as the only evidence a later Shape-A upgrade may stand on, so it is computed once here and carried, never re-derived downstream',
+  );
+  assert(
+    mkMode({}, { mode: 'overnight' }).docket === null &&
+      mkMode({}, { mode: 'overnight', docket: { entries: 2, overrides: 5 } }).docket === null &&
+      mkMode({}, { mode: 'overnight', docket: { entries: -1, overrides: 0 } }).docket === null &&
+      mkMode({}, { mode: 'overnight', docket: 'four of them' }).docket === null &&
+      mkMode({}, { mode: 'overnight', docket: { entries: 0, overrides: 0 } }).docket.overrideRate === null,
+    'autonomy/acceptance 4: an absent or malformed docket degrades to `null` — an ABSENT measurement, never a fabricated zero — and an empty docket reports `overrideRate: null` for the same reason (no decisions taken is not a zero override rate)',
+  );
+
+  // --- D1 at BUILD time: `interview.autonomy` may set interactive and nothing else ---
+  {
+    const ivOvernight = join(tmp, 'iv-overnight.json');
+    writeFileSync(ivOvernight, JSON.stringify({ autonomy: 'overnight' }));
+    const rOver = spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivOvernight], { encoding: 'utf8' });
+    assert(
+      rOver.status !== 0 && /file text can never raise autonomy/i.test(`${rOver.stdout || ''}${rOver.stderr || ''}`),
+      'autonomy/D1 (build): `interview.autonomy: "overnight"` FAILS THE BUILD and the message NAMES the rule — the file-borne value is refused and surfaced at compile time, not silently ignored at run time',
+    );
+    const ivHeadless = join(tmp, 'iv-headless.json');
+    writeFileSync(ivHeadless, JSON.stringify({ autonomy: 'headless' }));
+    assert(
+      spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivHeadless], { encoding: 'utf8' }).status !== 0,
+      'autonomy/D1 (build): `interview.autonomy: "headless"` fails the build too — the reserved Shape-A name gets no file-side back door',
+    );
+    const ivInteractive = join(tmp, 'iv-interactive.json');
+    writeFileSync(ivInteractive, JSON.stringify({ autonomy: 'interactive' }));
+    assert(
+      spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivInteractive], { encoding: 'utf8' }).status === 0,
+      'autonomy/D1 (build): `interview.autonomy: "interactive"` BUILDS — a file may set the default, it just may never raise it (both directions, so the refusal is not vacuous)',
+    );
+    const wfAfter = readFileSync(join(tmp, `.claude/workflows/${man.repo_name}-dev-loop.js`), 'utf8');
+    const cfgAfter = JSON.parse((wfAfter.match(/^const VERILOOP = (\{[\s\S]*?\n\});$/m) || [])[1]);
+    assert(
+      !('autonomy' in cfgAfter) && !/"autonomy"/.test(JSON.stringify(cfgAfter)),
+      'autonomy/D1: even an ACCEPTED `interview.autonomy` emits NO key into the workflow config — an inert key that can only hold one value is dead weight and re-opens the laundering path the moment it is wired, so there is nothing to wire and no new parity row to diverge (rule 9)',
+    );
+  }
+
+  // --- D4: the CAP CARVE-OUT survives at questions=1 (acceptance 2) ---
+  {
+    const ivCap = join(tmp, 'iv-cap1.json');
+    writeFileSync(ivCap, JSON.stringify({ question_cap: 1 }));
+    assert(
+      spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivCap], { encoding: 'utf8' }).status === 0,
+      'autonomy/D4: a bundle with interview.question_cap = 1 builds (the cap branch is the one under test)',
+    );
+    const dpCapped = readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ');
+    assert(
+      dpCapped.includes('DEFAULT cap of ≤1 questions') &&
+        dpCapped.includes('**CARVE-OUT — a cap can NEVER convert a PARK into a default.**') &&
+        dpCapped.includes('are EXEMPT from every cap and are ALWAYS asked') &&
+        dpCapped.includes('A `questions=1` run still PARKS on a MUST item and still ratifies.'),
+      'autonomy/D4: a questions=1 bundle STILL carries the carve-out — the MUST items and the ratification/docket tap are exempt from every cap, so a cap can never convert a PARK into a default (acceptance 2)',
+    );
+    assert(
+      dpCapped.includes('proceed on best-effort defaults for the rest') &&
+        dpCapped.includes('"Proceed on best-effort defaults" is scoped to non-MUST items and to nothing else'),
+      'autonomy/D4: the "proceed on best-effort defaults" wording SURVIVES, scoped to non-MUST items only — the exact banned conversion is named where it lives, not deleted and left implicit',
+    );
+    // NON-VACUITY: the uncapped branch carries the same carve-out, so the exemption is not
+    // an artifact of the cap branch alone.
+    const ivNoCap = join(tmp, 'iv-nocap.json');
+    writeFileSync(ivNoCap, JSON.stringify({ question_cap: null }));
+    spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', tmp, '--interview', ivNoCap], { encoding: 'utf8' });
+    const dpUncapped = readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ');
+    assert(
+      dpUncapped.includes('NO fixed cap') &&
+        dpUncapped.includes('**CARVE-OUT — a cap can NEVER convert a PARK into a default.**'),
+      'autonomy/D4: the UNCAPPED branch carries the identical carve-out — both branches describe a cap the owner can set, so both must carve the MUST items out of it',
+    );
+  }
+
+  // --- D2/D3: LEDGER COMPLETENESS and the un-bundleable MUST list (acceptance 2 + 4) ---
+  {
+    const dpNow = readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ');
+    assert(
+      dpNow.includes('the **options considered**') &&
+        dpNow.includes('the **recommender**') &&
+        dpNow.includes('a **one-line rationale**') &&
+        dpNow.includes('an **enumeration of every ratified text consulted, with an explicit NONE-CONTRADICTS line per text**') &&
+        dpNow.includes('auditable coverage, not conclusions'),
+      'autonomy/D2 (ledger completeness): every prepared fork carries options + recommender + a one-line rationale + a NONE-CONTRADICTS line PER ratified text, and the copy states plainly that this is auditable COVERAGE, not conclusions (R3 recorded, not cleared)',
+    );
+    const MUST_ITEMS = [
+      'the decision would contradict or amend a RATIFIED spec, the constitution, a binding non-goal, or the locked vision',
+      'danger-surface authority expansion — new egress, credentials, secrets, data deletion, any outward action beyond the preview push',
+      'the rider judges the opposite case not weaker',
+      'council non-convergence on a load-bearing fork',
+      'anything irreversible (merge/publish/deploy — belt-and-braces, these modes never do them)',
+      'any decision touching the hostile-input surfaces, MECHANICALLY matched by path/identifier (detectors sanitizer, hostile fixtures, safety tiers, secret/path scans)',
+    ];
+    const missingMust = MUST_ITEMS.filter((t) => !dpNow.includes(t));
+    assert(
+      missingMust.length === 0 && dpNow.includes('**(f) stays separate from (b): it is the checkable member.**'),
+      `autonomy/D3: all SIX MUST-ESCALATE items ship VERBATIM as drafted, with (f) kept separate from (b) as the checkable member${missingMust.length ? ` [missing: ${missingMust.length}]` : ''}`,
+    );
+    assert(
+      dpNow.includes('ONE batched `AskUserQuestion` set') &&
+        dpNow.includes('`ACCEPT ALL RECOMMENDATIONS`') &&
+        dpNow.includes('rendered SEPARATELY and are UN-BUNDLEABLE from accept-all') &&
+        dpNow.includes('accepting all recommendations never answers a MUST item') &&
+        dpNow.includes("Record the owner's **override rate**"),
+      'autonomy/D3 (Shape B): the docket is ONE batched AskUserQuestion with an accept-all option, the MUST items are UN-BUNDLEABLE from it, and the override rate is recorded — that measured rate is the only evidence a later Shape-A upgrade could stand on',
+    );
+    assert(
+      dpNow.includes('judged by the same model whose recommendation is on the table') &&
+        dpNow.includes('narrower than the ten protected-path classes'),
+      'autonomy/D3: the list\'s KNOWN HONEST LIMITS are recorded and not cleared — same-model judgment on (a)/(c)/(d), and a list narrower than the ten protected-path classes',
+    );
+    assert(
+      dpNow.includes('with **`Status: DRAFT`** — always, in every mode') &&
+        dpNow.includes('**builds a spec only when its `Status:` line LEADS with `RATIFIED`**') &&
+        dpNow.includes('is the ratification of step 3 (so its `Status: RATIFIED` rewrite applies) and is also the launch trigger') &&
+        dpNow.includes('tap-gated grant — INERT until the answer'),
+      'autonomy/D5: the spec is written Status: DRAFT, /dev-loop builds only what its Status line says is RATIFIED, and the docket answer both RATIFIES (through step 3\'s Status rewrite — the same flip the interactive path takes, so the two paths cannot drift) and launches — a tap-gated grant that is inert until the answer',
+    );
+    assert(
+      /^allowed-tools:.*\bSlashCommand\b/m.test(readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8')),
+      'autonomy/D5: /dev-plan\'s allowed-tools carries SlashCommand — the grant the tap gates; without it the launch trigger could not fire even after the answer',
+    );
+  }
+
+  // --- the SEVER SENTENCE, verbatim, with the residual risk RECORDED ADJACENT (D7/R1) ---
+  {
+    const dpRaw = readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8');
+    const SEVER =
+      '   draft. (This severs the injection channel: repo text → generated personas → council →\n' +
+      '   spec → background implementer prompts is a laundering path; owner ratification cuts it.)\n';
+    assert(
+      dpRaw.includes(SEVER),
+      '/dev-plan: the injection-sever sentence is UNCHANGED, byte-for-byte (acceptance 5 — it is not reworded, softened, or moved)',
+    );
+    const after = dpRaw.slice(dpRaw.indexOf(SEVER) + SEVER.length).replace(/\s+/g, ' ').trim();
+    assert(
+      after.startsWith('**RESIDUAL RISK, recorded not cleared:**') &&
+        after.includes('thoroughness-as-theater') &&
+        after.includes('the sever is what the ratification IS, this is what it COSTS'),
+      '/dev-plan: R1 (rubber-stamp pressure) is RECORDED IMMEDIATELY ADJACENT to the sever sentence — beside it, never substituted for it',
+    );
+  }
+
+  // --- NO TIMEOUT-INTO-CONSENT, asserted by ABSENCE across the whole surface ---
+  {
+    const TIMEOUT_CONSTRUCT = /\bsetTimeout\s*\(|\bsetInterval\s*\(|\bclearTimeout\s*\(|AbortSignal\s*\.\s*timeout/;
+    const surfaces = [
+      ['the emitted workflow', readFileSync(join(tmp, `.claude/workflows/${man.repo_name}-dev-loop.js`), 'utf8')],
+      ['/dev-loop', readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8')],
+      ['/dev-plan', readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8')],
+    ];
+    const timed = surfaces.filter(([, t]) => TIMEOUT_CONSTRUCT.test(t)).map(([n]) => n);
+    assert(
+      timed.length === 0,
+      `autonomy: NO timeout construct exists anywhere in the emitted workflow or in either command — absence is never converted into consent, and the binding non-goal is checked by SCANNING for the construct rather than by trusting the prose${timed.length ? ` [found in: ${timed.join(', ')}]` : ''}`,
+    );
+    assert(
+      surfaces.every(([, t]) => /timeout/i.test(t)) &&
+        /No timeout converts absence into consent|NO TIMEOUT converts absence into consent/.test(surfaces[1][1]) &&
+        /NO TIMEOUT converts absence into consent/.test(surfaces[2][1]),
+      'autonomy: both commands and the workflow SAY the rule out loud — the absence scan proves there is no clock, and this proves the reader is told there is none',
+    );
+  }
+
+  // --- D4: a PARK SERIALIZES through the SAME `attestationFrom` a completed run uses ---
+  {
+    // A PRE-BUILD park: no worktree, so the record goes to the owner's checkout under the
+    // machine-IGNORED `history/parks/`. `preBuildPark` is what routes it there.
+    const parkRes = attestationFrom({
+      ...attBase, verdict: 'PARKED', resolveMode: 'clean', autonomyMode: 'overnight',
+      preBuildPark: true,
+      modeRefusals: [{ source: 'the spec text', claimed: 'headless', reason: 'file text can never raise autonomy' }],
+      docket: { entries: 4, overrides: 1, mustItems: 2, acceptedAll: false, overrideRate: 0.25 },
+      parked: {
+        state: 'PARKED',
+        reason: 'the spec is still marked Status: DRAFT',
+        question: 'Ratify the spec before this feature is built.',
+        context: 'worktree at /tmp/wt/slug\nAWS_SECRET_ACCESS_KEY=abc123def456',
+        recordSerialized: true,
+      },
+    }, null, attStamps, ['/tmp/wt']);
+    const parkRec = JSON.parse(parkRes.json);
+    assert(
+      parkRes.relPath === `.claude/veriloop/history/parks/${attStamps.ts}.json` &&
+        parkRec.verdict === 'PARKED' && parkRec.autonomyMode === 'overnight' &&
+        parkRec.parked && parkRec.parked.state === 'PARKED' &&
+        parkRec.parked.question === 'Ratify the spec before this feature is built.' &&
+        parkRec.parked.recordSerialized === true &&
+        parkRec.modeRefusals.length === 1,
+      'autonomy/D4 (acceptance 3): a PRE-BUILD park serializes through the SAME redacted builder a completed run uses — PARKED state, the pending question, `recordSerialized: true` and the surfaced refusals all land in it — and it routes to `history/parks/`, not the tracked `history/` root, because it is the one record written into the OWNER\'S checkout',
+    );
+    // `parks/` must be IGNORED wherever the bundle installs it, for the same reason
+    // `dry-runs/` is: `.claude/veriloop/history/` is a tracked, protected-path directory and
+    // a park must not leave an untracked file for a later `git add -A` to sweep up.
+    assert(
+      readFileSync(join(tmp, '.gitignore'), 'utf8').includes('.claude/veriloop/history/parks/'),
+      'autonomy/D4: the machine-owned .gitignore block ignores `.claude/veriloop/history/parks/` — the pre-build park writes into the owner\'s checkout, and this is what keeps it out of `git status` and out of an unrelated commit',
+    );
+    assert(
+      !('answeredEntries' in parkRec.parked),
+      'autonomy/D4: the park record carries NO `answeredEntries` field — there is no resume path in this workflow, so an always-empty array would have documented a mechanism that does not exist. "Answered entries are never re-opened" holds because the answers live in the RATIFIED SPEC the docket tap produced',
+    );
+    assert(
+      parkRec.parked.context === 'worktree at %REPO%/slug',
+      'autonomy/D4: REDACTION applies to the park\'s context exactly as to every other string — the known root becomes the inert %REPO% sentinel and the secret-shaped line is dropped whole (constitution rule 7)',
+    );
+    // A RUN-TIME park (PARK-TERMINAL) rides the run's ORDINARY record, whose top-level
+    // `verdict` is the GATE's verdict — FAIL, not PARKED. Without a top-level
+    // `terminalState` a reader grepping history for a parked run would find only the
+    // pre-build parks, which is exactly the hole this field closes.
+    const termRes = attestationFrom({
+      ...attBase, verdict: 'FAIL', resolveMode: 'clean', autonomyMode: 'overnight',
+      parked: { state: 'PARKED', reason: "the gate's final verdict is FAIL after the fix budget", question: 'How should this run proceed?', context: 'worktree preserved', recordSerialized: true },
+    }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']);
+    const termRec = JSON.parse(termRes.json);
+    assert(
+      termRes.relPath === `.claude/veriloop/history/${attStamps.ts}.json` &&
+        termRec.verdict === 'FAIL' && termRec.terminalState === 'PARKED',
+      'autonomy/D4: a PARK-TERMINAL record keeps the GATE\'s verdict (FAIL) at top level and reports `terminalState: "PARKED"` beside it — the honest verdict is preserved AND parked runs stay greppable, which a `verdict: "PARKED"` grep alone would have missed',
+    );
+    // acceptance 4 — the docket record reaches the attestation, with the rate intact.
+    assert(
+      parkRec.docket && parkRec.docket.entries === 4 && parkRec.docket.overrides === 1 &&
+        parkRec.docket.overrideRate === 0.25 && parkRec.docket.acceptedAll === false,
+      'autonomy/acceptance 4: the DOCKET DECISION RECORD lands IN THE ATTESTATION — entries, overrides and the derived override rate — so the measurement the spec names as the only evidence for a Shape-A upgrade is machine-readable, not prose inside a spec file',
+    );
+    const noPark = JSON.parse(attestationFrom({ ...attBase, verdict: 'CONCERNS' }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+    assert(
+      noPark.autonomyMode === 'interactive' && noPark.parked === null && noPark.terminalState === null &&
+        noPark.docket === null && Array.isArray(noPark.modeRefusals) && noPark.modeRefusals.length === 0,
+      'autonomy/acceptance 1: a mode-absent record reports autonomyMode `interactive`, `parked: null`, `terminalState: null`, `docket: null` and an empty refusal list — every new field is inert on an ordinary run',
+    );
+  }
+
+  // --- the PARK PRESENTATION copy: what /dev-loop tells the owner about a park ---
+  // The first cut told the presenter there is NO brief on any park and that the record WAS
+  // serialized — both false for the two run-time parks, and the second is false precisely at
+  // the loud attestation park, whose reason for existing is that the write failed.
+  {
+    const dlNow = readFileSync(join(tmp, '.claude/commands/dev-loop.md'), 'utf8').replace(/\s+/g, ' ');
+    assert(
+      dlNow.includes('A **run-time** park (PARK-TERMINAL, or the loud attestation park) DOES return `brief`') &&
+        dlNow.includes('**Present the brief when it is there**') &&
+        dlNow.includes('**Never tell the owner a preview does not exist when `result.land.pushed` is true.**') &&
+        dlNow.includes('**False ⇒ say the record is MISSING**'),
+      '/dev-loop (park presentation): the copy tells the presenter to READ the facts — a run-time park DOES return a brief and must present it, `result.land.pushed` decides whether a preview exists, and `parked.recordSerialized` decides whether a record was written. No park may be presented as "nothing happened" when a preview was pushed, and no missing record may be reported as serialized',
+    );
+    assert(
+      dlNow.includes('`result.modeRefusals` is surfaced on EVERY run, parked or not') &&
+        dlNow.includes('the run that completes normally is the case most likely to hide one'),
+      '/dev-loop: D1\'s "REFUSED **AND SURFACED**" half reaches the owner on the ORDINARY path too, not only on a park — a laundering attempt caught on a run that otherwise passes is the case that most needs surfacing',
+    );
+    assert(
+      dlNow.includes('`args.feature` is **NOT** file text and is **not scanned**') &&
+        dlNow.includes('the mode is honored only from `args.mode`'),
+      '/dev-loop: the copy states that `args.feature` is the owner-typed invocation and is NOT scanned as file text — the doc matches the code, and the reason (a control that fires on its own happy path marks nothing) is given rather than assumed',
+    );
+    assert(
+      dlNow.includes('with exactly ONE exception, named here so it is not a surprise: a **pre-build park**') &&
+        dlNow.includes('`.claude/veriloop/history/parks/`') &&
+        dlNow.includes('That single ignored file is the whole exception'),
+      '/dev-loop: "never the owner\'s main checkout" now names its ONE exception — the pre-build park record, written to the machine-ignored `history/parks/` — instead of leaving the emitted docs contradicting the emitted code',
+    );
+    assert(
+      dlNow.includes('grep `terminalState: "PARKED"`, not `verdict`, to find parked runs') &&
+        dlNow.includes('The **loud attestation park** is the one that serializes NOTHING, by construction'),
+      '/dev-loop: the park-serialization copy is exact about all three shapes — `history/parks/` for a pre-build park, the run\'s own record (greppable by `terminalState`) for a PARK-TERMINAL, and NOTHING for the loud attestation park. The retired "every park serializes a record" was false for two of them',
+    );
+    assert(
+      dlNow.includes('`args.docket = { entries, overrides, mustItems, acceptedAll }`') &&
+        dlNow.includes('`docket=<entries>/<overrides>/<must>` token') &&
+        dlNow.includes('`<must>` is the third slot') &&
+        dlNow.includes('a field with no transport') &&
+        dlNow.includes('stays **`null`** — never zero') &&
+        dlNow.includes('**Counts only, never the question text.**') &&
+        dlNow.includes('never invent counts'),
+      '/dev-loop (acceptance 4): Step 2 plumbs `/dev-plan`\'s docket token into `args.docket` — counts only, omitted rather than invented when there was no docket — and the token carries THREE slots, because `mustItems` is a field the attestation records and a field with no transport arrives `null` on every real run',
+    );
+    // ACCEPTANCE 1, COUNTED. "Behaves exactly as before" was published over TWO deltas while
+    // naming one. The frontmatter grant was disclosed; the DRAFT refusal was not, and it is
+    // the one that changes what a `mode`-absent run BUILDS — `preBuildPark` returns `'draft'`
+    // before it ever looks at the mode. A disclosure that undercounts is worse than none: it
+    // reads as a completed audit. The executed predicate is asserted BESIDE the copy, so the
+    // doc cannot claim a split the code does not take.
+    assert(
+      mkMode({}, {}).preBuildPark('interactive', 'unratified', true) === 'draft' &&
+        dlNow.includes('with TWO disclosed deltas') &&
+        dlNow.includes('The **DRAFT refusal is mode-independent by design**') &&
+        dlNow.includes('is refused in EVERY mode') &&
+        dlNow.includes('present on every `/dev-plan` invocation, `mode`-absent ones included'),
+      '/dev-loop (acceptance 1, counted): the mode-absent disclosure names BOTH deltas — the frontmatter grant AND the mode-independent DRAFT refusal, which is the one that changes what a `mode`-absent run builds',
+    );
+    // The mode has ONE legitimate second arrival: `/dev-plan` Step 3.4's tap-gated launch,
+    // forwarding what the owner typed THERE. Without this clause, "the owner typed it in THIS
+    // invocation" reads as a prohibition on the only overnight path the bundle ships.
+    assert(
+      dlNow.includes("The one other way the mode legitimately arrives: `/dev-plan`'s tap-gated launch.") &&
+        dlNow.includes('the owner typed in THAT invocation') &&
+        dlNow.includes('still owner-typed, one hop back'),
+      '/dev-loop (mode arrival): the Mode section names the ONE other legitimate arrival — `/dev-plan`\'s tap-gated launch, carrying what the owner typed THERE — so "owner-typed in THIS invocation" does not read as a prohibition on the only overnight path that exists',
+    );
+  }
+
+  // --- /dev-plan: the RATIFICATION FLIP, the docket hand-off, and the scoped grant ---
+  {
+    const dpFlat2 = readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ');
+    // Step 3.1 writes every spec DRAFT and /dev-loop refuses a DRAFT — so WITHOUT this flip
+    // the mode-ABSENT path parks the run the owner just ratified. That break was patched on
+    // /dev-loop's confirm-and-go branch and missed here.
+    assert(
+      dpFlat2.includes("REWRITE THE SPEC FILE'S `Status:` LINE TO `**Status:** RATIFIED — BINDING (owner, <YYYY-MM-DD>)`") &&
+        dpFlat2.includes('in every mode, `mode`-absent included') &&
+        dpFlat2.includes('so `RATIFIED` must come FIRST, and the line must not also say DRAFT') &&
+        dpFlat2.includes('skipping this flip PARKS the very run the owner just ratified'),
+      '/dev-plan (D5, acceptance 1): the INTERACTIVE ratification rewrites the spec file to the exact stamp /dev-loop\'s POSITIVE predicate reads — `RATIFIED` LEADING the line — in every mode. Without it Step 3.1\'s unconditional `Status: DRAFT` plus /dev-loop\'s unconditional refusal would park every ordinary /dev-plan → /dev-loop hand-off, and a flip that buried RATIFIED mid-sentence would park it just as hard',
+    );
+    assert(
+      dpFlat2.includes('**`docket=<entries>/<overrides>/<must>`**') &&
+        dpFlat2.includes('how many MUST-ESCALATE items the docket carried') &&
+        dpFlat2.includes('the workflow writes the measured override rate into the attestation') &&
+        dpFlat2.includes('**in the spec AND in the launch call**'),
+      '/dev-plan (acceptance 4): the override rate is carried into the LAUNCH CALL as well as the spec — "either shape\'s override/decision record lands in the attestation" needs a machine-readable hand-off, and prose in a spec file is not one',
+    );
+    assert(
+      /^allowed-tools:.*SlashCommand\(\/dev-loop:\*\)/m.test(readFileSync(join(tmp, '.claude/commands/dev-plan.md'), 'utf8')),
+      'autonomy/D5 (security): the launch grant is SCOPED — `SlashCommand(/dev-loop:*)`, not a bare `SlashCommand` that could invoke anything. This command holds untrusted repo text in the same context as the grant, so the grant\'s reach is narrowed by the frontmatter, not only by prose',
+    );
+    assert(
+      dpFlat2.includes('**TWO honest exceptions to that, stated rather than buried.**') &&
+        dpFlat2.includes('the capability is present on **every** invocation, including `mode`-absent ones') &&
+        dpFlat2.includes('That inertness is **prose, not a mechanism.**') &&
+        dpFlat2.includes('a capability that is *instructed* not to fire, not one that *cannot*') &&
+        dpFlat2.includes('**(2) The DRAFT refusal is mode-independent by design.**') &&
+        dpFlat2.includes('does not say RATIFIED **in every mode**, `mode`-absent included'),
+      '/dev-plan (acceptance 1, honest disclosure): BOTH mode-absent deltas are stated out loud — frontmatter cannot see the mode, so the grant exists on every run and only prose holds it inert; and the DRAFT refusal fires in every mode, so Step 3.3\'s stamp is what keeps it off the ordinary hand-off. "Behaves exactly as before" is qualified where it is untrue, and COUNTED rather than rounded down to one',
+    );
+    assert(
+      dpFlat2.includes('under `mode=overnight` it asks nothing mid-run, batching every fork into one wake-up docket instead') &&
+        dpFlat2.includes('the questions do not disappear, they MOVE'),
+      '/dev-plan (D7, acceptance 5): the FRONTMATTER DESCRIPTION and the intro paragraph — the two most-read sentences, one of them shown by the command router without opening the file — are conditioned on the mode. No sentence claims the interview always asks mid-run',
+    );
+  }
+
+  // --- SELF-HOST: this repo's own COMMITTED commands carry the same copy ---
+  {
+    const selfDevPlan = readFileSync(join(here, '..', '.claude/commands/dev-plan.md'), 'utf8').replace(/\s+/g, ' ');
+    const selfDevLoop = readFileSync(join(here, '..', '.claude/commands/dev-loop.md'), 'utf8').replace(/\s+/g, ' ');
+    assert(
+      selfDevPlan.includes('**CARVE-OUT — a cap can NEVER convert a PARK into a default.**') &&
+        selfDevPlan.includes('rendered SEPARATELY and are UN-BUNDLEABLE from accept-all') &&
+        selfDevLoop.includes('**`mode=overnight` is honored ONLY when the owner typed it in THIS invocation.**') &&
+        selfDevLoop.includes('**leads with `RATIFIED`** and does not also say DRAFT') &&
+        selfDevLoop.includes('**PRECEDENCE — `mode=overnight` overrides that skip.**') &&
+        selfDevPlan.includes("REWRITE THE SPEC FILE'S `Status:` LINE TO `**Status:** RATIFIED — BINDING (owner, <YYYY-MM-DD>)`") &&
+        selfDevLoop.includes('`args.feature` is **NOT** file text and is **not scanned**'),
+      'autonomy/self-host: this repo\'s COMMITTED /dev-plan and /dev-loop carry the mode copy, the cap carve-out, the un-bundleable MUST list, the DRAFT refusal, the interview=false precedence, the ratification Status flip and the args.feature carve-out — the bundle was regenerated with the change, not just the renderer',
+    );
+  }
 
   rmSync(tmp, { recursive: true, force: true });
 }

@@ -1,5 +1,153 @@
 # Changelog
 
+## Unreleased — headless overnight-prep (Shape B)
+
+### headless autonomy — Shape B, overnight-prep (`mode=overnight`)
+
+Ratified spec: `.claude/veriloop/specs/headless-autonomy.md` — RATIFIED, BINDING, in full
+view of open risks R1–R5. The owner chose **Shape B now, Shape A earned later**: the
+overnight stretch runs unattended, every fork arrives at wake-up as ONE batched docket with
+an `ACCEPT ALL RECOMMENDATIONS` option, and **every decision stays owner-taken**. Each
+docket records the owner's **override rate**; if that measured rate stays near zero over N
+runs it is the evidence — and the only evidence — a later Shape-A upgrade could stand on.
+`mode=headless` is reserved and refused until such an amendment exists.
+
+**File text can never raise autonomy (D1).** `mode=overnight` is honored ONLY from the
+owner-typed invocation. A `mode=` token found in file text — a spec body, `interview.json`,
+a PR body — is **REFUSED AND SURFACED**: recorded (deduped per source and claim), logged,
+carried into the attestation, presented to the owner on **every** run and not just on a park,
+never honored. `args.feature` is deliberately NOT scanned: it is `$ARGUMENTS`, the owner's
+typed invocation and the one channel D1 trusts, so it necessarily contains the
+`mode=overnight` the owner typed — scanning it made every legitimate overnight run record a
+false refusal of its own mode, which is an alarm that cannot mark the abnormal run.
+`interview.autonomy` may say `interactive` and nothing else; any other value **fails the
+build**, naming the rule. Nothing is emitted into the workflow config for autonomy at all —
+the `veriloop:autonomy` region takes `VERILOOP` as a parameter and never names it, so the
+guarantee is proved by executing the region, not by a comment, and there is no new
+manifest↔workflow parity row to diverge. (An accepted `interactive` does land in the
+manifest's `interview_answers`, like every interview key; that is the re-read path the assert
+runs against again on the next build.) This generalizes the auto-merge dial's D2 (args may
+lower, never raise) one layer down, to the file layer.
+
+**`/dev-loop` builds a spec only when its `Status:` line SAYS it is ratified (D5), in every mode.**
+Until now the loop adopted any on-disk spec as BINDING, so an un-ratified draft could be
+laundered into the binding corpus. `/dev-plan` now writes every spec as DRAFT, and
+ratification — the interactive tap or the docket answer — **rewrites the file's `Status:` line
+to `RATIFIED`**, which is what keeps the ordinary `/dev-plan` → `/dev-loop` hand-off working.
+Under `mode=overnight` that same answer is also the launch trigger: a **tap-gated grant,
+inert until the answer**, which is why `/dev-plan` gained `SlashCommand(/dev-loop:*)` —
+scoped to that one command — and nothing else. Stated plainly rather than implied:
+frontmatter cannot see the mode, so that grant exists on **every** invocation, and only prose
+holds it inert.
+
+The predicate is **POSITIVE**, and the inversion is the point. The first cut asked "does this
+look like a DRAFT?" — and a negative test has to enumerate every way English can mean *not
+ratified*. It missed the first one it met: `**Status:** DRAFT — NOT RATIFIED`, the verbatim
+status line of this repo's own only real draft, BUILT, because the predicate excused any line
+that also said RATIFIED. Buildable now means the **first non-blockquoted** `Status:` line
+**leads with the state token `RATIFIED`** and does not also say DRAFT. A `DRAFT`, a
+`PENDING RATIFICATION`, a `SUPERSEDED`, an `EXECUTED UNDER OWNER DELEGATION` or a typo'd
+`RTAIFIED` are all the same answer — refused, in every mode; every one of them BUILT under the
+negative form. Blockquoted lines are not status lines (`>` is excluded from the leading class),
+so a `> Status: RATIFIED` decoy can neither shield a real `**Status:** DRAFT` below it nor
+satisfy the predicate by itself. Two costs, recorded rather than left to be found: a genuinely
+ratified spec whose status line also mentions a past draft parks — one word fixes it, and that
+is the direction to be wrong in — and "first" is taken literally over a deliberately permissive
+leading class, so a `Status:` line sitting in fenced, bulleted, or comment-interior text above the
+real one is not distinguished from it (only `>` is excluded).
+A spec with **no** `Status:` line is the one decision that **splits by mode**: an overnight run
+PARKS on it, because unattended ambiguity has nobody to ask and must fail safe, while an
+interactive or `mode`-absent run builds it exactly as before — eight of this repo's eighteen
+specs predate the convention, and refusing them interactively would break acceptance 1.
+Naming the consequence rather than discovering it later: the inversion newly refuses
+`specs/resolution-pass-2026-08-17.md`, whose status line reads `EXECUTED UNDER OWNER
+DELEGATION`; the selftest pins that file by name.
+
+**PARK semantics, and no clock anywhere (D4/D6).** A run that reaches a boundary it may not
+cross stops, records the pending question with its context, and WAITS. No spec under
+`mode=overnight` ⇒ PARK (this **supersedes** the `args.interview = false` skip, and the docs
+state the precedence). A spec whose `Status:` line does not say RATIFIED ⇒ PARK, in every mode,
+before the plan phase — no worktree, no agents. A spec with NO `Status:` line ⇒ PARK under
+`mode=overnight` only.
+A final `FAIL` or a no-progress halt ⇒ **PARK-TERMINAL**: the worktree is preserved and there
+is no autonomous re-plan. An attestation write that cannot be confirmed ⇒ a loud park (the 529
+precedent). A park is **terminal**: there is no resume path, so re-invoking is a fresh run and
+answered docket entries are never re-opened — because the answers live in the ratified spec,
+not in workflow state. (No `answeredEntries` field ships; an always-empty array would have
+documented a mechanism that does not exist.) **No timeout converts absence into consent** —
+asserted by scanning both commands and the emitted workflow for the construct, not by trusting
+the prose.
+
+**What a park actually serializes**, said exactly rather than as one comfortable rule. A
+**pre-build** park fires before any worktree exists, so its record is written into the owner's
+checkout under `.claude/veriloop/history/parks/` — the loop's one and only write into the main
+checkout, and machine-ignored (the `.gitignore` block gained the entry) so it never dirties
+`git status` in a tracked, protected-path directory. A **park-terminal** rides the run's
+ordinary `history/<ts>.json`, whose top-level `verdict` stays the *gate's* verdict; the new
+top-level `terminalState: "PARKED"` is what makes parked runs greppable. The **loud attestation
+park** serializes nothing, by construction — its reason for existing is that the write could not
+be confirmed — and reports `parked.recordSerialized: false`. Because that park fires after Land,
+it can sit on top of a run that really pushed a preview: the returned `ownerGate` and the
+`/dev-loop` presentation copy both read `land.pushed` and say so, and a run-time park returns
+its `brief` and gate history rather than suppressing them.
+
+**The docket measurement reaches the attestation (acceptance 4).** `/dev-plan` carries the
+owner's override rate into the launch call as a `docket=<entries>/<overrides>` token;
+`/dev-loop` turns it into `args.docket` (counts only, never question text); the workflow writes
+it into the record as `docket`, with the derived `overrideRate`. Malformed or absent degrades to
+`null` — an absent measurement, never a fabricated zero. The spec names that measured rate as the
+only evidence a Shape-A upgrade may stand on, so it had to be machine-readable rather than prose
+inside a spec file, on the `resolveMode` / `rawConcerns` / `confirmedConcerns` precedent.
+
+**A cap can never convert a PARK into a default (D4).** The `/dev-plan` question-cap copy
+gains a carve-out on **both** branches: the six MUST-ESCALATE items and the ratification /
+docket tap are EXEMPT from every cap and are always asked. "Proceed on best-effort defaults"
+survives, scoped to non-MUST items and nothing else — a `questions=1` run still parks on a
+MUST item and still ratifies.
+
+**What did NOT change.** `mode` absent ⇒ both commands behave as before, with the TWO
+disclosed exceptions above: `/dev-plan`'s frontmatter-level, `/dev-loop`-scoped `SlashCommand`
+grant, which no per-invocation condition can gate; and the DRAFT refusal, which is
+**mode-independent by design** — `/dev-loop` refuses an un-ratified spec in every mode, so
+`mode`-absent runs park on one too (D5 says "any spec still marked DRAFT", not "any spec in an
+overnight run"), with `/dev-plan`'s ratification stamp keeping it off the ordinary path. No merge
+authority: the future auto-merge dial is forced to effective OFF, and the docs say plainly
+that this is a documented obligation on a dial that does not exist in code yet, not an
+enforced one. Waivers stay human-only. No cross-model council (R2's named lever stays
+deferred). No new slash command, no routing-table or payload bytes moved — and the payload's
+"neither route writes code, so the owner gets a turn before anything is built" is re-pinned
+rather than reworded, because the launch grant is tap-gated and the owner's turn is what
+fires it. The injection-sever sentence is unchanged byte-for-byte, with R1's residual
+rubber-stamp-pressure risk **recorded immediately adjacent to it**, never substituted for it.
+
+<!-- veriloop:gate-figure -->
+**Gate count: 562 → 627.** The mode derivation is marker-sliced out of a freshly generated
+workflow (`veriloop:autonomy` and the new `veriloop:parkgates`, on the `veriloop:resolvemode`
+precedent) and EXECUTED: a config claiming overnight yields `interactive` while the owner-typed
+arg yields `overnight`; `headless` and every unrecognized value fall back to interactive; a
+`mode=` token in the spec body is refused with one deduped refusal per claim; the canonical
+typed `mode=overnight` invocation yields the mode with **zero** refusals (the false-alarm
+regression, pinned red/green); and an ordinary run records zero. The status predicate runs all
+three verdicts, plus five "DRAFT — NOT RATIFIED"-style phrasings that the first cut BUILT, five
+that say *neither* word (the inversion's own delta — all five BUILT under the negative form),
+the recorded cost of the positive form, a blockquoted decoy pinned in BOTH directions, the mode
+split on a status-less spec, and a sweep over this repo's whole real 18-spec corpus that must
+read 8 ratified / 8 status-less / exactly 2 un-ratified, named. The park **control flow** is
+executed, not just the values it reads: which park fires, in which mode, and that an interactive
+FAIL never park-terminals. The docket record derives its override rate and degrades to `null`
+rather than a fabricated zero. The build-time refusal is a real child process judged by exit
+code, in both directions, plus a check that an ACCEPTED value still emits no config key. The cap
+carve-out is asserted on the capped AND the uncapped branch. Park serialization goes through the
+real `attestationFrom` — redaction of the park's context, routing to `parks/`, the `.gitignore`
+entry that keeps it out of the owner's working tree, the top-level `terminalState` beside an
+honest `FAIL` verdict, and the absence of any `answeredEntries` field. The presentation copy is
+pinned too, since the failure it prevents is a lie told to the owner: present the brief when a
+run-time park returns one, read `land.pushed` before claiming no preview exists, and never
+report a record as serialized when `recordSerialized` is false. The no-timeout non-goal is a
+construct scan over three surfaces. Four previously pinned interview assertions were RE-PINNED
+to the mode branch rather than deleted — each of them would have stayed green through a build
+that dropped the new discipline.
+
 ## 0.6.0 — 2026-08-17
 
 Routing was measured at **72/72** across fresh, depth (~56k and ~129k tokens) and
@@ -153,7 +301,6 @@ to prevent. The directory git is asked about is `${REPO:?}`, not `$REPO`, becaus
 is a documented **no-op** — an unset or empty root would resolve to the cwd and give the same
 wrong answer by a second route, silently. `${REPO:?}` makes that case a loud shell failure.
 
-<!-- veriloop:gate-figure -->
 **Gate count: 481 → 562.** The fix loop had no assertions at all before this change: the
 predicate is now marker-sliced out of a freshly generated workflow (`veriloop:resolve`, the
 `verdictFrom` precedent) and EXECUTED against an inline case table — pass-through under the

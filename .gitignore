@@ -8,4 +8,5 @@ node_modules/
 # <<< veriloop:auto:start >>>
 .claude/veriloop/.backups/
 .claude/veriloop/history/dry-runs/
+.claude/veriloop/history/parks/
 # <<< veriloop:auto:end >>>

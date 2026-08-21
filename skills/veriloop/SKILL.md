@@ -178,6 +178,14 @@ Schema (every field optional):
                                     // /dev-loop qualify every SHOULD-FIX through an independent confirm
                                     // agent and extend the fix loop to the confirmed ones. Any OTHER
                                     // value FAILS THE BUILD — it is never silently ignored.
+  "autonomy": "interactive",        // the ONLY value a file may set, and the default when absent.
+                                    // Any other value — "overnight", "headless", a typo — FAILS THE
+                                    // BUILD, naming the rule: file text can never raise autonomy.
+                                    // `mode=overnight` is honored ONLY from the owner's typed
+                                    // /dev-loop or /dev-plan invocation, which no file can reach, so
+                                    // this key can lower/confirm the default and never raise it.
+                                    // It emits NOTHING into the workflow config (there is no
+                                    // autonomy channel there to read) — it is a build-time refusal.
   "phase_models": {                 // per-phase model — overrides the posture preset
     "plan"|"implement"|"review"|"checks"|"fix"|"land"|"report": "haiku"|"sonnet"|"opus"|"fable" },
   "phase_effort": {                 // per-phase reasoning effort
@@ -399,11 +407,43 @@ constitution edits are owner-only, by hand.
 background subagents with **no channel to ask the owner anything**. So `/dev-plan` (main
 session) does the recon, asks only the questions it cannot derive (NO fixed cap by default; a repo may bake one via `interview.question_cap` and `questions=<N>` overrides per run — skipped entirely
 when nothing is ambiguous), convenes the expert council, and writes
-`.claude/veriloop/specs/<slug>.md`, which the owner ratifies as BINDING. `/dev-loop`
-detects or confirms that spec (a trivial change gets a confirm-and-go, not a second
-interview) and passes it in as `args.spec`. The spec is then **binding**: the planner and
-implementer build to it, and a review lens treats contradicting an explicit decision as a
-BLOCKER.
+`.claude/veriloop/specs/<slug>.md` as **`Status: DRAFT`**; the owner's ratification stamps it
+BINDING **and rewrites that `Status:` line to `RATIFIED`**. `/dev-loop` detects or confirms
+that spec (a trivial change gets a confirm-and-go, not a second interview) and passes it in as
+`args.spec` — and **builds a spec only when its first non-blockquoted `Status:` line LEADS with
+`RATIFIED` and does not also say DRAFT**, in every mode, which is why the rewrite is not
+optional. The test is positive, so a `DRAFT`, a `PENDING`, a `SUPERSEDED` or a typo are all
+refused alike; a spec with **no** `Status:` line is refused under `mode=overnight` only. The spec is then **binding**: the planner and implementer build to
+it, and a review lens treats contradicting an explicit decision as a BLOCKER.
+
+**`mode=overnight` (Shape B, overnight-prep).** Honored ONLY from the owner-typed
+invocation; a `mode=` value found in file text is **refused and surfaced** (deduped, and
+surfaced to the owner on every run, not only on a park), and `interview.autonomy` may say
+`interactive` and nothing else (any other value fails the build). `args.feature` is the
+owner's typed `$ARGUMENTS`, not file text, and is deliberately not scanned. `mode=headless`
+is reserved. Under it the recon, council and premise-rider run unattended and every fork
+arrives at wake-up as ONE batched docket with an accept-all option, six un-bundleable
+MUST-ESCALATE items, and the owner's override rate recorded — in the spec AND carried into
+the launch call, so it reaches the attestation as a machine-readable `docket` measurement.
+The docket answer ratifies the spec (same `Status:` rewrite) and is the launch trigger: a
+tap-gated grant, inert until the answer, scoped to `SlashCommand(/dev-loop:*)`. Frontmatter
+cannot see the mode, so that grant is present on every `/dev-plan` invocation and only prose
+holds it inert; the command says so. The build defaults to `resolve=clean`, has no merge
+authority, keeps waivers human-only, and PARKS on: no spec (this **supersedes** the
+`args.interview = false` skip — the precedence is stated in the `/dev-loop` docs), a spec whose
+`Status:` line does not say RATIFIED (that one parks in every mode), a spec with no `Status:`
+line at all (this mode only), a final `FAIL` or a no-progress halt (park-terminal, worktree
+preserved, no autonomous
+re-plan), or an unconfirmed attestation write. A park is TERMINAL — no resume path, so
+answered entries are never re-opened because the answers live in the ratified spec. What is
+serialized differs by shape: a pre-build park writes to the owner's checkout under the
+machine-ignored `history/parks/` (the loop's only write there); a park-terminal rides the
+run's `history/<ts>.json` with `terminalState: "PARKED"` at top level; the loud attestation
+park serializes nothing and reports `recordSerialized: false`. **No timeout converts absence
+into consent.** With `mode` absent, both commands behave as before apart from TWO disclosed
+deltas: that frontmatter grant, and the DRAFT refusal, which is mode-independent by design —
+an un-ratified spec is refused in every mode, `mode`-absent included, so a `mode`-absent run
+parks on one too.
 
 ## Guardrails
 - The domain phase is the only one that reaches the network, and only through a
