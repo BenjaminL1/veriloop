@@ -1,0 +1,34 @@
+{
+  "ts": "2026-08-22T04-38-19Z",
+  "feature": "resolve=clean observation period — HAND-DRIVEN RE-GATE after owner rulings of 2026-08-21 (spec: .claude/veriloop/specs/resolve-clean-observation-period.md, sha256 4df32b88…)",
+  "repo": "veriloop",
+  "emittedBy": "regate",
+  "resolveMode": "blockers",
+  "verdict": "PASS",
+  "tier": "high",
+  "confirmPromptHash": "8b5c2626a40fba4db563f92a26f27de098aa3fdc28770b5a369c9b34943a8f47",
+  "routing": { "review": "opus", "checks": "session (hand)", "fix": "opus" },
+  "checks": [
+    { "name": "lint", "command": "npm run lint", "exit": 0, "result": "pass", "tail": "31 ok, 0 warn, 0 fail" },
+    { "name": "test", "command": "npm run test", "exit": 0, "result": "pass", "tail": "676 ok, 0 failed" },
+    { "name": "counter", "command": "node scripts/count-window.mjs --repo . --main main", "exit": 0, "result": "pass", "tail": "clean output" }
+  ],
+  "blockers": [],
+  "concerns": [],
+  "waived": [],
+  "gateHistory": [
+    { "phase": "workflow gate 1", "verdict": "FAIL", "blockers": 7, "concerns": 9 },
+    { "phase": "workflow fix 1", "verdict": "FAIL", "blockers": 2, "concerns": 9 },
+    { "phase": "workflow fix 2 (no-progress halt, owner escalation)", "verdict": "FAIL", "blockers": 4, "concerns": 6 },
+    { "phase": "owner rulings 2026-08-21 + remediation pass", "verdict": "n/a", "blockers": 0, "concerns": 0 },
+    { "phase": "re-gate lenses (baseline PASS-with-conditions / security PASS / drift NO-GO on 1 docs blocker)", "verdict": "CONCERNS", "blockers": 1, "concerns": 8 },
+    { "phase": "final batch (8 items, each lens-specified) + re-check", "verdict": "PASS", "blockers": 0, "concerns": 0 }
+  ],
+  "lensDispositions": "All four original blockers verified resolved by three independent lenses; drift's README blocker fixed and PINNED by a both-directions selftest assertion; preSpec exact-count pin replaced with membership+property form; quotePath and maxBuffer parser fixes with the newline/quote residual recorded in count-window's HONEST LIMIT list; countability predicate hoisted to one implementation in lib/util.mjs; segment table segments on consecutive key runs. Owner-only items OPEN and surfaced, not cleared: four rule-8 citation numerals in constitution.md + drift.overrides.md at margin 1; two spec-text premises corrected by the build (routing field never pre-existed on records; grandfathering is empirical-opener, not calendar) awaiting owner acknowledgment.",
+  "fixPasses": 3,
+  "branch": "feat/resolve-clean-observation-period",
+  "baseSha": "949d82afaed113815021c38a0e6a097a4fa1d927",
+  "headSha": "949d82afaed113815021c38a0e6a097a4fa1d927",
+  "land": null,
+  "note": "First record written under the D3 hand-record procedure. Written by the interactive session that ran the re-gate; this record carries emittedBy + both D7 window-key axes and is expected to be the empirical WINDOW OPENER; resolveMode blockers makes it NON-COUNTABLE toward N by construction."
+}
