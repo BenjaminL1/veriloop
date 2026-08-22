@@ -386,7 +386,15 @@ bounded auto-fix of **blockers** (≤3 passes, stop on no-progress) → docs syn
 branch/preview, **STOP before merge** (owner gate). Waivers are human-only (`args.waive`);
 an agent may never waive its own finding.
 
-**`args.resolve` (default `"blockers"` — the shape above, unchanged).** With
+**`args.resolve` — the per-run override; the DEFAULT is `interview.json`'s `resolve_default`,
+owned at build time by `scripts/generate.mjs:779 buildResolveDefault` — which supplies
+`blockers` when the key is absent and FAILS THE BUILD on any other value — never a constant.**
+A bundle generated with `resolve_default: "blockers"` behaves
+exactly as the shape above; one generated with `"clean"` pays the per-drive confirm fan-out
+described below on every un-argumented run, and has different verdict semantics. Do not state
+the default from memory — the generated `/dev-loop` command derives it from the config
+(constitution rule 9) and is the surface that says what a bare run does. **This repo's own
+bundle ships `resolve_default: "clean"`.** With
 `resolve: "clean"` each SHOULD-FIX first goes to a **fresh independent confirm agent**
 (one finding + the diff, never another lens's agreement); only confirmed concerns count
 toward the verdict, and the fix loop extends to the confirmed, non-pre-existing,
@@ -434,7 +442,10 @@ authority, keeps waivers human-only, and PARKS on: no spec (this **supersedes** 
 `Status:` line does not say RATIFIED (that one parks in every mode), a spec with no `Status:`
 line at all (this mode only), a final `FAIL` or a no-progress halt (park-terminal, worktree
 preserved, no autonomous
-re-plan), or an unconfirmed attestation write. A park is TERMINAL — no resume path, so
+re-plan). An unconfirmed attestation write also parks loudly — but that one parks in EVERY
+mode, not just this one, and its record is committed on the feature branch for every non-dry
+run regardless of land outcome (`resolve-clean-observation-period.md` D1/D2, 2026-08-21). A
+park is TERMINAL — no resume path, so
 answered entries are never re-opened because the answers live in the ratified spec. What is
 serialized differs by shape: a pre-build park writes to the owner's checkout under the
 machine-ignored `history/parks/` (the loop's only write there); a park-terminal rides the

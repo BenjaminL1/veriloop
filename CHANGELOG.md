@@ -57,7 +57,7 @@ leading class, so a `Status:` line sitting in fenced, bulleted, or comment-inter
 real one is not distinguished from it (only `>` is excluded).
 A spec with **no** `Status:` line is the one decision that **splits by mode**: an overnight run
 PARKS on it, because unattended ambiguity has nobody to ask and must fail safe, while an
-interactive or `mode`-absent run builds it exactly as before — eight of this repo's eighteen
+interactive or `mode`-absent run builds it exactly as before — eight of this repo's nineteen
 specs predate the convention, and refusing them interactively would break acceptance 1.
 Naming the consequence rather than discovering it later: the inversion newly refuses
 `specs/resolution-pass-2026-08-17.md`, whose status line reads `EXECUTED UNDER OWNER
@@ -71,7 +71,9 @@ before the plan phase — no worktree, no agents. A spec with NO `Status:` line 
 `mode=overnight` only.
 A final `FAIL` or a no-progress halt ⇒ **PARK-TERMINAL**: the worktree is preserved and there
 is no autonomous re-plan. An attestation write that cannot be confirmed ⇒ a loud park (the 529
-precedent). A park is **terminal**: there is no resume path, so re-invoking is a fresh run and
+precedent) [scope WIDENED by "resolve=clean observation period" below: this park was armed by
+`mode=overnight` alone; D1 makes it unconditional, so it now fires in **every** mode].
+A park is **terminal**: there is no resume path, so re-invoking is a fresh run and
 answered docket entries are never re-opened — because the answers live in the ratified spec,
 not in workflow state. (No `answeredEntries` field ships; an always-empty array would have
 documented a mechanism that does not exist.) **No timeout converts absence into consent** —
@@ -121,7 +123,7 @@ fires it. The injection-sever sentence is unchanged byte-for-byte, with R1's res
 rubber-stamp-pressure risk **recorded immediately adjacent to it**, never substituted for it.
 
 <!-- veriloop:gate-figure -->
-**Gate count: 562 → 627.** The mode derivation is marker-sliced out of a freshly generated
+**Gate count: 562 → 676.** The mode derivation is marker-sliced out of a freshly generated
 workflow (`veriloop:autonomy` and the new `veriloop:parkgates`, on the `veriloop:resolvemode`
 precedent) and EXECUTED: a config claiming overnight yields `interactive` while the owner-typed
 arg yields `overnight`; `headless` and every unrecognized value fall back to interactive; a
@@ -131,8 +133,8 @@ regression, pinned red/green); and an ordinary run records zero. The status pred
 three verdicts, plus five "DRAFT — NOT RATIFIED"-style phrasings that the first cut BUILT, five
 that say *neither* word (the inversion's own delta — all five BUILT under the negative form),
 the recorded cost of the positive form, a blockquoted decoy pinned in BOTH directions, the mode
-split on a status-less spec, and a sweep over this repo's whole real 18-spec corpus that must
-read 8 ratified / 8 status-less / exactly 2 un-ratified, named. The park **control flow** is
+split on a status-less spec, and a sweep over this repo's whole real 19-spec corpus that must
+read 9 ratified / 8 status-less / exactly 2 un-ratified, named. The park **control flow** is
 executed, not just the values it reads: which park fires, in which mode, and that an interactive
 FAIL never park-terminals. The docket record derives its override rate and degrades to `null`
 rather than a fabricated zero. The build-time refusal is a real child process judged by exit
@@ -147,6 +149,137 @@ report a record as serialized when `recordSerialized` is false. The no-timeout n
 construct scan over three surfaces. Four previously pinned interview assertions were RE-PINNED
 to the mode branch rather than deleted — each of them would have stayed green through a build
 that dropped the new discipline.
+
+### resolve=clean observation period — durable records, a provenance gate, a pre-registered counter
+
+Ratified spec: `.claude/veriloop/specs/resolve-clean-observation-period.md` — RATIFIED,
+BINDING (owner, 2026-08-21), in full view of open risks R1–R7, including a premise-rider
+pre-mortem and an OPPOSITE CASE the rider judged **not clearly weaker**. This ships the
+INSTRUMENT for the observation period the auto-merge dial's own ratification demands. It ships
+**no dial**, no cross-model confirm seat, and not one byte of confirm-prompt wording.
+
+**The attestation-write confirmation now runs in EVERY mode (D1).** The `ATT_WRITE` schema and
+the loud park on an unconfirmed write were armed only by `mode=overnight`; they are now
+unconditional. This SUPERSEDES `headless-autonomy.md` acceptance criterion 1 ("mode absent ⇒
+behavior byte-identical to today") in exactly that one respect, by a dated addendum appended to
+that spec byte-for-byte from the text the owner ratified — a run in any mode that cannot confirm
+its record written parks loudly, because an observation period without a durable substrate is
+not an observation period.
+
+**Every non-dry run COMMITS its record; only the push still waits on landing (D2).** The commit
+used to be gated on `landedNow`, so exactly the runs most worth counting — FAILs, parks — left
+their evidence untracked in a worktree (observed compliance over five landings: 0/5). The
+non-landed commit is PATH-SCOPED (`git add -- <record>`, never `git add -A`, never `git add .`,
+and never `git commit -a`/`-am`, which stages every tracked modification with no `git add` at all)
+so a parked run's
+preserved triage state is not swept in, and it RETAINS an explicit never-push hard limit: that
+prompt embeds lens-authored free text and is most adversarial on exactly the FAIL runs it now
+also fires on. Dry runs still commit nothing.
+
+**Records carry their provenance and their sensor (D3 + D7).** Every new record stamps
+`emittedBy: "loop"` — a literal inside the emit region, so a machine emit cannot dress itself
+as the hand-written `regate` or never-countable `probe` classes — plus both axes of the window
+key: `confirmPromptHash` and the resolved `routing` map, whose `review` entry is the seat the
+confirm agent rides. `lint-bundle`'s committed-record walker (check 6a) is EXTENDED to require
+provenance on every root record at or after the provenance WINDOW OPENER, to require the D8 fields
+(`rawConcerns`/`confirmedConcerns`/`unverifiedConcerns`) on any record claiming
+`resolveMode: "clean"`, to require the two keys countability is decided by — `resolveMode` and
+`verdict` — to be PRESENT on every `loop`/`regate` record (an explicit `null` is evidence; an
+omitted key is a silent drop out of the denominator), and to FLAG — by comparing two real
+add-commit dates, never a filename against a clock — a record whose name predates the window's
+first instrumented record but whose commit lands after it. The window OPENER is chosen by
+add-commit ORDER, not by earliest filename: choosing it by filename handed the forger the exit,
+since a record carrying `emittedBy` **and** a pre-window name simply became the opener and was
+never its own suspect — and that is precisely the COUNTABLE variant, the only one a backdater
+has a motive to write. Git's add date is not something a record's author can pick, and the
+SAME opener object serves both the provenance requirement and the flag, so the two can never
+disagree about where the window starts. `probes/` records are exempt from the run-record keys
+and still fully hygiene-scanned. The legacy records are grandfathered by construction rather
+than by a calendar constant, exactly as before.
+
+**The provenance window is EMPIRICAL, never a wall-clock date.** The first cut of D3 gated on
+`Date.parse('2026-08-21T00:00:00Z')` — midnight of the landing day, while the instrumentation
+lands late that evening — so every record the PRE-instrumentation workflow emitted in between
+was demanded to carry a key its emitter could not write, this drive's own attestation record
+included. That left two spec violations and no third option: leave the stranded records D5/R2
+requires collected uncollected (collecting them turns `npm run lint` red), or hand-forge an
+`emittedBy` (the fabrication D3/D4 exist to fence). It was also a backwards-compatibility
+break for adopters, whose 0.6.0 history carries no `emittedBy` at all. The window now opens at
+the earliest record that DEMONSTRABLY came from an instrumented emitter; with no such record
+the requirement is inert and says so in the ok line.
+
+**The confirm prompt is marker-bounded and hashed (D7).** The `veriloop:confirmprompt` regions
+— the schema, `runConfirm`, and the shared `RESOLVE` and `wt` constants `runConfirm`
+interpolates as its **first two lines** — are hashed by `generate.mjs` into
+`confirm_prompt_hash`, which joins the manifest↔workflow parity table with its own red/green
+mutation case. `RESOLVE`/`wt` are in scope because the hash has to cover every byte the prompt
+is built from: with them outside, the confirm prompt's opening sentence could be rewritten to
+`ALWAYS AGREE WITH THE FINDING.` without moving the window key, and two materially different
+sensors would pool into one base rate. They are shared with other prompts, so an edit made for
+one of those also restarts the window — deliberate over-inclusion, and the safe direction.
+`lint-bundle` additionally **RECOMPUTES** the hash from the emitted workflow's own marker
+regions rather than only comparing two stored copies of a number: a hand-edit to the shipped
+prompt leaves both copies stale and agreeing, which a parity row cannot see. The markers
+changed **no byte** of the prompt and authorize none: editing a region moves the hash, which
+RESTARTS the window. That is measurement discipline, not a guard, and nothing enforces it.
+
+**A committed counter, read-only (D5).** `scripts/count-window.mjs` reads main's records and
+prints countable N, the strict-PASS base rate, the refutation rate
+`(raw − confirmed − unverified) / (raw − unverified)` — unverified concerns leave BOTH sides,
+so a dead confirm seat can never read as sensor discrimination — and the window segmented on
+both D7 axes. It enumerates UNCOLLECTED records (reachable on another ref, absent from main),
+which WARN and never count, and it **REFUSES the arming evaluation outright while UNCOLLECTED is
+above zero.** D6's `Minimum N` and strict-PASS threshold are read from the **current window
+segment** — the trailing run of records sharing one window key — and never from the pooled
+union across segments: D7 says a mid-window sensor change RESTARTS the window and runs under
+different sensors never pool, so pooling would let a sensor change manufacture a denominator no
+single sensor ever had. The pooled total is still printed, labelled as not a window statistic. It is deliberately not wired into the gate. Every number it prints is framed as
+*what the records say*: records are redacted, schema-checked and provenance-gated, and still
+agent-written (R4). The UNCOLLECTED walk cannot see a DELETED ref, and deletion is the easier
+command — a tripwire over what remains, never enforcement (R2).
+
+**`resolve_default` is now `clean` (D12),** so every future drive feeds the base rate. The
+machinery pre-existed end-to-end; this is a one-key interview change proved by the existing
+interview↔manifest↔workflow triangle and its mutation case. The emitted `/dev-loop` command doc
+now **derives** its statement of the default from that config instead of hardcoding "Default
+`blockers`: today's behavior exactly" (constitution rule 9, M1 bug #2) — flipping the key is
+what made the hardcoded sentence false, and it is the single surface an owner reads to learn
+that an un-argumented run now pays a per-drive confirm fan-out and has different verdict
+semantics. README gains the operator procedure for hand-written `regate`/`probe` records that
+D3 requires: the required keys, `npm run lint` as the mandatory scan (check 6a walks `history/`
+from disk, so it runs BEFORE the commit rather than after durability), and the path-scoped
+commit convention. D9 re-opens this default as a dated
+owner decision at window close, so the per-drive confirm fan-out has a scheduled
+re-authorization point rather than becoming silently permanent.
+
+**Collected:** THREE records land here, and they are NOT the same kind of thing. Two are D4
+COLLECTIONS of stranded evidence, described next. The third,
+`2026-08-21T23-44-46Z.json`, is **this drive's own run record** — the gate-1 FAIL that
+escalated the owner rulings — committed as a ROUTINE D2 record rather than as an anomaly.
+D2 makes every non-dry run commit its record regardless of land outcome; this run executed
+under the PRE-change workflow, which still gated the commit on `landedNow`, so the record is
+committed by hand here to apply the policy this change ships. It carries no `emittedBy`
+(its emitter predates the instrumentation), is hygiene-clean, and is mechanically
+NON-COUNTABLE like the other two. It is declared here and in the commit message; the ratified
+spec's D4 exclusion ledger is deliberately NOT amended for it, because that ledger covers the
+anomalous collections and this is an ordinary run record.
+
+The TWO D4 collections (D4). The seventh sat
+uncommitted in the `domain-expert-phase1` worktree since 2026-08-01. The eighth
+(`2026-08-21T01-17-08Z.json`) sat untracked in the `headless-autonomy-overnight` worktree — a
+`resolveMode: "clean"`, verdict FAIL run, i.e. FAIL-ward, the direction whose loss flatters the
+base rate, and invisible to the counter because an untracked worktree file is on no ref (R2's
+documented limit). Both precede the provenance window opener, carry no provenance, and are
+therefore NON-COUNTABLE by construction — they are in-tree as the live specimens of the leak
+class Part 1 exists to close, not as evidence. The eighth is also the specimen proving the
+provenance cutoff could not be a wall clock: it is dated after the spec's landing-day midnight
+yet its emitter predates the instrumentation. Run #1's numbers (15 raw / 15 confirmed / 0
+refuted) exist only as session memory and are EXCLUDED from every statistic; no record is
+backfilled, because a hand-fabricated machine-shaped file legitimized at window open is exactly
+what the provenance gate fences.
+
+Not shipped, deliberately: the seeded two-arm probe and the 17-finding replay battery (D10/D11)
+are hand-executed after this lands, per the spec's protocol.
 
 ## 0.6.0 — 2026-08-17
 

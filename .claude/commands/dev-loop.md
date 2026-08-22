@@ -53,7 +53,9 @@ Under `mode=overnight`:
   RATIFIED ⇒ PARK (that one refuses in EVERY mode); a spec with NO `Status:` line ⇒ PARK **under
   this mode only** — unattended ambiguity fails safe, and an interactive run builds it as before; a final
   `FAIL` or a no-progress halt ⇒ **PARK-TERMINAL** with the worktree preserved and no autonomous
-  re-plan; an attestation that cannot be confirmed written ⇒ park loudly. A park is **TERMINAL** —
+  re-plan; an attestation that cannot be confirmed written ⇒ park loudly — **that last one in
+  EVERY mode**, not only this one, and it is the one park point this mode did not introduce.
+  A park is **TERMINAL** —
   there is no resume path in the workflow, so re-invoking is a fresh run, and answered docket
   entries are never re-opened because the owner's answers live in the **ratified spec** the
   docket tap produced, not in workflow state.
@@ -158,8 +160,9 @@ It **STOPS before merge/deploy** — that is the owner gate.
 - `args.waive = ["substring", ...]` — human waiver: downgrade a matching blocker to WAIVED. An agent
   may never waive its own finding.
 - `args.spec = "..."` — the spec from step 1 (binding on the planner, implementer, and reviewers).
-- `args.resolve = "blockers" | "clean"` — how far the loop resolves findings. **Default `blockers`:
-  today's behavior exactly** — the fix loop runs on FAIL only and concerns are reported, not qualified.
+- `args.resolve = "blockers" | "clean"` — how far the loop resolves findings. **This repo's default is
+  `clean`** (`resolve_default` in `.claude/veriloop/interview.json`; change it there and regenerate). `blockers`
+  runs the fix loop on FAIL only and reports concerns without qualifying them.
   `clean` sends every SHOULD-FIX to a fresh **independent confirm agent** first (blockers are never
   qualified away), counts only confirmed concerns toward the verdict, and extends the fix loop to the
   confirmed, non-pre-existing, non-waived ones. The attestation records the raw AND confirmed counts,
@@ -185,8 +188,13 @@ It **STOPS before merge/deploy** — that is the owner gate.
   ⇒ PARK (superseding `args.interview = false`), a spec whose `Status:` line does not say
   RATIFIED ⇒ PARK (that one in every mode), a spec with NO `Status:` line ⇒ PARK (this mode
   only), `FAIL` or a no-progress halt ⇒ PARK-TERMINAL with the worktree preserved and no
-  autonomous re-plan, an unconfirmed
-  attestation write ⇒ a loud park. A pre-build park serializes to `history/parks/<ts>.json`
+  autonomous re-plan.
+  **An unconfirmed attestation write ⇒ a loud park in EVERY mode** — that park was introduced
+  here as overnight-only and is no longer gated to this flag
+  (`resolve-clean-observation-period.md` D1, 2026-08-21): the observation period needs a
+  durable record whether or not anybody is awake, and the record is now COMMITTED on the
+  feature branch for every non-dry run, landed or not — only the push still waits on landing.
+  A pre-build park serializes to `history/parks/<ts>.json`
   (machine-ignored, in the owner's checkout); a PARK-TERMINAL rides the run's own
   `history/<ts>.json`, which carries `terminalState: "PARKED"` at top level; the loud
   attestation park serializes nothing and says so via `parked.recordSerialized: false`. Every

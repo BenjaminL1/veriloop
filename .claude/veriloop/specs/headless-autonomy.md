@@ -172,3 +172,15 @@ shape of D1, never its file-text prohibition.
 non-goals). The payload/generator implementation of this extension lands only after the
 window closes and its memo is written. Until then, `mode=overnight` typed in the
 invocation remains the only trigger.
+
+## Addendum — 2026-08-21: attestation-write confirmation extends to every mode
+(owner-ratified via `resolve-clean-observation-period.md`)
+
+Acceptance criterion 1 of this spec ("Mode absent ⇒ behavior byte-identical to today")
+is SUPERSEDED in exactly one respect: the attestation-write confirmation (the ATT_WRITE
+schema + the loud park on an unconfirmed write), introduced here as overnight-only, now
+runs in EVERY mode, and the attestation record is committed on the feature branch for
+every non-dry run regardless of land outcome. Authority: the owner's ratification of
+`resolve-clean-observation-period.md` (2026-08-21), whose Part 1 requires a durable
+substrate for the observation period this spec's own R4 names. Everything else in
+acceptance criterion 1 stands unchanged.

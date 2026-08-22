@@ -1,9 +1,9 @@
 {
   "veriloop_version": "0.6.0",
-  "generated_at": "2026-08-21T02:22:20.099Z",
+  "generated_at": "2026-08-22T04:35:13.767Z",
   "repo_name": "veriloop",
   "repo_root": ".",
-  "repo_sha": "4d3a14113e3387ce2b6ad74e4b373c18258ce563",
+  "repo_sha": "949d82afaed113815021c38a0e6a097a4fa1d927",
   "stack": [
     "node"
   ],
@@ -178,7 +178,7 @@
     "effort": {}
   },
   "cross_model": true,
-  "resolve_default": "blockers",
+  "resolve_default": "clean",
   "protected_paths": [
     {
       "path": ".claude/veriloop/constitution.md",
@@ -271,6 +271,7 @@
       "deletionsOnly": false
     }
   ],
+  "confirm_prompt_hash": "8b5c2626a40fba4db563f92a26f27de098aa3fdc28770b5a369c9b34943a8f47",
   "e2e": null,
   "commands_summary": {
     "install": {
@@ -323,9 +324,9 @@
       },
       {
         "dir": "scripts/",
-        "files": 14,
+        "files": 15,
         "extensions": [
-          ".mjs:13",
+          ".mjs:14",
           ".js:1"
         ],
         "source": "scripts/"
@@ -510,6 +511,7 @@
           "selftest golden expectations — the assertions are this repo's only gate"
         ]
       }
-    ]
+    ],
+    "resolve_default": "clean"
   }
 }

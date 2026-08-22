@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { detectRoster, SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderOverrides, renderConstitution, renderCommand, renderAdviseCommand, renderReviewCommand, renderDevPlanCommand, renderPostureCommand, renderAutoBlock, spliceAuto, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, wiresSessionHook, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, CLAUDE_SETTINGS } from './lib/render.mjs';
+import { confirmPromptHash } from './lib/util.mjs';
 import { collectDomainFacts, buildReferences, renderDomainAudit, renderDomainExpert, renderDomainOverrides, readDomainInput } from './lib/domain.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -450,6 +451,20 @@ function main() {
   const domainFacts = collectDomainFacts(args.repo, cj);
 
   const template = readFileSync(join(HERE, 'templates/dev-loop.template.js'), 'utf8');
+  // D7 axis 1 — the confirm sensor's wording hash, taken from the TEMPLATE, before the auto
+  // block is spliced in: a posture change or a new gate command must not read as a change to
+  // the confirm prompt. Attached beside `resolveDefault` for the same line-stability reason.
+  //
+  // TWO SIDES, TWO DIFFERENT BYTE SOURCES, AND WHY THEY AGREE. This hashes the TEMPLATE;
+  // `lint-bundle` recomputes the same digest over the EMITTED workflow and fails the bundle
+  // when the two disagree. That comparison is only meaningful because the one transform
+  // between them — `spliceAuto` replacing the `veriloop:auto` block — writes bytes that lie
+  // entirely OUTSIDE every `veriloop:confirmprompt` region (the auto block sits at the top of
+  // the template, the confirm-prompt regions far below it), so the hashed spans are
+  // byte-identical on both sides. Moving the auto block, or a confirm-prompt region, so that
+  // one contains the other would make every bundle's recompute red for a reason that has
+  // nothing to do with the confirm prompt — keep them disjoint.
+  config.confirmPromptHash = confirmPromptHash(template, 'templates/dev-loop.template.js');
   const workflow = spliceAuto(template, renderAutoBlock(meta, config));
 
   const w = makeWriter(args.out, args.force);
@@ -457,7 +472,7 @@ function main() {
 
   // machine-owned artifacts
   w.machine(P('.claude/workflows', `${repoName}-dev-loop.js`), workflow);
-  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget }));
+  w.machine(P('.claude/commands/dev-loop.md'), renderCommand({ repoName, roster, commandsJson: cj, gate: config.gate, budget: config.budget, resolveDefault: config.resolveDefault }));
   // /advise seats the DOMAIN EXPERT, never the roster (Phase 2 of the domain-expert
   // spec) — hence NO `roster` argument here. The experts' second mandate is now
   // /review (lens review without the loop) and /dev-plan's council in ADVISE mode.
@@ -592,6 +607,9 @@ function main() {
     cross_model: config.crossModel,
     resolve_default: config.resolveDefault,
     protected_paths: config.protectedPaths,
+    // D7 axis 1. Emitted into both places, so it gets a PARITY_KEYS row like every other
+    // twin — a hash that disagrees with the workflow's copy would mis-segment the window.
+    confirm_prompt_hash: config.confirmPromptHash,
     e2e: config.e2e,
     commands_summary: Object.fromEntries(Object.entries(cj.commands).map(([k, c]) => [k, { cmd: c.cmd, safety: c.safety, verified: c.verified, verified_by_ci: c.verified_by_ci }])),
     domain_facts: domainFacts,
@@ -748,6 +766,10 @@ function usesCargo(cj) {
 // `*.overrides.md`, `interview.json`, the manifest, SECURITY.md and README.md, and
 // declarations hoist, so nothing above them moves.
 // ---------------------------------------------------------------------------
+
+// D7 axis 1 — the confirm sensor's wording hash is computed by `confirmPromptHash` in
+// `lib/util.mjs` (imported above), NOT here: `lint-bundle` recomputes the same hash over the
+// EMITTED workflow's own marker regions, and rule 9 allows exactly one implementation of it.
 
 /**
  * D1. The repo's DEFAULT resolve mode. Fails the BUILD on an unrecognized value —

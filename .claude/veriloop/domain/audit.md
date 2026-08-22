@@ -20,7 +20,7 @@ generator computes. The audit **cites** these; it never re-derives them
 
 - `docs/` — 13 files (.md:10, .sh:3)
 - `fixtures/` — 12 files (.toml:6, .json:3, .yaml:2, .rs:1)
-- `scripts/` — 14 files (.mjs:13, .js:1)
+- `scripts/` — 15 files (.mjs:14, .js:1)
 - `skills/` — 1 file (.md:1)
 
 ## Field classification

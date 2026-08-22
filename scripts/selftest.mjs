@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { detectCommands } from './lib/detectors.mjs';
 import { SPECIALIST_DEFAULTS } from './lib/roster.mjs';
 import { renderExpert, renderConstitution, ROSTER_SCOPE_NOTE, renderSessionRouting, renderSessionStartHook, renderClaudeSettings, renderDevPlanCommand, SESSION_ROUTES, SESSION_NO_ROUTE, SESSION_ROUTING_DOC, SESSION_HOOK_SCRIPT, SESSION_START_SOURCES, CLAUDE_SETTINGS } from './lib/render.mjs';
+import { confirmPromptHash } from './lib/util.mjs';
 import { REFERENCE_HOST_ALLOWLIST, REFERENCE_CATEGORIES, STANCES, collectDomainFacts, scrubSecrets, renderDomainAudit, renderDomainExpert, buildReferences } from './lib/domain.mjs';
 // probe: a persona rendered with NO evidence must omit the beat section entirely
 const renderExpertProbe = () => renderExpert('security', { repoName: 'r', stack: ['node'], gate: [], constitutionPath: 'c.md', title: 't', evidence: [] });
@@ -1124,7 +1125,7 @@ function assert(cond, desc) {
   //     the bundle. dry-runs/ (already seeded above) must never trip this scan.
   const cleanScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(cleanScan.status === 0, 'lint-bundle: passes with only clean committed history records present (dry-runs/ excluded)');
-  writeFileSync(join(histDir, 'poisoned.json'), JSON.stringify({ note: 'API_KEY=abcd1234efgh' }, null, 2));
+  writeFileSync(join(histDir, 'poisoned.json'), JSON.stringify({ emittedBy: 'probe', note: 'API_KEY=abcd1234efgh' }, null, 2));
   const poisonedScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(poisonedScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a secret-shaped line (API_KEY=...)');
   assert(/secret-shaped content in committed attestation record/.test(poisonedScan.stdout || ''), 'lint-bundle: the failure names the committed-history secret backstop');
@@ -1138,7 +1139,7 @@ function assert(cond, desc) {
   rmSync(join(histDir, 'poisoned.json'));
   const cleanAgainScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(cleanAgainScan.status === 0, 'lint-bundle: passes again once the API_KEY= poisoned record is removed');
-  writeFileSync(join(histDir, 'poisoned-pem-footer.json'), JSON.stringify({ note: '-----END RSA PRIVATE KEY-----' }, null, 2));
+  writeFileSync(join(histDir, 'poisoned-pem-footer.json'), JSON.stringify({ emittedBy: 'probe', note: '-----END RSA PRIVATE KEY-----' }, null, 2));
   const poisonedPemScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(poisonedPemScan.status !== 0, 'lint-bundle: FAILS when a committed history record carries a bare PEM END-marker footer line');
   assert(/secret-shaped content in committed attestation record/.test(poisonedPemScan.stdout || ''), 'lint-bundle: the PEM-footer failure names the committed-history secret backstop');
@@ -1153,8 +1154,14 @@ function assert(cond, desc) {
   //     already in this repo's history red; asserting only the first two — which is what
   //     shipped — passed one that failed OPEN on every unparseable name.
   rmSync(join(histDir, 'poisoned-pem-footer.json'));
+  //     ATTRIBUTABILITY: the hygiene fixtures here (and the two poisoned records above) carry
+  //     `emittedBy: 'probe'` because the record seeded at (a) comes from the instrumented
+  //     template and therefore OPENS this bundle's provenance window (6a) — every later root
+  //     record is then asked for the key. Without it each fixture would go red for TWO
+  //     reasons and no assert below would still pin the thing it names. `probe` is the class
+  //     exempt from the countability keys, which is all a hygiene fixture needs.
   const TEMP_LINE = 'scratch dir was /private/tmp/vl-scratchpad/notes.md';
-  writeFileSync(join(histDir, '2026-08-17T04-05-06Z.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  writeFileSync(join(histDir, '2026-08-17T04-05-06Z.json'), JSON.stringify({ emittedBy: 'probe', note: TEMP_LINE }, null, 2));
   const postCutoffScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(
     postCutoffScan.status !== 0 && /temp-root path in committed attestation record/.test(postCutoffScan.stdout || '') &&
@@ -1162,7 +1169,7 @@ function assert(cond, desc) {
     'lint-bundle: a committed record timestamped AFTER the 2026-08-16 cutoff FAILS on a /private/tmp/… line, and the failure names the offending record',
   );
   rmSync(join(histDir, '2026-08-17T04-05-06Z.json'));
-  writeFileSync(join(histDir, '2026-08-01T04-05-06Z.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  writeFileSync(join(histDir, '2026-08-01T04-05-06Z.json'), JSON.stringify({ emittedBy: 'probe', note: TEMP_LINE }, null, 2));
   const preCutoffScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(
     preCutoffScan.status === 0,
@@ -1175,7 +1182,7 @@ function assert(cond, desc) {
   // hand-placed file it exists to catch. The predicate is now the negated `<`, so an
   // unparseable name is SCANNED. The residual bypass is a BACKDATED parseable name, which no
   // parse fix closes and which is named in the source comment rather than covered here.
-  writeFileSync(join(histDir, 'notes.json'), JSON.stringify({ note: TEMP_LINE }, null, 2));
+  writeFileSync(join(histDir, 'notes.json'), JSON.stringify({ emittedBy: 'probe', note: TEMP_LINE }, null, 2));
   const unparseableScan = spawnSync(process.execPath, [lintPath, '--bundle', tmp], { encoding: 'utf8' });
   assert(
     unparseableScan.status !== 0 && /temp-root path in committed attestation record/.test(unparseableScan.stdout || '') &&
@@ -2792,6 +2799,43 @@ function gateFigures(file, re) {
     claimedLines > 0 && Math.abs(claimedLines - realLines) / realLines <= 0.1,
     `published docs: README's "~N lines" note about selftest.mjs is within 10% of the real file (claims ${claimedLines || 'NOT FOUND'}, actual ${realLines})`,
   );
+
+  // The README's `## Repo layout` inventory is the one artifact an owner consults to find a
+  // script, and it enumerated every top-level `scripts/*.mjs` — until `count-window.mjs`, the
+  // entire D5 deliverable and a HAND-RUN owner-facing tool, shipped without an entry. Nothing
+  // read the block, so an inventory that claims to be complete could quietly stop being it.
+  // Pinned as a SET comparison rather than a count, so the failure names the missing file.
+  {
+    const layout = (readFileSync(join(here, '..', 'README.md'), 'utf8').match(/## Repo layout\n+```\n([\s\S]*?)```/) || [])[1] || '';
+    const topLevelScripts = readdirSync(here).filter((n) => n.endsWith('.mjs')).sort();
+    const unlisted = topLevelScripts.filter((n) => !layout.includes(`scripts/${n}`));
+    assert(
+      layout.length > 0 && unlisted.length === 0,
+      `published docs: README's \`## Repo layout\` lists EVERY top-level scripts/*.mjs (${topLevelScripts.length} checked) — the inventory an owner reads to find a tool must not silently stop being complete${unlisted.length ? ` [UNLISTED: ${unlisted.join(', ')}]` : ''}`,
+    );
+  }
+
+  // D3 requires hand-written `regate`/`probe` records to follow "a MANDATORY pre-commit hygiene
+  // scan (… scan BEFORE the commit, never detection-after-durability)". The DETECTOR shipped —
+  // check 6a's extended walker — but no procedure an operator could follow did: grepping the
+  // tree, `regate` appeared only in the spec, a code comment, the counter's constant list and
+  // two selftest strings. The mechanism exists (6a walks history/ from DISK, so `npm run lint`
+  // before `git add` is a real pre-commit scan) but nothing said so, and the same-day hand
+  // session was its first consumer. This pins the four load-bearing halves of that procedure.
+  {
+    const readmeAll = readFileSync(join(here, '..', 'README.md'), 'utf8');
+    const proc = (readmeAll.match(/### Hand-written attestation records[\s\S]*?\n### /) || [])[0] || '';
+    const missing = [
+      ['names the two hand-written classes', /`regate`/.test(proc) && /`probe`/.test(proc)],
+      ['names the pre-commit scan COMMAND', /npm run lint/.test(proc)],
+      ['says the scan reads from DISK, i.e. before the commit', /from disk/i.test(proc) && /pre-commit scan/.test(proc)],
+      ['names the path-scoped commit convention', /git add -- /.test(proc) && /chore\(veriloop\): attestation record/.test(proc)],
+    ].filter(([, ok]) => !ok).map(([label]) => label);
+    assert(
+      proc.length > 0 && missing.length === 0,
+      `observation/D3 (procedure): README documents the hand-written-record procedure an operator can actually follow — the two classes, \`npm run lint\` as the MANDATORY scan, the fact that check 6a reads history/ from disk so the scan happens BEFORE the commit (never detection-after-durability), and the path-scoped commit convention${missing.length ? ` [MISSING: ${missing.join('; ')}]` : ''}`,
+    );
+  }
 
   // --- DOMAIN CITATION SCAN. The audit's citations are `veriloop-manifest.json`,
   //     `.claude-plugin/marketplace.json`, `SECURITY.md`, `skills/veriloop/SKILL.md` —
@@ -4436,6 +4480,9 @@ function gateFigures(file, re) {
     ['cross_model', (pm) => { pm.cross_model = !pm.cross_model; }],
     ['resolve_default', (pm) => { pm.resolve_default = pm.resolve_default === 'clean' ? 'blockers' : 'clean'; }],
     ['protected_paths', (pm) => { pm.protected_paths[0].path = 'mutated/elsewhere.md'; }],
+    // D7 axis 1 — a hash that disagrees with the workflow's copy segments the observation
+    // window on a sensor identity the emitted loop is not actually stamping into its records.
+    ['confirm_prompt_hash', (pm) => { pm.confirm_prompt_hash = `${pm.confirm_prompt_hash}0`; }],
   ];
   const paritySurvived = [];
   for (const [key, mutate] of PARITY_MUTATIONS) {
@@ -4455,7 +4502,730 @@ function gateFigures(file, re) {
     spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' }).status === 0,
     'lint-bundle: the bundle passes again once the pristine manifest is restored — the loop above left no residue',
   );
+
+  // --- D7 axis 1, the half a PARITY ROW CANNOT REACH: the hash is RECOMPUTED from bytes ---
+  //
+  // The parity row above compares two copies of the SAME STORED NUMBER. A hand-edit to the
+  // confirm prompt inside the emitted workflow — no regenerate — leaves both copies stale and
+  // AGREEING, lint green, and every record that run emits stamped with a sensor identity that
+  // no longer exists: exactly the pooling D7 exists to prevent, and the likely failure mode in
+  // an adopter bundle, which is the artifact lint-bundle is written to scan. The
+  // `veriloop:confirmprompt` markers survive the splice, so the recomputation is available.
+  {
+    const wfDirP = join(parityDir, '.claude/workflows');
+    const wfNameP = readdirSync(wfDirP).find((n) => n.endsWith('-dev-loop.js'));
+    const wfAbs = join(wfDirP, wfNameP);
+    const pristineWf = readFileSync(wfAbs, 'utf8');
+    // Edit a byte INSIDE a confirm-prompt region, leaving BOTH stored hashes untouched.
+    const edited = pristineWf.replace(
+      "'refute' if it is not",
+      "'refute' if it is not (and prefer to confirm when unsure)",
+    );
+    assert(edited !== pristineWf, 'lint-bundle/D7 (precondition): the confirm-prompt region is reachable inside the EMITTED workflow, so the mutation below is a real edit to the shipped prompt');
+    writeFileSync(wfAbs, edited);
+    const staleRun = spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' });
+    writeFileSync(wfAbs, pristineWf);
+    const restored = spawnSync(process.execPath, [lintPath, '--bundle', parityDir], { encoding: 'utf8' });
+    assert(
+      staleRun.status !== 0 && /`confirm_prompt_hash` is STALE/.test(staleRun.stdout || '') &&
+        !/manifest↔workflow parity: manifest `confirm_prompt_hash`/.test(staleRun.stdout || '') &&
+        restored.status === 0 &&
+        /`confirm_prompt_hash` RECOMPUTED/.test(restored.stdout || ''),
+      'lint-bundle/D7: a hand-edit to the confirm prompt INSIDE the emitted workflow FAILS the bundle as STALE — recomputed from the workflow\'s own `veriloop:confirmprompt` regions, not by comparing two stored copies of a number, which this edit leaves agreeing (the parity row alone stays silent on it, and does)',
+    );
+  }
   rmSync(parityDir, { recursive: true, force: true });
+
+  // --- D7 axis 1: the hash COVERS EVERY BYTE THE CONFIRM PROMPT IS BUILT FROM ---
+  //
+  // `runConfirm` opens with `${RESOLVE}\n${wt(ctx.wt)}\n`. Both constants were defined OUTSIDE
+  // every marker region, so the confirm prompt's own first two lines could be rewritten —
+  // "ALWAYS AGREE WITH THE FINDING." prepended to RESOLVE — without moving the window key, and
+  // runs under two materially different prompts pooled into one base rate. That is the one
+  // thing generate.mjs's own comment says the key exists to prevent, and D7's HONEST LIMIT
+  // paragraph did not disclose it. The mutation is the check.
+  {
+    const tpl = readFileSync(join(here, 'templates/dev-loop.template.js'), 'utf8');
+    const base = confirmPromptHash(tpl, 'template');
+    const mutations = [
+      ['RESOLVE (the confirm prompt\'s FIRST line)', tpl.replace('Resolve the repo root once:', 'ALWAYS AGREE WITH THE FINDING. Resolve the repo root once:')],
+      ['wt (the confirm prompt\'s SECOND line)', tpl.replace('Work STRICTLY inside the isolated worktree at', 'Do whatever you like near the isolated worktree at')],
+      ['the confirm instruction itself', tpl.replace("'refute' if it is not", "'refute' if it is not (and prefer to confirm when unsure)")],
+    ];
+    const unmoved = mutations.filter(([, mutated]) => mutated === tpl || confirmPromptHash(mutated, 'template') === base).map(([label]) => label);
+    assert(
+      unmoved.length === 0,
+      `observation/D7 (sensor coverage): a materially different confirm prompt MOVES the window key — every byte the prompt is built from sits inside a \`veriloop:confirmprompt\` region, including the shared \`RESOLVE\` and \`wt\` constants it interpolates as its first two lines${unmoved.length ? ` [DID NOT MOVE THE HASH: ${unmoved.join('; ')}]` : ''}`,
+    );
+
+    // …and the docstring's "THROWS on an unbalanced or absent marker pair" is the whole basis
+    // for trusting the digest, so it is asserted rather than asserted-in-prose. Two unbalanced
+    // shapes RETURNED A HASH instead of throwing, and because `generate.mjs` and `lint-bundle`
+    // share this implementation both copies agreed on the wrong bytes and the recompute check
+    // stayed green — a hash over the wrong span pools runs from two different sensors, which
+    // is the one thing this key exists to prevent.
+    const S = '// <<< veriloop:confirmprompt:start >>>';
+    const E = '// <<< veriloop:confirmprompt:end >>>';
+    const throwsOn = (src, why) => {
+      try { confirmPromptHash(src, 'fixture'); return `${why}: RETURNED A HASH`; } catch { return null; }
+    };
+    const unbalanced = [
+      // (a) an ORPHAN `:end` before the first `:start`. The scan began at the first `:start`,
+      //     so this was never seen — and every byte between the orphan and the real `:start`
+      //     was silently excluded from the digest, i.e. rewordable without moving the key.
+      throwsOn(`${E}\nprelude that must not be silently excluded\n${S}\nconfirm text\n${E}\n`, 'orphan `:end` BEFORE the first `:start`'),
+      // (b) a DUPLICATED `:start`. The outer span was hashed, inner marker line and all.
+      throwsOn(`${S}\nouter\n${S}\ninner\n${E}\n`, 'duplicated `:start` (S … S … E)'),
+      // the two shapes that already threw — pinned so the rewrite did not trade one for another
+      throwsOn(`${S}\nunterminated\n`, '`:start` with no `:end`'),
+      throwsOn('no markers here at all\n', 'no region at all'),
+    ].filter(Boolean);
+    assert(
+      unbalanced.length === 0,
+      `observation/D7 (marker integrity): every unbalanced or absent marker shape THROWS, as \`confirmPromptHash\`'s docstring promises — a digest taken over the wrong span is indistinguishable from a legitimate one and would pool two different sensors into one base rate${unbalanced.length ? ` [${unbalanced.join('; ')}]` : ''}`,
+    );
+  }
+
+  // =========================================================================
+  // resolve=clean OBSERVATION PERIOD — spec
+  // `.claude/veriloop/specs/resolve-clean-observation-period.md` (RATIFIED — BINDING,
+  // owner, 2026-08-21). D1 (write confirmation in every mode), D2 (commit always, push
+  // only when landed), D3 (record provenance + the extended 6a walker), D5 (the counter),
+  // D7 (the two-axis window key).
+  //
+  // Every case builds its OWN synthetic input inline — synthetic records, a synthetic git
+  // repo — because a fixture may never supply the evidence under test (constitution rule 3).
+  // The lint cases run the REAL linter as a child process and are judged by its exit code;
+  // the counter is executed as a child process against records this block wrote.
+  // =========================================================================
+
+  // --- D1/D2: the EMITTED emit step, read out of the generated workflow ---
+  {
+    const emitStart = wf.indexOf('6b. Emit attestation record');
+    // (Both arms of the ternary this replaced were the same expression — the `6. Report`
+    // probe decided nothing and only read as if a fallback existed.)
+    const emitEnd = wf.indexOf('return {\n  brief,', emitStart);
+    const emitBlock = wf.slice(emitStart, emitEnd === -1 ? wf.length : emitEnd);
+    assert(
+      emitBlock.length > 500 && !/autonomyMode === 'overnight'/.test(emitBlock) &&
+        /schema: ATT_WRITE_SCHEMA,/.test(emitBlock) &&
+        /if \(!\(attWrite && attWrite\.written === true\)\)/.test(emitBlock),
+      'observation/D1: the emitted attestation step attaches ATT_WRITE_SCHEMA and checks the confirmation UNCONDITIONALLY — not one `autonomyMode === \'overnight\'` test survives in the block, so an interactive run that cannot confirm its record parks exactly as an unattended one does (supersedes headless-autonomy acceptance 1 in this one respect)',
+    );
+    assert(
+      /a run that leaves no record of what it decided is not a finished run/.test(emitBlock) &&
+        !/an unattended run that leaves no record/.test(wf),
+      'observation/D1: the loud park\'s reason no longer says "unattended" — the park fires in every mode now, and a reason that describes only one of them is a false fact in the record an owner reads hardest',
+    );
+    // D2 — the COMMIT no longer branches on `landedNow`; only the PUSH does. The prompt lives
+    // inside a template literal in the emitted file, so its backticks arrive ESCAPED —
+    // un-escape before matching, or the pin passes for the wrong reason by never matching
+    // anything and the drift it exists to catch walks straight through (the `wfProse` precedent).
+    const emitProse = emitBlock.replace(/\\`/g, '`');
+    const nonLanded = /4\. This run did NOT land — commit the record ANYWAY[\s\S]*?Nothing about this run leaves the machine\./.exec(emitProse);
+    assert(
+      !!nonLanded && /git add -- /.test(nonLanded[0]) && /NEVER `git add -A`/.test(nonLanded[0]) &&
+        /HARD LIMIT for this branch: NEVER `git push`/.test(nonLanded[0]) &&
+        !/Leave `git status` clean/.test(nonLanded[0]),
+      'observation/D2: the NON-LANDED branch of the emit prompt COMMITS the record anyway, path-scoped (`git add --`, never `git add -A`), RETAINS the explicit never-push hard limit, and does NOT ask for a clean `git status` — a parked run\'s preserved triage state must survive the commit that records it',
+    );
+    // …and the fence names `git commit -a`. This is the one prompt that grants COMMIT authority
+    // on a FAIL/park run whose worktree is deliberately preserved for triage, and whose text
+    // embeds lens-authored free text (D2 itself calls that "most adversarial exactly on FAIL
+    // runs"). The denylist enumerated `git add -A` / `git add .` by name and stopped there, but
+    // `git commit -a` stages every tracked modification with NO `git add` at all — the one
+    // remaining single command that sweeps the preserved implementation state into the record
+    // commit. An enumerated denylist that misses the obvious sibling reads as permission.
+    assert(
+      !!nonLanded && /NEVER `git commit -a`/.test(nonLanded[0]) && /`git commit -am`/.test(nonLanded[0]) &&
+        /stages every tracked modification WITHOUT any `git add`/.test(nonLanded[0]),
+      'observation/D2 (staging fence): the non-landed emit prompt denies `git commit -a` / `git commit -am` BY NAME and says why — `-a` needs no `git add`, so an add-only denylist leaves the whole preserved triage worktree sweepable by one command on exactly the run where the embedded lens text is most adversarial',
+    );
+    assert(
+      /\? `4\. This is a DRY RUN — do NOT commit or push/.test(emitProse) &&
+        /This run LANDED[\s\S]*?then `git push`/.test(emitProse),
+      'observation/D2: the three-way split is dry-run ⇒ no commit at all (its record lives in the machine-ignored `dry-runs/`), landed ⇒ commit + push, non-landed ⇒ commit only. Push behavior is unchanged; only the commit stopped branching',
+    );
+  }
+
+  // --- D3/D7: the record itself, from the SAME sliced `attestationFrom` the loop runs ---
+  {
+    const provRec = JSON.parse(attestationFrom({
+      ...attBase, verdict: 'PASS', resolveMode: 'clean', rawConcerns: 3, confirmedConcerns: 1,
+      unverifiedConcerns: [], confirmPromptHash: 'a'.repeat(64),
+      routing: { plan: 'opus / high', review: 'opus / xhigh', land: 'session default' },
+    }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+    assert(
+      provRec.emittedBy === 'loop' && provRec.confirmPromptHash === 'a'.repeat(64) &&
+        provRec.routing.review === 'opus / xhigh',
+      'observation/D3+D7: a machine-emitted record carries `emittedBy: "loop"` and BOTH window-key axes — the confirm-prompt hash and the resolved review route the confirm seat rides',
+    );
+    // `emittedBy` is a LITERAL in the region, not an evidence field: a loop emit can never
+    // dress itself as a hand-driven re-gate or a probe, which are the classes D5 counts
+    // differently and D3's hand-written procedure governs.
+    const forged = JSON.parse(attestationFrom({
+      ...attBase, verdict: 'PASS', emittedBy: 'probe', confirmPromptHash: 'b'.repeat(64), routing: { review: 'r' },
+    }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+    assert(
+      forged.emittedBy === 'loop',
+      'observation/D3: `emittedBy` is hardcoded inside the emit region — an `evidence.emittedBy` of "probe" is IGNORED, so a machine emit cannot launder itself into the never-countable probe class',
+    );
+    // The hash and the route must SURVIVE redaction. A 64-hex line that tripped
+    // SECRET_PATTERNS, or a route string the ABS net dropped, would silently blank the
+    // window key on every record and pool two sensors into one base rate.
+    assert(
+      provRec.confirmPromptHash.length === 64 && provRec.routing.plan === 'opus / high' &&
+        provRec.routing.land === 'session default',
+      'observation/D7: the hash and every route string survive the rule-7 redactor intact — a self-inflicted secret-pattern or absolute-path drop would blank the window key rather than leak anything',
+    );
+    // A record with no sensor recorded says so with nulls, never with an invented value.
+    const noSensor = JSON.parse(attestationFrom({ ...attBase, verdict: 'PASS' }, { wt: '/tmp/wt', branch: 'b' }, attStamps, ['/tmp/wt']).json);
+    assert(
+      noSensor.confirmPromptHash === null && noSensor.routing === null && noSensor.emittedBy === 'loop',
+      'observation/D7: an evidence object carrying no sensor fields records NULLs — an absent window key is an absent measurement, and the counter must be able to see that rather than read a default',
+    );
+  }
+
+  // --- D3: lint-bundle check 6a, extended. BLACK BOX: synthetic records into a copied
+  //     bundle, the real linter as a child process, judged by exit code + printed text. ---
+  {
+    const recPath = (dir, name) => join(dir, '.claude/veriloop/history', name);
+    const mkRec = (over) => JSON.stringify({
+      ts: '2026-08-22T00-00-00Z', emittedBy: 'loop', confirmPromptHash: 'c'.repeat(64),
+      routing: { review: 'opus / xhigh' }, feature: 'f', repo: 'r', tier: 'standard',
+      verdict: 'PASS', resolveMode: 'clean', rawConcerns: 0, confirmedConcerns: 0,
+      unverifiedConcerns: [], dryRun: false, ...over,
+    }, null, 2);
+    const freshBundle = () => {
+      const d = mkdtempSync(join(tmpdir(), 'veriloop-6a-'));
+      cpSync(tmp, d, { recursive: true });
+      mkdirSync(join(d, '.claude/veriloop/history'), { recursive: true });
+      return d;
+    };
+    const lintOf = (d) => spawnSync(process.execPath, [lintPath, '--bundle', d], { encoding: 'utf8' });
+
+    // (0) a well-formed post-cutoff record is GREEN — every failure below is its own mutation
+    const okDir = freshBundle();
+    writeFileSync(recPath(okDir, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    const okRun = lintOf(okDir);
+    assert(okRun.status === 0, 'lint-bundle/6a: a well-formed instrumented record with provenance and the D8 fields passes — the cases below are attributable to their own mutations');
+
+    // (1) MISSING PROVENANCE fails, naming the key. The bundle must also contain a record
+    //     that DOES carry `emittedBy` — see (1a): the window is opened by evidence of an
+    //     instrumented emitter, never by a date on the wall clock.
+    const noProv = freshBundle();
+    writeFileSync(recPath(noProv, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    const stripped = JSON.parse(mkRec({}));
+    delete stripped.emittedBy;
+    writeFileSync(recPath(noProv, '2026-08-22T06-00-00Z.json'), JSON.stringify(stripped, null, 2));
+    const noProvRun = lintOf(noProv);
+    assert(
+      noProvRun.status !== 0 && /has no valid `emittedBy`/.test(noProvRun.stdout || '') &&
+        /2026-08-22T06-00-00Z\.json/.test(noProvRun.stdout || ''),
+      'lint-bundle/6a: a record at or after the window opener with NO `emittedBy` FAILS the bundle, naming both the key and the record — a record whose provenance is unknown can neither be counted nor honestly excluded (D3)',
+    );
+
+    // (1a) THE WINDOW OPENER IS EMPIRICAL, NOT A CALENDAR CONSTANT — the regression that
+    //      shipped first and had to be undone. `RECORD_KEYS_FROM` was
+    //      `Date.parse('2026-08-21T00:00:00Z')`: MIDNIGHT of the landing day, while the
+    //      instrumentation lands ~22:45 that same day. Every record the PRE-instrumentation
+    //      workflow emitted in between — including this feature's OWN attestation record,
+    //      which main's uninstrumented workflow writes at Report time — was required to
+    //      carry a key its emitter could not write. That is unsatisfiable by construction:
+    //      collecting the stranded records D5/R2 REQUIRES collected turns `npm run lint`
+    //      red, and the only green move is hand-forging an `emittedBy`, the exact act D3/D4
+    //      fence. The cutoff is now the earliest record that DEMONSTRABLY came from an
+    //      instrumented emitter, so a pre-instrumentation record dated later than any
+    //      calendar landing date is exempt as long as it precedes that opener.
+    const preInstr = freshBundle();
+    writeFileSync(recPath(preInstr, '2026-09-01T00-00-00Z.json'), mkRec({}));
+    const legacyShape = JSON.parse(mkRec({}));
+    delete legacyShape.emittedBy;
+    writeFileSync(recPath(preInstr, '2026-08-31T23-59-59Z.json'), JSON.stringify(legacyShape, null, 2));
+    const preInstrRun = lintOf(preInstr);
+    assert(
+      preInstrRun.status === 0,
+      'lint-bundle/6a: a record with NO `emittedBy` that PRECEDES the bundle\'s earliest instrumented record is GREEN however late its calendar date — the pre-instrumentation emitter could not have stamped the key, and a wall-clock cutoff made D5/R2 record collection and constitution rule 1 mutually unsatisfiable (D3)',
+    );
+
+    // (1b) ZERO instrumented records ⇒ the requirement is INERT, and the ok line says so.
+    //      This is the adopter case (CLAUDE.md §2): a bundle upgrading from 0.6.0 has a
+    //      history written entirely before the `emittedBy` template existed, and a
+    //      wall-clock cutoff left it only one remediation — hand-editing committed history.
+    //      It is also this repo's own state until its first instrumented drive commits.
+    const noWindow = freshBundle();
+    const bare1 = JSON.parse(mkRec({})); delete bare1.emittedBy;
+    const bare2 = JSON.parse(mkRec({})); delete bare2.emittedBy;
+    writeFileSync(recPath(noWindow, '2027-01-01T00-00-00Z.json'), JSON.stringify(bare1, null, 2));
+    writeFileSync(recPath(noWindow, '2027-06-01T00-00-00Z.json'), JSON.stringify(bare2, null, 2));
+    const noWindowRun = lintOf(noWindow);
+    assert(
+      noWindowRun.status === 0 && /requirement is inert/.test(noWindowRun.stdout || ''),
+      'lint-bundle/6a: a bundle where NO record carries `emittedBy` has not opened its provenance window — the requirement is inert and SAYS SO in the ok line, so an adopter upgrading into the instrumentation is never asked to retrofit history it cannot rewrite (CLAUDE.md §2)',
+    );
+
+    // (2) a `clean` record MISSING the D8 fields fails, naming them
+    const noD8 = freshBundle();
+    const d8less = JSON.parse(mkRec({}));
+    delete d8less.rawConcerns; delete d8less.unverifiedConcerns;
+    writeFileSync(recPath(noD8, '2026-08-22T00-00-00Z.json'), JSON.stringify(d8less, null, 2));
+    const noD8Run = lintOf(noD8);
+    assert(
+      noD8Run.status !== 0 && /rawConcerns, unverifiedConcerns/.test(noD8Run.stdout || '') &&
+        /resolveMode: "clean"/.test(noD8Run.stdout || ''),
+      'lint-bundle/6a: a record declaring `resolveMode: "clean"` without rawConcerns/unverifiedConcerns FAILS, naming exactly the missing fields — the refutation rate is computed from those three and nothing else (D3)',
+    );
+
+    // (2a) BOTH D7 SENSOR AXES on a record claiming the countable class (owner ruling 3,
+    //      2026-08-21: "the countable class requires BOTH sensor axes … keyless records are
+    //      NON-COUNTABLE and warned, never pooled into a segment"). D6 opens the window at the
+    //      first record carrying `emittedBy` + the D7 window key, and 6a required only
+    //      `resolveMode`/`verdict` — so a countable record with no sensor identity at all
+    //      linted green and reached the counter, which had nothing to do with it but invent a
+    //      shared "unknown" segment. Each axis is dropped SEPARATELY, because a check that
+    //      fires on the pair says nothing about which half is load-bearing, and `null` is
+    //      dropped rather than the key: `attestationFrom` writes an explicit `null` when the
+    //      run recorded no sensor, so key-presence alone would have passed the real shape.
+    for (const [label, mutate, expect] of [
+      ['confirmPromptHash', (r) => { r.confirmPromptHash = null; }, /no confirmPromptHash/],
+      ['routing.review', (r) => { r.routing = null; }, /no routing\.review/],
+      ['both axes', (r) => { r.confirmPromptHash = null; r.routing = {}; }, /no confirmPromptHash and no routing\.review/],
+    ]) {
+      const d = freshBundle();
+      const keyless = JSON.parse(mkRec({}));
+      mutate(keyless);
+      writeFileSync(recPath(d, '2026-08-22T00-00-00Z.json'), JSON.stringify(keyless, null, 2));
+      // …and an instrumented record that DOES carry both, so the window is open and the
+      // failure is attributable to the mutation rather than to an inert requirement.
+      writeFileSync(recPath(d, '2026-08-22T06-00-00Z.json'), mkRec({ ts: '2026-08-22T06-00-00Z' }));
+      const run = lintOf(d);
+      assert(
+        run.status !== 0 && expect.test(run.stdout || '') && /COUNTABLE class/.test(run.stdout || '') &&
+          /2026-08-22T00-00-00Z\.json/.test(run.stdout || ''),
+        `lint-bundle/6a (D7): a record claiming the COUNTABLE class (emittedBy loop|regate + resolveMode clean) with no ${label} FAILS, naming the missing axis and the record — the window key is BOTH axes, so a run that cannot say which sensor produced it has no segment it can honestly belong to and must never pool into another's base rate (D6/D7)`,
+      );
+      rmSync(d, { recursive: true, force: true });
+    }
+    // …and the axes are required ONLY of the countable class. A probe-class record and a
+    // default-mode (`blockers`) run are never countable in either direction, so demanding a
+    // sensor identity of them would fail bundles over records no base rate can ever read.
+    const axesScoped = freshBundle();
+    writeFileSync(recPath(axesScoped, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    writeFileSync(recPath(axesScoped, '2026-08-22T06-00-00Z.json'), mkRec({
+      ts: '2026-08-22T06-00-00Z', emittedBy: 'probe', confirmPromptHash: null, routing: null,
+    }));
+    writeFileSync(recPath(axesScoped, '2026-08-22T07-00-00Z.json'), mkRec({
+      ts: '2026-08-22T07-00-00Z', resolveMode: 'blockers', confirmPromptHash: null, routing: null,
+    }));
+    assert(
+      lintOf(axesScoped).status === 0,
+      'lint-bundle/6a (D7 scope): the two sensor axes are demanded ONLY of the countable class — a `probe` record and a `resolveMode: "blockers"` run pass without them, because neither can ever enter the observation window\'s denominator and a key nothing reads is not a gap (D5)',
+    );
+    rmSync(axesScoped, { recursive: true, force: true });
+
+    // (3) `probes/` records are EXEMPT from the run-record keys and still HYGIENE-scanned
+    const probeDir = freshBundle();
+    mkdirSync(join(probeDir, '.claude/veriloop/history/probes'), { recursive: true });
+    const bareProbe = JSON.parse(mkRec({}));
+    delete bareProbe.emittedBy; delete bareProbe.rawConcerns;
+    writeFileSync(join(probeDir, '.claude/veriloop/history/probes/2026-08-22T01-00-00Z.json'), JSON.stringify(bareProbe, null, 2));
+    const probeExempt = lintOf(probeDir);
+    writeFileSync(
+      join(probeDir, '.claude/veriloop/history/probes/2026-08-22T02-00-00Z.json'),
+      JSON.stringify({ note: 'seed replay came from /Users/someone/secret-repo/src/x.ts' }, null, 2),
+    );
+    const probeScanned = lintOf(probeDir);
+    assert(
+      probeExempt.status === 0 && probeScanned.status !== 0 &&
+        /absolute path in committed attestation record .*probes\/2026-08-22T02-00-00Z\.json/.test(probeScanned.stdout || ''),
+      'lint-bundle/6a: a `probes/` record is EXEMPT from the run-record keys (it is a probe-class measurement artifact, never countable) and is still fully hygiene-scanned — the walker recurses into it and an absolute path there fails the bundle by name (D11)',
+    );
+
+    // (4) the BACKDATING FLAG — the close for the self-reported-filename bypass the temp
+    //     backstop's own comment names as open. Needs real git: a record whose filename
+    //     predates the window's first instrumented record but whose ADD-COMMIT lands after it.
+    const gitDir = freshBundle();
+    const G = (...a) => spawnSync('git', ['-C', gitDir, ...a], { encoding: 'utf8' });
+    // Commit dates are PINNED, because the gate compares two add-commit dates and two
+    // commits made in the same second would make the case pass or fail by scheduling luck.
+    const at = (iso, ...a) => spawnSync('git', ['-C', gitDir, ...a], {
+      encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso },
+    });
+    G('init', '-b', 'main');
+    G('config', 'user.email', 'selftest@example.invalid');
+    G('config', 'user.name', 'veriloop selftest');
+    writeFileSync(recPath(gitDir, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    G('add', '-A');
+    at('2026-08-22T00:05:00Z', 'commit', '-q', '-m', 'window opens', '--no-gpg-sign');
+    const beforeBackdate = lintOf(gitDir);
+    // pre-cutoff by filename, so the key checks exempt it: the FLAG is the only thing that
+    // can fire, which is what makes this case attributable.
+    writeFileSync(recPath(gitDir, '2026-08-19T00-00-00Z.json'), JSON.stringify({ ts: '2026-08-19T00-00-00Z', verdict: 'PASS' }, null, 2));
+    G('add', '-A');
+    at('2026-08-23T00:00:00Z', 'commit', '-q', '-m', 'add a pre-window-looking record', '--no-gpg-sign');
+    const afterBackdate = lintOf(gitDir);
+    assert(
+      beforeBackdate.status === 0 && !/FLAG — committed attestation record/.test(beforeBackdate.stdout || '') &&
+        /FLAG — committed attestation record .*2026-08-19T00-00-00Z\.json[\s\S]*?was ADDED to git at 2026-08-23/.test(afterBackdate.stdout || ''),
+      'lint-bundle/6a: a record whose FILENAME predates the window\'s first instrumented record but whose ADD-COMMIT lands after it is FLAGGED by add-date — the commit-date gate the 6a backstop\'s own comment named as the close for its self-reported-filename backdating bypass (D3)',
+    );
+    assert(
+      afterBackdate.status === 0,
+      'lint-bundle/6a: the backdating gate FLAGS and does not FAIL — the add date is a fact, "backdated" is an intent this scanner has no standing to judge, and a legitimately late-collected legacy record (D4) has the same shape',
+    );
+
+    // THE EXPLOITABLE VARIANT — the case the gate previously could not see. The opener was
+    // "earliest BY FILENAME among records carrying `emittedBy`", so a forged record that
+    // carries `emittedBy` AND a pre-window filename simply BECAME the opener and was never its
+    // own suspect. That is the variant that MATTERS: the `emittedBy`-less record above is
+    // already non-countable, while this one is fully countable and lands in the base rate. The
+    // opener is now chosen by ADD-COMMIT ORDER, which the record's author cannot pick.
+    const forged = recPath(gitDir, '2026-08-18T00-00-00Z.json');
+    writeFileSync(forged, mkRec({ ts: '2026-08-18T00-00-00Z', emittedBy: 'loop', verdict: 'PASS', resolveMode: 'clean' }));
+    G('add', '-A');
+    at('2026-08-24T00:00:00Z', 'commit', '-q', '-m', 'a countable record dressed as pre-window history', '--no-gpg-sign');
+    const afterForged = lintOf(gitDir);
+    assert(
+      afterForged.status === 0 &&
+        /FLAG — committed attestation record .*2026-08-18T00-00-00Z\.json[\s\S]*?was ADDED to git at 2026-08-24/.test(afterForged.stdout || '') &&
+        /2026-08-22T00-00-00Z\.json, added 2026-08-22/.test(afterForged.stdout || ''),
+      'lint-bundle/6a: a record carrying `emittedBy` AND a pre-window filename is FLAGGED too — it can no longer make itself the window opener, because the opener is the earliest ADD-COMMIT rather than the earliest self-reported filename. This is the COUNTABLE variant, i.e. the only one a backdater has a motive to write; flagging only the `emittedBy`-less one flagged the shape that was already harmless (D3)',
+    );
+    // …and the forgery is visible where it does damage: it IS in the counter's denominator.
+    const forgedCount = JSON.parse(spawnSync(process.execPath, [join(here, 'count-window.mjs'), '--repo', gitDir, '--main', 'main', '--json'], { encoding: 'utf8' }).stdout);
+    assert(
+      forgedCount.countableRecords.includes('2026-08-18T00-00-00Z.json'),
+      'lint-bundle/6a (why it matters): the backdated record with `emittedBy` is COUNTABLE — it enters the observation window\'s denominator — which is precisely why the FLAG above has to reach it and not only the non-countable shape',
+    );
+
+    // FAIL-CLOSED ON AN UNPARSEABLE NAME (owner ruling 3, 2026-08-21). The suspects filter read
+    // `r.instant < opener.instant`, and every comparison with NaN is false — so a record whose
+    // filename is not `<ts>.json` was silently EXEMPT from the gate, which is the wrong side to
+    // fail toward for exactly the reason the temp backstop already gives: a hand-placed
+    // `restored.json` is the shape a record laundered out of the denominator takes, and it was
+    // the one shape the gate could not see. The predicate is now the negated `>=`.
+    // `emittedBy: 'probe'` so the record is EXEMPT from the countable-class keys: an unparseable
+    // name is `NaN ⇒ checked` by the provenance loop too, and a record failing for a missing key
+    // would make the FLAG below unattributable to the suspects filter it exists to pin.
+    const unparseable = recPath(gitDir, 'restored.json');
+    writeFileSync(unparseable, JSON.stringify({ ts: 'restored', emittedBy: 'probe', verdict: 'PASS' }, null, 2));
+    G('add', '-A');
+    at('2026-08-25T00:00:00Z', 'commit', '-q', '-m', 'a record whose name carries no timestamp at all', '--no-gpg-sign');
+    const afterUnparseable = lintOf(gitDir);
+    assert(
+      afterUnparseable.status === 0 &&
+        /FLAG — committed attestation record .*restored\.json[\s\S]*?was ADDED to git at 2026-08-25/.test(afterUnparseable.stdout || ''),
+      'lint-bundle/6a: a committed record whose FILENAME does not parse to a timestamp is a backdating SUSPECT and is FLAGGED by its add-date — NaN compares false against everything, so the old bare `<` exempted the one shape a self-reported timestamp cannot even be checked against (D3)',
+    );
+
+    // THE OPENER IS THE EARLIEST ADD, NOT THE MOST RECENT (owner ruling 3). `addedAt` ran
+    // `git log … -1`, which returns the NEWEST add of a path — so a record deleted and re-added
+    // carried a forward-moved add-date, and the window opener could be walked forward at will
+    // by exactly the actor the add-date anchor exists to defeat. Deleting and re-adding the
+    // opener here must NOT move it: its add-date stays the original commit's, so the
+    // already-flagged records stay flagged and the opener stays the opener.
+    G('rm', '-q', recPath(gitDir, '2026-08-22T00-00-00Z.json').slice(gitDir.length + 1));
+    at('2026-08-26T00:00:00Z', 'commit', '-q', '-m', 'delete the window opener', '--no-gpg-sign');
+    writeFileSync(recPath(gitDir, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    G('add', '-A');
+    at('2026-08-27T00:00:00Z', 'commit', '-q', '-m', 're-add the window opener', '--no-gpg-sign');
+    const afterReadd = lintOf(gitDir);
+    assert(
+      afterReadd.status === 0 &&
+        /2026-08-22T00-00-00Z\.json, added 2026-08-22/.test(afterReadd.stdout || '') &&
+        !/2026-08-22T00-00-00Z\.json, added 2026-08-27/.test(afterReadd.stdout || ''),
+      'lint-bundle/6a: a record DELETED and RE-ADDED keeps its EARLIEST add-commit date, so the window opener cannot be walked forward by a delete/re-add — `git log` emits newest-first and the old `-1` took the most recent add, handing the backdater the very handle that anchoring on add-commit order exists to remove (D3)',
+    );
+
+    // …and it SKIPS LOUDLY rather than passing silently outside a git worktree.
+    const noGit = freshBundle();
+    writeFileSync(recPath(noGit, '2026-08-22T00-00-00Z.json'), mkRec({}));
+    writeFileSync(recPath(noGit, '2026-08-19T00-00-00Z.json'), JSON.stringify({ ts: '2026-08-19T00-00-00Z', verdict: 'PASS' }, null, 2));
+    const noGitRun = lintOf(noGit);
+    assert(
+      noGitRun.status === 0 && /backdating gate was SKIPPED, not passed/.test(noGitRun.stdout || ''),
+      'lint-bundle/6a: outside a git worktree the backdating gate says it was SKIPPED, not passed — a check that cannot run must never print as a check that ran (the getSecretPatterns precedent)',
+    );
+
+    for (const d of [okDir, noProv, noD8, probeDir, gitDir, noGit]) rmSync(d, { recursive: true, force: true });
+  }
+
+  // --- D5: the COUNTER, executed against synthetic records in a synthetic git repo ---
+  {
+    const countPath = join(here, 'count-window.mjs');
+    const cRepo = mkdtempSync(join(tmpdir(), 'veriloop-count-'));
+    const cHist = join(cRepo, '.claude/veriloop/history');
+    mkdirSync(join(cHist, 'probes'), { recursive: true });
+    const H1 = '1'.repeat(64);
+    const H2 = '2'.repeat(64);
+    const rec = (over) => JSON.stringify({
+      emittedBy: 'loop', resolveMode: 'clean', dryRun: false, verdict: 'PASS',
+      confirmPromptHash: H1, routing: { review: 'opus / xhigh' },
+      rawConcerns: 0, confirmedConcerns: 0, unverifiedConcerns: [], ...over,
+    }, null, 2);
+    const put = (name, over) => writeFileSync(join(cHist, name), rec(over));
+    // COUNTABLE — three under sensor H1, one under H2 (the sensor moved mid-window)
+    put('2026-08-21T01-00-00Z.json', { verdict: 'PASS', rawConcerns: 4, confirmedConcerns: 2, unverifiedConcerns: [] });
+    put('2026-08-21T02-00-00Z.json', { verdict: 'CONCERNS', rawConcerns: 5, confirmedConcerns: 3, unverifiedConcerns: ['a dead confirm seat left this unchecked'] });
+    put('2026-08-21T03-00-00Z.json', { emittedBy: 'regate', verdict: 'FAIL', rawConcerns: 3, confirmedConcerns: 1, unverifiedConcerns: [] });
+    put('2026-08-21T04-00-00Z.json', { verdict: 'PASS', rawConcerns: 2, confirmedConcerns: 2, unverifiedConcerns: [], confirmPromptHash: H2, routing: { review: 'sonnet' } });
+    // NEVER COUNTABLE — a probe, a default-mode run, a dry run, and a probes/ record
+    put('2026-08-21T05-00-00Z.json', { emittedBy: 'probe', verdict: 'PASS' });
+    put('2026-08-21T06-00-00Z.json', { resolveMode: 'blockers', verdict: 'PASS', confirmedConcerns: null });
+    put('2026-08-21T07-00-00Z.json', { dryRun: true, verdict: 'PASS' });
+    writeFileSync(join(cHist, 'probes/2026-08-21T08-00-00Z.json'), rec({ emittedBy: 'probe' }));
+    const CG = (...a) => spawnSync('git', ['-C', cRepo, ...a], { encoding: 'utf8' });
+    CG('init', '-b', 'main');
+    CG('config', 'user.email', 'selftest@example.invalid');
+    CG('config', 'user.name', 'veriloop selftest');
+    CG('add', '-A');
+    CG('commit', '-q', '-m', 'window', '--no-gpg-sign');
+    const runCounter = () => JSON.parse(spawnSync(process.execPath, [countPath, '--repo', cRepo, '--main', 'main', '--json'], { encoding: 'utf8' }).stdout);
+
+    const r0 = runCounter();
+    const near = (a, b) => a !== null && Math.abs(a - b) < 1e-9;
+    assert(
+      r0.countable.n === 4 && near(r0.countable.passRate, 2 / 4) &&
+        r0.excluded.length === 3 && !r0.countableRecords.includes('2026-08-21T05-00-00Z.json'),
+      'observation/D5 (countability): the counter counts the four `emittedBy ∈ {loop, regate}` clean runs that reached a verdict — a park-terminal FAIL and a hand re-gate count, while a probe record, a default-mode run and a dry run are recorded-and-excluded, never counted',
+    );
+    assert(
+      near(r0.countable.refutationRate, (14 - 8 - 1) / (14 - 1)) &&
+        r0.countable.raw === 14 && r0.countable.confirmed === 8 && r0.countable.unverified === 1,
+      'observation/D5 (refutation rate): the counter computes (raw − confirmed − unverified) / (raw − unverified) with `unverifiedConcerns` taken as an ARRAY LENGTH beside two numbers — a dead confirm seat leaves BOTH sides of the ratio, so it can never read as sensor discrimination',
+    );
+    const segKeys = r0.segments.map((s) => s.key).sort();
+    assert(
+      r0.segments.length === 2 && segKeys[0].startsWith(H1) && segKeys[0].endsWith('opus / xhigh') &&
+        segKeys[1].startsWith(H2) && segKeys[1].endsWith('sonnet') &&
+        r0.segments.find((s) => s.key.startsWith(H1)).n === 3,
+      'observation/D7 (segmentation): the counter segments on BOTH axes of the window key — (confirm_prompt_hash, recorded review route) — so a run under a moved sensor lands in its own segment and is never pooled into the base rate of the other',
+    );
+    assert(
+      r0.uncollected.length === 0 && r0.arming.evaluated === true && r0.arming.nMet === false,
+      'observation/D5: with UNCOLLECTED at zero the arming evaluation is PERFORMED and reports N below the pre-registered minimum — the threshold is read, never moved to fit',
+    );
+    // D7 — the arming numbers are read off the CURRENT WINDOW SEGMENT, never the pooled union.
+    // The four countable records here are three under sensor H1 followed by one under H2, so
+    // the sensor MOVED and the live window is the trailing one-record segment. Pooling would
+    // report N=4 and strict-PASS 2/4 = 50%; the window reports N=1 and 100%. The two disagree
+    // in BOTH directions, which is what makes this case attributable rather than decorative.
+    assert(
+      r0.window && r0.window.n === 1 && r0.window.restarted === true &&
+        r0.window.opensAt === '2026-08-21T04-00-00Z.json' && r0.window.priorClosedRecords === 3 &&
+        r0.arming.windowN === 1 && near(r0.arming.windowPassRate, 1) && r0.arming.pooledN === 4 &&
+        r0.arming.nMet === false && r0.arming.passMet === true && near(r0.countable.passRate, 2 / 4),
+      'observation/D6+D7 (arming reads the WINDOW, not the union): with the sensor moved mid-window the arming evaluation reports N and strict-PASS over the TRAILING segment (1 record, 100%) and never over the pooled 4 records (50%) — D6\'s `Minimum N` and threshold are window quantities and D7 says runs under different sensors never pool, so a sensor change must not be able to manufacture a denominator no single sensor ever had',
+    );
+
+    // UNCOLLECTED > 0 — a record reachable on another ref and absent from main
+    CG('checkout', '-q', '-b', 'feat/stranded');
+    writeFileSync(join(cHist, '2026-08-21T09-00-00Z.json'), rec({ verdict: 'FAIL', rawConcerns: 9, confirmedConcerns: 9 }));
+    CG('add', '-A');
+    CG('commit', '-q', '-m', 'a record that never reached main', '--no-gpg-sign');
+    CG('checkout', '-q', 'main');
+    const r1 = runCounter();
+    assert(
+      r1.uncollected.length === 1 && r1.uncollected[0] === '2026-08-21T09-00-00Z.json' &&
+        r1.countable.n === 4 && r1.arming.evaluated === false && /REFUSED/.test(r1.arming.reason),
+      'observation/D5 (UNCOLLECTED): a record reachable on another ref but absent from main is enumerated by name, is NEVER counted, and REFUSES the arming evaluation outright — a denominator missing its FAIL-ward runs arms on the wrong number (spec R2)',
+    );
+
+    // …AND A STRANDED SUBDIRECTORY RECORD IS ENUMERATED TOO (owner ruling 3, 2026-08-21).
+    // `recordsOnAllRefs` skipped every path containing a `/` with the reason "never countable",
+    // which is true and beside the point: UNCOLLECTED is a COMPLETENESS check, not a count, and
+    // `probes/` is the one TRACKED history subdirectory (D11 commits the replay battery and the
+    // seeded probe corpus there). A battery record stranded on a preserved branch — the exact
+    // artifact D11 produces and R2 says gets lost — read as UNCOLLECTED 0 and unblocked arming
+    // by being invisible. Both sides of the comparison are recursive now, so a probe already ON
+    // main is not reported as forever-missing either.
+    CG('checkout', '-q', '-b', 'feat/stranded-probe');
+    writeFileSync(join(cHist, 'probes/2026-08-21T10-00-00Z.json'), rec({ emittedBy: 'probe', verdict: 'PASS' }));
+    CG('add', '-A');
+    CG('commit', '-q', '-m', 'a battery record that never reached main', '--no-gpg-sign');
+    CG('checkout', '-q', 'main');
+    const r2 = runCounter();
+    assert(
+      r2.uncollected.includes('probes/2026-08-21T10-00-00Z.json') &&
+        !r2.uncollected.includes('probes/2026-08-21T08-00-00Z.json') &&
+        r2.countable.n === 4 && r2.arming.evaluated === false,
+      'observation/D5 (UNCOLLECTED, subdirectories): a `probes/` record reachable on another ref and absent from main is enumerated BY ITS SUBDIRECTORY PATH and blocks the arming evaluation, while the probe already collected onto main is not — probe records are never COUNTABLE, but UNCOLLECTED is a completeness check and a stranded battery record (D11) is exactly what it exists to surface (spec R2)',
+    );
+
+    // D6/D7 — A COUNTABLE-SHAPED RECORD WITH NO WINDOW KEY IS NON-COUNTABLE AND WARNED (owner
+    // ruling 3). The key used to fall back to the literals `(no confirm_prompt_hash)` /
+    // `(no recorded review route)`, which read as honest labelling and did the opposite: two
+    // records missing the same axis produced the SAME key string, so they pooled into one
+    // segment — a segment whose defining property is that nobody can say what sensor produced
+    // its members. D7's rule is that runs under different sensors never pool, and "unknown" is
+    // not a sensor. They are excluded, named, and the missing axis is named with them.
+    //
+    // THE THIRD SHAPE IS `routing: {}` — truthy, and carrying no route. It is here because a
+    // mutation probe on the two-axis predicate showed this exact shape was what a relaxed copy
+    // let through: a `rec.routing !== null` test passes it, `rec.routing.review` is `undefined`,
+    // and the key string became the literal `…:: undefined`, i.e. an invented sensor that every
+    // other routeless run would then pool into. Presence of the OBJECT is not presence of the
+    // AXIS, and the shared predicate in `lib/util.mjs` is what both readers now ask.
+    writeFileSync(join(cHist, '2026-08-21T11-00-00Z.json'), rec({ verdict: 'PASS', confirmPromptHash: null }));
+    writeFileSync(join(cHist, '2026-08-21T12-00-00Z.json'), rec({ verdict: 'PASS', routing: null }));
+    writeFileSync(join(cHist, '2026-08-21T13-00-00Z.json'), rec({ verdict: 'PASS', routing: {} }));
+    CG('add', '-A');
+    CG('commit', '-q', '-m', 'three clean runs that recorded no sensor', '--no-gpg-sign');
+    const r3 = runCounter();
+    const keylessNames = r3.keyless.map((k) => k.name).sort();
+    const keylessMissing = (n) => (r3.keyless.find((k) => k.name === n) || { missing: [] }).missing.join();
+    assert(
+      r3.countable.n === 4 && r3.keyless.length === 3 &&
+        keylessNames.join(',') === '2026-08-21T11-00-00Z.json,2026-08-21T12-00-00Z.json,2026-08-21T13-00-00Z.json' &&
+        keylessMissing('2026-08-21T11-00-00Z.json') === 'confirmPromptHash' &&
+        keylessMissing('2026-08-21T12-00-00Z.json') === 'routing.review' &&
+        keylessMissing('2026-08-21T13-00-00Z.json') === 'routing.review' &&
+        r3.excluded.some((e) => e.name === '2026-08-21T11-00-00Z.json' && /no D7 window key/.test(e.why)) &&
+        !JSON.stringify(r3.segments).includes('undefined') && r3.segments.length === 2,
+      'observation/D6+D7 (keyless records never pool): a clean run that reached a verdict but recorded no window-key axis is NON-COUNTABLE in all three real shapes — `confirmPromptHash: null`, `routing: null`, and the truthy-but-routeless `routing: {}` — staying out of N, out of every segment and out of the base rate, reported by name with the axis it is missing, and never producing an `undefined` segment key. The retired substitution literals gave sensorless runs one SHARED key, which is the pooling D7 forbids dressed as a label',
+    );
+
+    // A NON-ASCII RECORD NAME IS STILL ENUMERATED (`core.quotePath=false`). Git C-quotes such a
+    // path by default, so the `--name-only` line arrives ending in `"`, the `.endsWith('.json')`
+    // filter drops it, and the record vanishes from the all-refs walk — which reads as
+    // UNCOLLECTED 0 and lets the arming evaluation PROCEED, the one thing D5 says it must not do
+    // while records are stranded. The filename is chosen by whoever writes the record, so this is
+    // an attacker-selectable input, and it fails in the direction that destroys evidence.
+    const oddName = '2026-08-21T14-00-00Z\u00e9.json';
+    CG('checkout', '-q', '-b', 'feat/stranded-odd-name');
+    writeFileSync(join(cHist, oddName), rec({ verdict: 'FAIL', rawConcerns: 3, confirmedConcerns: 3 }));
+    CG('add', '-A');
+    CG('commit', '-q', '-m', 'a stranded record whose name is not ASCII', '--no-gpg-sign');
+    CG('checkout', '-q', 'main');
+    const r4 = runCounter();
+    assert(
+      r4.uncollected.includes(oddName) && r4.arming.evaluated === false && /REFUSED/.test(r4.arming.reason),
+      'observation/D5 (UNCOLLECTED, quoted paths): a stranded record whose filename carries a NON-ASCII byte is enumerated and still REFUSES the arming evaluation — git quotes such paths by default and the line-based `.json` filter silently dropped them, which turned a FAIL-ward stranded record into UNCOLLECTED 0 and unblocked the very evaluation D5 makes conditional on it (spec R2)',
+    );
+    rmSync(cRepo, { recursive: true, force: true });
+  }
+
+  // --- D7: SEGMENTS ARE RUNS, NOT KEYS — a returning sensor opens a NEW window ---
+  //
+  // Its own repo, because the shape under test is an ORDERING (A → B → A) and folding it into
+  // the fixture above would have changed every count asserted there. Grouping by key identity
+  // reported ONE row of `[2]` for sensor A across a window restart, directly contradicting both
+  // the printed "runs under different sensors NEVER pool" heading and the live-window figure in
+  // the same report — the segment table said A had 2 runs while the window said the live segment
+  // had 1. D7 restarts the window on any key change; a sensor that comes back opens a new one.
+  {
+    const sRepo = mkdtempSync(join(tmpdir(), 'veriloop-seg-'));
+    const sHist = join(sRepo, '.claude/veriloop/history');
+    mkdirSync(sHist, { recursive: true });
+    const A = 'a'.repeat(64);
+    const B = 'b'.repeat(64);
+    const sput = (name, hash, verdict) => writeFileSync(join(sHist, name), JSON.stringify({
+      emittedBy: 'loop', resolveMode: 'clean', dryRun: false, verdict,
+      confirmPromptHash: hash, routing: { review: 'opus / xhigh' },
+      rawConcerns: 0, confirmedConcerns: 0, unverifiedConcerns: [],
+    }, null, 2));
+    sput('2026-08-21T01-00-00Z.json', A, 'PASS');
+    sput('2026-08-21T02-00-00Z.json', B, 'FAIL');
+    sput('2026-08-21T03-00-00Z.json', A, 'PASS');
+    const SG = (...a) => spawnSync('git', ['-C', sRepo, ...a], { encoding: 'utf8' });
+    SG('init', '-b', 'main');
+    SG('config', 'user.email', 'selftest@example.invalid');
+    SG('config', 'user.name', 'veriloop selftest');
+    SG('add', '-A');
+    SG('commit', '-q', '-m', 'A then B then A', '--no-gpg-sign');
+    const seg = JSON.parse(spawnSync(process.execPath, [join(here, 'count-window.mjs'), '--repo', sRepo, '--main', 'main', '--json'], { encoding: 'utf8' }).stdout);
+    const aRows = seg.segments.filter((x) => x.key.startsWith(A));
+    assert(
+      seg.segments.length === 3 && aRows.length === 2 && aRows.every((x) => x.n === 1) &&
+        seg.segments[0].opensAt === '2026-08-21T01-00-00Z.json' &&
+        seg.segments[2].opensAt === '2026-08-21T03-00-00Z.json' &&
+        seg.window.n === 1 && seg.window.opensAt === '2026-08-21T03-00-00Z.json' &&
+        seg.window.restarted === true && seg.window.key === seg.segments[2].key,
+      'observation/D7 (segments are RUNS): a sensor that changes away and comes back yields TWO rows of one record each, never one pooled row of two — the earlier visit belongs to a window D7 CLOSED at the change, and the live window is by construction the LAST row of the table rather than a second, independently-computed answer',
+    );
+    rmSync(sRepo, { recursive: true, force: true });
+  }
+
+  // --- D4: BOTH stranded records were COLLECTED into this repo's own history ---
+  //
+  // NOT ONE RECORD COUNT IN THIS BLOCK, IN EITHER HALF. `.claude/veriloop/history/` is a
+  // BY-DESIGN-GROWING directory: D2 — shipped in this same change — makes every non-dry run
+  // commit its record there, so a pin of the form `names.length === N` goes red on this
+  // feature's own FIRST use, taking `npm test` and every subsequent drive's gate with it
+  // (constitution rule 1). The PRE-2026-08-21 half looks like the exception and is not: D5
+  // requires the owner to triage-collect stranded records onto main, and R2 records five
+  // landings that committed none — so the very next legitimate collection of a pre-window
+  // record grows that half too, and a count there would fail the gate for the spec's own
+  // required action. Both halves are therefore pinned as MEMBERSHIP + PROPERTY.
+  //
+  // The 2026-08-21 bound survives only as a partition LABEL for these two assertions. It is
+  // deliberately NOT lint-bundle's provenance cutoff, which is empirical (see below and
+  // lint-bundle 6a): a wall-clock cutoff demanded `emittedBy` from records the
+  // pre-instrumentation workflow emitted later that same day — the late-legacy class the
+  // second assertion below pins BY PROPERTY rather than by name.
+  {
+    const selfHist = join(here, '..', '.claude/veriloop/history');
+    const names = readdirSync(selfHist).filter((f) => f.endsWith('.json')).sort();
+    const PRE_SPEC = Date.parse('2026-08-21T00:00:00Z'); // partition label — see above, no count rides it
+    const instantOf = (n) => { // === lint-bundle.mjs recordInstant (check 6a)
+      const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z\.json$/.exec(n);
+      return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN;
+    };
+    const emittedByOf = (n) => {
+      try { return JSON.parse(readFileSync(join(selfHist, n), 'utf8')).emittedBy; } catch { return undefined; }
+    };
+    // NO COUNT HERE EITHER — MEMBERSHIP AND A PROPERTY. The pre-spec half looks closed, and is
+    // not: D5 MANDATES that the owner triage-collect stranded records onto main ("the owner
+    // triage-commits stranded records to main"), and R2 records five landings 2026-08-14→08-20
+    // that committed no record at all. Any one of those collected later is a PRE-2026-08-21
+    // filename entering this partition — so `preSpec.length === N` would turn the gate red on
+    // the spec's own required action, which is the same constitution-rule-1 trap as counting the
+    // growing half. (The eighth record is not in this set at all: it is dated 01:17 on the
+    // landing day, i.e. AFTER this bound — the point the assertion below makes.) What survives
+    // collection is the pair that carries the meaning: the seventh record is IN, and nothing in
+    // the partition carries `emittedBy`, so no member of it can ever be counted.
+    const preSpec = names.filter((n) => instantOf(n) < PRE_SPEC); // NaN ⇒ NOT pre-spec
+    const preSpecKeyed = preSpec.filter((n) => typeof emittedByOf(n) === 'string');
+    assert(
+      preSpec.includes('2026-08-01T01-44-25Z.json') && preSpecKeyed.length === 0,
+      `observation/D4: the seventh record — stranded uncommitted in the domain-expert-phase1 worktree — is COLLECTED into this repo's history/, and NO pre-spec record carries \`emittedBy\`, so none of them can ever be counted. Pinned as membership + property, never as a COUNT: D5 requires the owner to keep triage-collecting stranded records, and every such collection legitimately grows this partition${preSpecKeyed.length ? ` [unexpectedly keyed: ${preSpecKeyed.join(', ')}]` : ''}`,
+    );
+    // …AND THE GROWING HALF, WHICH IS PINNED BY PROPERTY AND NEVER BY NAME. The eighth record —
+    // the headless-autonomy drive (landed as bb11fae) left a `resolveMode: "clean"`, verdict
+    // FAIL record stranded and untracked in its worktree, dated 01:17 on the spec's own landing
+    // day — is KEPT and collected (owner ruling 2, 2026-08-21: the route corrected, the
+    // substance authorized; it is exclusion-ledgered as non-countable legacy). It is invisible
+    // to the counter (an untracked worktree file is on no ref — the documented R2 limit), so
+    // nothing would ever have surfaced it: exactly the leak class D4 and R2 exist to close, and
+    // FAIL-ward, i.e. the direction whose loss flatters the base rate.
+    //
+    // Naming it HERE was the defect the ruling names. `history/` grows by design (D2), so a
+    // `names.includes('<one file>')` pin is the same shape as a record COUNT: it asserts the
+    // membership of a set later drives extend, and it goes stale the moment collection is
+    // re-triaged. What the record actually demonstrates is a PROPERTY of whatever records
+    // exist — that a record emitted after the spec-landing midnight can still legitimately
+    // carry no `emittedBy`, so no wall clock can bound the legacy partition (the 6a regression
+    // in case 1a). Instrumented records never enter this set, so it stays true as the window
+    // fills; it goes red only if the collected legacy is dropped again, which is the thing
+    // worth catching.
+    const lateLegacy = names.filter((n) => typeof emittedByOf(n) !== 'string' && !(instantOf(n) < PRE_SPEC));
+    assert(
+      lateLegacy.length > 0 && lateLegacy.every((n) => !Number.isNaN(instantOf(n))),
+      `observation/D4: at least one COLLECTED record is dated AFTER the spec-landing midnight and still carries no \`emittedBy\` — the live specimen proving the provenance cutoff cannot be a wall clock (D3), asserted as a property of the records present rather than by filename over a by-design-growing directory [late legacy: ${lateLegacy.join(', ') || 'NONE'}]`,
+    );
+    // The complementary INVARIANT over the growing half, mirroring lint-bundle 6a exactly:
+    // the window opens at the earliest record that demonstrably came from an instrumented
+    // emitter, and every record at or after it declares a valid `emittedBy`. True vacuously
+    // today (no instrumented record exists yet) and stays true as the window fills — never a
+    // record COUNT, which D2's growth would turn red on this feature's own first use.
+    const instrumented = names.filter((n) => typeof emittedByOf(n) === 'string' && !Number.isNaN(instantOf(n)));
+    const opener = instrumented.length ? Math.min(...instrumented.map(instantOf)) : null;
+    const live = opener === null ? [] : names.filter((n) => !(instantOf(n) < opener));
+    assert(
+      live.every((n) => ['loop', 'regate', 'probe'].includes(emittedByOf(n))),
+      `observation/D3: every record this repo has committed at the history ROOT at or after its EMPIRICAL provenance window opener declares a valid \`emittedBy\` — pinned as an INVARIANT over a growing directory, never as a record COUNT${opener === null ? ' [WINDOW NOT YET OPEN: no record here carries `emittedBy`, so this assertion is INERT today — it is stated as vacuously-true-and-said-so rather than printing as a check that ran, mirroring lint-bundle 6a\'s own ok line]' : ` [window open at ${new Date(opener).toISOString()}, ${live.length} record(s) checked]`}`,
+    );
+  }
 
   // build-time validation — never emit a loop that runs a mode the interview never named
   const ivBad = join(tmp, 'bad-interview.json');
@@ -4465,6 +5235,62 @@ function gateFigures(file, re) {
     rBad.status !== 0 && /resolve_default/.test(rBad.stderr || ''),
     'resolve: an unknown interview.resolve_default FAILS THE BUILD, naming the key (fail fast, not mid-run)',
   );
+
+  // --- D12: the COMMAND DOC's statement of the default is DERIVED, never re-hardcoded ---
+  //
+  // Constitution rule 9: "command and constitution text derive from the generated config, never
+  // re-hardcoded (M1 bug #2)". `renderCommand` hardcoded "Default `blockers`: today's behavior
+  // exactly", and D12 flipping this repo to `clean` is what made that string FALSE — the one
+  // surface an owner reads to learn what a bare `/dev-loop` does stated the opposite of what it
+  // did, and understated the per-drive confirm fan-out the spec's own R5 wants visible. Nothing
+  // pinned the string against the config, so it drifted silently. This generates the bundle BOTH
+  // ways and reads the emitted command, so a re-hardcoding is red in whichever direction it lands.
+  {
+    const readDefaultLine = (mode) => {
+      const outDir = mkdtempSync(join(tmpdir(), `veriloop-rd-${mode}-`));
+      const iv = join(outDir, 'interview.json');
+      writeFileSync(iv, JSON.stringify({ resolve_default: mode }));
+      const r = spawnSync(process.execPath, [generatePath, '--repo', tmp, '--commands', cjPath, '--out', outDir, '--interview', iv], { encoding: 'utf8' });
+      const cmd = r.status === 0 ? readFileSync(join(outDir, '.claude/commands/dev-loop.md'), 'utf8') : '';
+      rmSync(outDir, { recursive: true, force: true });
+      return { status: r.status, cmd };
+    };
+    const asClean = readDefaultLine('clean');
+    const asBlockers = readDefaultLine('blockers');
+    assert(
+      asClean.status === 0 && asBlockers.status === 0 &&
+        /This repo's default is\n?\s*`clean`/.test(asClean.cmd) && !/default is\n?\s*`blockers`/.test(asClean.cmd) &&
+        /This repo's default is\n?\s*`blockers`/.test(asBlockers.cmd) && !/default is\n?\s*`clean`/.test(asBlockers.cmd) &&
+        !/today's behavior exactly/.test(asClean.cmd),
+      'resolve/D12 (rule 9): the emitted `/dev-loop` Options section states THIS repo\'s `resolve_default` because it is rendered from the generated config — generating with `clean` says clean and generating with `blockers` says blockers, so the doc can never again tell the owner an un-argumented run behaves "exactly as today" while every run pays a confirm-seat fan-out',
+    );
+    // …and the bundle THIS repo actually ships says what THIS repo actually does.
+    const selfCmd = readFileSync(join(here, '..', '.claude/commands/dev-loop.md'), 'utf8');
+    assert(
+      new RegExp(`This repo's default is\\n?\\s*\`${selfMan.resolve_default}\``).test(selfCmd),
+      `resolve/D12 (self-host): the emitted \`/dev-loop\` command doc names this repo's real default '${selfMan.resolve_default}' — the manifest, the workflow config and the owner-facing prose are one value, not three`,
+    );
+    // …AND README, the OTHER owner-facing surface — the one that actually rotted. Nothing read
+    // its prose, so the "Resolving to clean" section went on asserting "blockers-only by default,
+    // and that default is unchanged" and "Default runs therefore keep today's verdict semantics
+    // exactly" for a bundle shipping `clean`, three paragraphs of a released README stating the
+    // opposite of the generated command doc beside it. The command-doc pin above could not catch
+    // it, because the rot was in the file nothing pinned. Pinned BOTH ways: the real default has
+    // to be NAMED, and each retired absolute must stay retired — a positive-only pin passes
+    // happily with the false sentence still sitting one paragraph away.
+    const selfReadme = readFileSync(join(here, '..', 'README.md'), 'utf8').replace(/\s+/g, ' ');
+    const revived = [
+      'blockers-only by default',
+      'that default is unchanged',
+      'under the default `blockers`',
+      "Default runs therefore keep today's verdict semantics exactly",
+    ].filter((phrase) => selfReadme.includes(phrase));
+    assert(
+      selfReadme.includes(`This repo's own bundle ships \`resolve_default: "${selfMan.resolve_default}"\``) &&
+        revived.length === 0,
+      `resolve/D12 (self-host, README): README's own \`args.resolve\` section names this repo's real default '${selfMan.resolve_default}' and states the protected-path consequence against the EFFECTIVE resolve mode — not against a hardcoded "default blockers" that stopped being true the moment D12 flipped this bundle${revived.length ? ` [FALSE CLAIM BACK IN README: ${revived.join('; ')}]` : ''}`,
+    );
+  }
 
   // =========================================================================
   // headless autonomy — spec `.claude/veriloop/specs/headless-autonomy.md`
@@ -4660,7 +5486,7 @@ function gateFigures(file, re) {
     );
     // THE MODE SPLIT, and the only place the two modes disagree. A spec with NO status line is
     // not marked anything: an INTERACTIVE run proceeds on it exactly as it always has
-    // (acceptance 1 — eight of this repo's eighteen specs predate the convention), while an
+    // (acceptance 1 — eight of this repo's nineteen specs predate the convention), while an
     // OVERNIGHT run PARKS, because unattended ambiguity has nobody to ask and must fail safe.
     // The earlier description claimed the guard "cannot be dodged by omitting the line" while
     // asserting the opposite two lines above it; the split is what makes the claim true where
@@ -4685,9 +5511,9 @@ function gateFigures(file, re) {
     const byState = (st) => corpus.filter(([, v]) => v === st).map(([f]) => f);
     const unratified = byState('unratified');
     assert(
-      corpus.length === 18 && byState('ratified').length === 8 && byState('absent').length === 8 &&
+      corpus.length === 19 && byState('ratified').length === 9 && byState('absent').length === 8 &&
         unratified.join(',') === 'constitution-enforcer-partition.md,resolution-pass-2026-08-17.md',
-      `autonomy/D5 (corpus): over this repo's REAL 18-spec corpus the predicate reads 8 RATIFIED, 8 status-LESS and exactly 2 un-ratified — the genuine draft ("DRAFT — NOT RATIFIED", which the fail-open BUILT) and the resolution-pass record, whose "EXECUTED UNDER OWNER DELEGATION" line the inversion newly refuses${unratified.length !== 2 ? ` [un-ratified: ${unratified.join(', ') || 'none'}]` : ''}`,
+      `autonomy/D5 (corpus): over this repo's REAL 19-spec corpus the predicate reads 9 RATIFIED, 8 status-LESS and exactly 2 un-ratified — the genuine draft ("DRAFT — NOT RATIFIED", which the fail-open BUILT) and the resolution-pass record, whose "EXECUTED UNDER OWNER DELEGATION" line the inversion newly refuses${unratified.length !== 2 ? ` [un-ratified: ${unratified.join(', ') || 'none'}]` : ''}`,
     );
     // THE PROSE COUNT IS THE MEASURED COUNT. The owner-facing park context and the comment
     // above the predicate both spell that number out in words, and both said "nine" while the
@@ -4701,9 +5527,35 @@ function gateFigures(file, re) {
     const wfProse = wf.replace(/\\'/g, "'");
     const wrongWords = WORDS.filter((w) => w !== absentWord && new RegExp(`\\b${w} of this repo`, 'i').test(wfProse));
     assert(
-      new RegExp(`\\b${absentWord} of this repo's own eighteen specs predate the convention`, 'i').test(wfProse) &&
+      new RegExp(`\\b${absentWord} of this repo's own nineteen specs predate the convention`, 'i').test(wfProse) &&
         wrongWords.length === 0,
       `autonomy/D5 (the count is not decoration): the EMITTED workflow's owner-facing park context spells the status-LESS spec count as the word the corpus scan just measured ('${absentWord}'), and no other number appears in that sentence — the shipped text said "nine" over a corpus of eight, which is the kind of claim a reader trusts precisely because nothing checks it${wrongWords.length ? ` [also found: ${wrongWords.join(', ')}]` : ''}`,
+    );
+
+    // …and the SAME sweep figure in the RELEASED docs. This pin previously covered the emitted
+    // workflow and the README and stopped there, so the CHANGELOG kept the pre-growth numbers:
+    // "eight of this repo's eighteen" beside a corpus of 19, and — in one sentence — "this
+    // repo's whole real 18-spec corpus that must read 9 ratified / 8 status-less / exactly 2
+    // un-ratified", which is 19 by its own arithmetic. A released claim about the gate's own
+    // evidence that is false on its face is exactly the defect class this repo polices, so the
+    // CHANGELOG joins the README rather than being the one artifact nothing reads.
+    const CORPUS_WORDS = { 19: 'nineteen' };
+    const corpusWord = CORPUS_WORDS[corpus.length] || String(corpus.length);
+    const docsWithCounts = [['README.md', readFileSync(join(here, '..', 'README.md'), 'utf8')], ['CHANGELOG.md', readFileSync(join(here, '..', 'CHANGELOG.md'), 'utf8')]];
+    const staleCounts = [];
+    for (const [name, text] of docsWithCounts) {
+      // any "<word> of this repo's <word> specs" whose second word is not the measured one
+      for (const m of text.matchAll(/of this repo's (?:own )?([a-z]+) specs/g)) {
+        if (m[1] !== corpusWord) staleCounts.push(`${name}: "${m[0]}" (corpus is ${corpus.length})`);
+      }
+      // any "<n>-spec corpus" figure that is not the measured size
+      for (const m of text.matchAll(/(\d+)-spec corpus/g)) {
+        if (Number(m[1]) !== corpus.length) staleCounts.push(`${name}: "${m[0]}" (corpus is ${corpus.length})`);
+      }
+    }
+    assert(
+      staleCounts.length === 0,
+      `published docs: every spec-corpus figure in README AND CHANGELOG is the size this run just MEASURED (${corpus.length}/'${corpusWord}') — the CHANGELOG was the one released artifact no assertion read, and it kept saying "eighteen" and "18-spec corpus" beside a breakdown of 9 + 8 + 2 that sums to 19${staleCounts.length ? ` [STALE: ${staleCounts.join('; ')}]` : ''}`,
     );
   }
 

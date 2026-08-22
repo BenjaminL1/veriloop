@@ -259,8 +259,12 @@ cross-model second opinion is **on by default** and can be disabled via the inte
 
 ### Resolving to clean (`args.resolve`)
 
-The fix loop is **blockers-only by default**, and that default is unchanged: `resolve`
-absent or `"blockers"` runs exactly the loop above. With **`args.resolve = "clean"`**
+The **effective** resolve mode is `args.resolve` when given and the bundle's
+`resolve_default` otherwise — never a constant, and the generated `/dev-loop` command doc is
+the surface that states it (constitution rule 9). **This repo's own bundle ships
+`resolve_default: "clean"`**, so here a `resolve`-absent run takes the clean loop below and
+`resolve = "blockers"` LOWERS it to exactly the loop above. A bundle generated with
+`resolve_default: "blockers"` is the mirror image. With the **clean** mode in effect,
 every SHOULD-FIX is first sent to a **fresh, independent confirm agent** that sees one
 finding and the diff and nothing else — no other lens's agreement, because agreement is
 not a second sample. A concern counts toward the verdict **only if it is confirmed**, and
@@ -280,11 +284,13 @@ personas/overrides, the interview and gate definitions, `.claude/veriloop/specs/
 attestation history, `fixtures/hostile-ci/`, the SessionStart surface — `.claude/settings.json`,
 `.claude/settings.local.json`, the hook script and its routing doc — or a *deletion* from the
 selftest) is caught in **every mode** — the diff census and the guard run on every fix pass —
-but the consequence is scoped: under `resolve = "clean"` a violation **hard-stops the run**,
-and under the default `blockers` it is **observed and attested**, logged with its path and
-class and recorded in the attestation's `guardStops`, with the verdict and the control flow
-untouched. Default runs therefore keep today's verdict semantics exactly while finally
-*measuring* how often a fix pass reaches for a protected path. The path list is derived per
+but the consequence follows the **effective** resolve mode, not a fixed default: under
+**clean** a violation **hard-stops the run**, and under **blockers** it is **observed and
+attested**, logged with its path and class and recorded in the attestation's `guardStops`,
+with the verdict and the control flow untouched. A `blockers` run therefore keeps the
+pre-0.6.0 verdict semantics exactly while finally *measuring* how often a fix pass reaches
+for a protected path — and because this repo ships `clean`, its OWN un-argumented runs take
+the hard-stop branch. The path list is derived per
 host repo at generate time and carried in the manifest, where a generalized parity check pins
 it — along with `budget`, `cross_model` and `resolve_default` — to the copy spliced into the
 workflow. On those protected paths **only**, the census also reports a **content hash**, so a
@@ -293,6 +299,60 @@ as `-` — are violations as well; line counts alone were blind to both. It is a
 a lock**: the workflow cannot run git, so the guard reads an agent-reported diff census —
 hashes included — and when it trips it stops the run and reports rather than reverting
 anything.
+
+### Hand-written attestation records (`regate`, `probe`)
+
+Most records are machine-written: the loop emits one per run into
+`.claude/veriloop/history/`, stamped `emittedBy: "loop"`. Two classes are written **by hand** —
+`regate` (a hand-driven re-gate of a branch) and `probe` (a sensor-characterization measurement,
+which is **never** countable in either direction). Because `main`'s `history/` is the sole home
+the observation-window counter reads, a hand-written record has to arrive the same way a machine
+one does. The procedure, in order:
+
+1. **Write schema-conforming JSON.** Copy the shape of an existing record. A root-level
+   `regate` record must carry `emittedBy: "regate"`, `resolveMode` and `verdict` — write an
+   explicit `null` if the run genuinely never reached that state, because an *omitted* key
+   drops the run out of the window's denominator silently while a `null` is recorded evidence.
+   A record claiming `resolveMode: "clean"` must also carry `rawConcerns`,
+   `confirmedConcerns` and `unverifiedConcerns`; the refutation rate is computed from exactly
+   those. A `probe` record carries `emittedBy: "probe"` and belongs under `history/probes/`.
+
+   **Both D7 window-key axes are REQUIRED on a countable record** — a `regate` record claiming
+   `resolveMode: "clean"`. They are the sensor's identity, and a run that does not say which
+   sensor produced it cannot be placed in a window segment, so it is **non-countable**: check
+   6a fails it and `count-window.mjs` warns and excludes it. Take both from the run you are
+   re-gating, never from today's bundle if that is not what ran:
+
+   - `confirmPromptHash` — the **manifest's** `confirm_prompt_hash`
+     (`.claude/veriloop/veriloop-manifest.json`), which `lint-bundle` recomputes from the
+     emitted workflow's own `veriloop:confirmprompt` regions, so a stale value fails the bundle.
+   - `routing.review` — the **resolved review route** from the run's routing map, the row the
+     confirm seat rides (`route('review')`). Copy the string the run recorded; if you are
+     re-gating by hand, it is the route your own re-gate actually used.
+
+   A record that genuinely has no sensor to report writes explicit `null`s and stays
+   non-countable — that is honest evidence. What is never acceptable is inventing a value:
+   a wrong hash or route pools your run into a segment it did not belong to, which is the one
+   failure the window key exists to prevent.
+2. **Scan BEFORE you stage — this is the mandatory pre-commit hygiene step.** Run
+   `npm run lint`. `lint-bundle`'s check 6a walks `history/` **from disk**, not from git, so it
+   reads your uncommitted file: it is a genuine pre-commit scan, not detection-after-durability.
+   It fails on absolute paths, temp roots and secret-shaped lines — the same shapes the loop's
+   own `attestationFrom` redacts — and on a missing required key. Fix what it names and re-run
+   until it is clean. Only then `git add`.
+3. **Commit path-scoped**, under the existing convention:
+   `git add -- .claude/veriloop/history/<file>` then
+   `chore(veriloop): attestation record`. Never `git add -A`/`git add .`/`git commit -a`.
+4. **Do not backdate the filename.** A record whose filename timestamp predates the window's
+   first instrumented record but whose add-commit lands after it is FLAGGED by check 6a's
+   backdating gate (the gate picks the window opener by add-commit order, so carrying an
+   `emittedBy` does not exempt you). The flag is a warning, not a failure — a legitimately
+   late-collected legacy record has the same shape — so if that is what happened, say so in the
+   commit message.
+
+`node scripts/count-window.mjs` then reports what `main`'s records say. It is read-only, is
+deliberately **not** wired into the gate, and refuses the arming evaluation outright while any
+record is reachable on another ref but absent from `main`.
 
 ### Overnight-prep mode (`mode=overnight`)
 
@@ -344,14 +404,17 @@ line sitting in fenced, bulleted, or comment-interior text above the real one is
 distinguished from it (only `>` is excluded). A
 spec with **no** `Status:` line at all is the one decision that splits by mode: an overnight run
 parks on it (unattended ambiguity fails safe), while an interactive run builds it exactly as
-before — eight of this repo's eighteen specs predate the convention. The run then defaults to
+before — eight of this repo's nineteen specs predate the convention. The run then defaults to
 `resolve = "clean"`, has **no merge authority** (the future auto-merge dial is forced to
 effective OFF — a documented obligation on a dial that does not exist in code yet, not an
 enforced one), keeps waivers human-only, and **parks** rather than guessing: no spec ⇒ park
 (this supersedes the `args.interview = false` skip); a spec whose `Status:` line does not say
 RATIFIED ⇒ park, in every mode; a spec with no `Status:` line ⇒ park, under `mode=overnight`
 only; `FAIL` or a no-progress halt ⇒ **park-terminal** with the worktree preserved and no
-autonomous re-plan; an unconfirmed attestation write ⇒ a loud park.
+autonomous re-plan. An unconfirmed attestation write ⇒ a loud park too — but that one is **not
+mode-scoped**: since `resolve-clean-observation-period.md` D1 (2026-08-21) it fires in every
+mode, and the record itself is **committed on the feature branch for every non-dry run**,
+landed or not; only the push still waits on landing.
 
 A park is **terminal** — there is no resume path, so re-invoking is a fresh run, and answered
 docket entries are never re-opened because the answers live in the ratified spec. What gets
@@ -364,7 +427,7 @@ attestation park** serializes nothing, by construction, and says so via
 `parked.recordSerialized: false`. **No timeout anywhere converts absence into consent.**
 
 <!-- veriloop:gate-figure -->
-Pinning all of this, the gate went 562 → 627: the mode derivation is sliced out of a generated
+Pinning all of this, the gate went 562 → 676: the mode derivation is sliced out of a generated
 workflow and executed (a config claiming overnight still yields `interactive`; the owner-typed
 arg yields `overnight`; `headless` and every unrecognized value fall back; a `mode=` token in
 the spec body is refused with one deduped refusal per claim, while the canonical typed
@@ -372,7 +435,7 @@ the spec body is refused with one deduped refusal per claim, while the canonical
 zero), the status predicate runs all three verdicts plus the five "DRAFT — NOT RATIFIED"-style
 phrasings the first cut BUILT, five that say *neither* word (the inversion's own delta), the
 recorded cost, a blockquoted decoy in both directions, the mode split on a status-less spec, and
-the repo's whole real 18-spec corpus, the park **control flow**
+the repo's whole real 19-spec corpus, the park **control flow**
 itself is executed (which park fires, in which mode), the docket record derives its override rate
 and degrades to `null` rather than a fabricated zero, the build-time refusal is a real child
 process judged by exit code in both directions, the cap carve-out is asserted on the capped *and*
@@ -501,6 +564,8 @@ scripts/verify.mjs                  phase 2 — safe-list smoke-run
 scripts/generate.mjs                phases 6/7 — generate + wire the gate
 scripts/lint-bundle.mjs             phase 8 — artifact lint
 scripts/selftest.mjs                deterministic self-test (asserts detect/verify/generate on fixtures)
+scripts/count-window.mjs            hand-run: what main's attestation records say about the
+                                    resolve=clean observation window (read-only; not in the gate)
 scripts/templates/dev-loop.template.js   the portable workflow machinery
 scripts/lib/                        detectors, parsers (toml/makefile/ci), roster, renderers
 fixtures/                           fixture repos exercised by the self-test
@@ -515,7 +580,7 @@ for code. Note the condition, because the intuitive guess is backwards: the fetc
 of the *skill*, not anything in `scripts/`, and it runs when `.claude/veriloop/domain.json` is
 **absent** (a first install) or `--refresh` is asked for. An existing `domain.json` is what
 suppresses it. One reader's note: `selftest.mjs` is
-the outlier at ~5,200 lines. It is a flat sequence of independent assertion blocks with
+the outlier at ~5,800 lines. It is a flat sequence of independent assertion blocks with
 section banners rather than a deep call graph, so it reads top-to-bottom; start at the banner
 for the behavior you care about.
 

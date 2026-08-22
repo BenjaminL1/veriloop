@@ -11,7 +11,7 @@ import { readFileSync, existsSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { listDir, isDir } from './lib/util.mjs';
+import { listDir, isDir, confirmPromptHash, missingWindowKeyAxes } from './lib/util.mjs';
 import { SECRET_TRIGGER } from './lib/domain.mjs';
 
 // The commands veriloop emits into `.claude/commands/`. ONE source of truth
@@ -185,6 +185,9 @@ function main() {
         ['cross_model', 'crossModel'],
         ['resolve_default', 'resolveDefault'],
         ['protected_paths', 'protectedPaths'],
+        // D7 axis 1 — the confirm sensor's wording hash. A divergence here would segment the
+        // observation window on a value the emitted loop is not actually stamping.
+        ['confirm_prompt_hash', 'confirmPromptHash'],
       ];
       const wfDirX = join(args.bundle, '.claude/workflows');
       const wfX = (listDir(wfDirX) || []).find((x) => x.endsWith('-dev-loop.js'));
@@ -205,6 +208,28 @@ function main() {
             fail(`manifest↔workflow parity: manifest \`${mKey}\` and workflow \`${wKey}\` disagree — the emitted config has two copies and only one was updated. Re-run \`node scripts/generate.mjs\` to regenerate the bundle from its single source of truth.`);
           }
           if (!diverged) ok(`workflow config matches the manifest on every emitted key (${PARITY_KEYS.map(([k]) => k).join(', ')})`);
+
+          // …and `confirm_prompt_hash` is RECOMPUTED from the bytes it claims to describe.
+          // The parity row above only proves the two STORED copies agree, which a hand-edit
+          // to the confirm prompt inside this emitted workflow leaves true — both copies stay
+          // stale together, lint stays green, and every record that run emits claims a sensor
+          // identity that is not the sensor that ran. That is the single failure D7's window
+          // key exists to prevent, and it is the likely failure mode in an adopter bundle,
+          // which is exactly the artifact this scanner reads. The `veriloop:confirmprompt`
+          // markers survive the splice into the emitted workflow, so the recomputation is
+          // available here and uses the SAME implementation generate.mjs uses (rule 9).
+          if ('confirm_prompt_hash' in m || 'confirmPromptHash' in cfg) {
+            let recomputed = null;
+            let hashErr = null;
+            try { recomputed = confirmPromptHash(srcX, `workflow ${wfX}`); } catch (e) { hashErr = e.message; }
+            if (hashErr) {
+              fail(`workflow ${wfX} — the confirm-prompt marker regions could not be read (${hashErr}), so the D7 sensor hash it stamps into every attestation record cannot be verified against the bytes it describes`);
+            } else if (recomputed !== m.confirm_prompt_hash) {
+              fail(`workflow ${wfX} — \`confirm_prompt_hash\` is STALE: the manifest and the workflow both say ${String(m.confirm_prompt_hash).slice(0, 16)}…, but hashing this workflow's own \`veriloop:confirmprompt\` regions yields ${recomputed.slice(0, 16)}…. The confirm prompt was edited without regenerating, so every record this loop emits stamps a sensor identity that is not the sensor that ran, and two different sensors pool into one observation window (resolve-clean-observation-period.md D7). Re-run \`node scripts/generate.mjs\`.`);
+            } else {
+              ok(`workflow ${wfX} — \`confirm_prompt_hash\` RECOMPUTED from its own confirm-prompt marker regions and matches the manifest (D7 axis 1 describes the bytes that actually shipped)`);
+            }
+          }
         }
       }
     } catch (e) { fail(`manifest is not valid JSON: ${e.message}`); }
@@ -278,7 +303,16 @@ function main() {
   //     `2020-01-01T00-00-00Z.json` — is exempted exactly as a genuine pre-cutoff record is.
   //     No parse fix closes that; it is what gating on a self-reported name means. Closing it
   //     needs a different gate (the commit date, or scanning every record and hand-amending
-  //     the two), which is an owner call and not a lint tweak.
+  //     the two), which was an owner call and not a lint tweak.
+  //
+  //     THE OWNER MADE THAT CALL (spec D3, ratified 2026-08-21) and it is built — but for
+  //     the PROVENANCE window, not for this backstop. `THE BACKDATING GATE` below reads two
+  //     real `git log --diff-filter=A` add-commit dates and FLAGS a record whose filename
+  //     predates the provenance window opener while its add-commit lands after it. Read the
+  //     scope precisely: it WARNS rather than fails, it needs a git worktree (outside one it
+  //     says SKIPPED), and it is anchored on the provenance window — so a record backdated
+  //     to before 2026-08-16 still evades THIS temp scan on its filename alone. The bypass
+  //     above is narrowed, not closed.
   //
   //     The regex is a MIRRORED LITERAL, the same convention ABS already uses in its three
   //     copies (the template's `attestationFrom`, and selftest :980/:1922): lint-bundle is a
@@ -297,10 +331,61 @@ function main() {
     return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : NaN;
   };
 
+  // 6a (continued) — RECORD PROVENANCE (`resolve-clean-observation-period.md` D3,
+  //     owner-ratified 2026-08-21). The observation period counts records; a record that
+  //     cannot say WHICH CLASS emitted it, or that claims `resolveMode: "clean"` without the
+  //     three D8 measurement fields, is not countable and must not sit in history looking as
+  //     if it were.
+  //
+  //     THE CUTOFF IS EMPIRICAL, NOT WALL-CLOCK — and this is the correctness of the check,
+  //     not a nicety. D3 scopes the keys to "post-instrumentation" records, and a calendar
+  //     constant (`Date.parse('2026-08-21T00:00:00Z')`, the first draft) is not that: it
+  //     names midnight of the landing DAY, so every record the PRE-instrumentation workflow
+  //     emitted later that same day — including this feature's OWN attestation record, which
+  //     main's uninstrumented workflow writes at Report time on the feature branch — was
+  //     classified post-instrumentation and failed for missing a key its emitter could not
+  //     have written. The only remediations were both spec violations: leave D5/R2's
+  //     stranded records uncollected (they turn `npm run lint` red on collection), or
+  //     hand-add an `emittedBy` the run never emitted (the fabrication D3/D4 fence). The
+  //     same constant was a backwards-compatibility break for adopters (CLAUDE.md §2): an
+  //     adopter's 0.6.0 records carry no `emittedBy` at all, and upgrading would have turned
+  //     their `npm run lint` red on history they cannot rewrite.
+  //
+  //     So the window OPENS at the earliest record that DEMONSTRABLY came from an
+  //     instrumented emitter — the filename instant of the window opener resolved below,
+  //     which is the earliest record carrying `emittedBy` BY ADD-COMMIT DATE (falling back
+  //     to earliest by filename outside a git worktree). Before that instant no emitter in
+  //     this bundle was stamping provenance, so requiring the key is requiring a forgery; at
+  //     or after it one was, and a record without the key is a real gap. With ZERO
+  //     instrumented records the window has not opened and the requirement is INERT — which
+  //     is exactly the state of a fresh adopter, and of this repo until its first
+  //     instrumented drive.
+  //
+  //     WHY THE OPENER IS THE SAME OBJECT THE BACKDATING GATE USES. The one exit left is to
+  //     date a record so it falls outside the window; the backdating gate below catches that
+  //     by add-commit date. Resolving the opener ONCE is what makes the two compose instead
+  //     of contradict: anchored on filename alone, a single early-NAMED instrumented record
+  //     — a forgery, or an honestly hand-written `regate` record named for the run it
+  //     re-gates — would drag every genuinely pre-window legacy record into the checked set
+  //     and fail the bundle on history nobody can rewrite. The honest residual: if no
+  //     instrumented record is ever committed the check never fires; completeness of the
+  //     denominator is D5's counter (`scripts/count-window.mjs`), not this scanner.
+  //
+  //     Fail-closed on an unparseable name is retained from the temp backstop: the exemption
+  //     is spelled as a NEGATED `<`, so a name that does not parse (NaN) is CHECKED.
+  //
+  //     SCOPE. Run-record keys are required at the history ROOT only. `probes/` records are
+  //     probe-class measurement artifacts (D11) with their own shape — they are EXEMPT from
+  //     these keys and still fully hygiene-scanned by the walker above, which recurses into
+  //     them. `dry-runs/` never commits and `parks/` is machine-ignored.
+  const EMITTED_BY = ['loop', 'regate', 'probe'];
+
   const histDir = join(args.bundle, '.claude/veriloop/history');
   if (isDir(histDir)) {
     const secretPatterns = getSecretPatterns();
     let histHits = 0;
+    // root-level records, collected as the walk runs, for the backdating gate below
+    const rootRecords = [];
     const walkHist = (dir, rel) => {
       for (const name of listDir(dir)) {
         if (rel === '' && name === 'dry-runs') continue; // dry-run records never commit
@@ -317,11 +402,223 @@ function main() {
               if (re.test(line)) { histHits++; fail(`secret-shaped content in committed attestation record ${relPath}:${i + 1}`); break; }
             }
           });
+          if (rel !== '') continue; // probes/ (and any other subdirectory) — hygiene only
+          let rec = null;
+          try { rec = JSON.parse(t); } catch { histHits++; fail(`committed attestation record ${relPath} is not valid JSON`); continue; }
+          // The provenance checks below need the WHOLE root set before any of them can run
+          // (the window opener is derived from it), so the walk only collects here.
+          rootRecords.push({ relPath, instant: recordInstant(name), rec, emittedBy: rec && rec.emittedBy });
         }
       }
     };
     walkHist(histDir, '');
-    if (!histHits) ok('committed attestation records scanned for absolute paths + secret patterns (and for temp-root paths, except where the filename timestamp parses to before 2026-08-16)');
+
+    // ONE WINDOW OPENER, used by BOTH the provenance requirement and the backdating gate
+    // that follow. Two independent definitions would disagree exactly where it matters — the
+    // gate flags a record for sitting before the opener while the key check demands keys of
+    // it for sitting after a DIFFERENT opener — so the opener is resolved once, here.
+    //
+    // It is the earliest instrumented record BY ADD-COMMIT, falling back to the earliest by
+    // FILENAME when no add date can be read. Add-commit order is the right anchor for the
+    // same reason the backdating gate gives: the filename is the field a record's author
+    // chooses, the add date is not. Anchoring on the filename alone let a single
+    // early-NAMED instrumented record — a forgery, or an honestly hand-written `regate`
+    // record named for the run it re-gates — drag every genuinely pre-window legacy record
+    // into the checked set and fail the bundle on history nobody can rewrite.
+    const instrumentedRoot = rootRecords.filter((r) => typeof r.emittedBy === 'string' && !Number.isNaN(r.instant));
+    const earliestByName = instrumentedRoot.length
+      ? instrumentedRoot.reduce((a, b) => (b.instant < a.instant ? b : a))
+      : null;
+    // BOTH sides of the backdating comparison are ADD-COMMIT dates, never a filename instant
+    // against a clock: comparing a real commit date to a self-reported name compares two
+    // different clocks.
+    //
+    // GIT SUBPROCESS SAFETY — the constraint every edit below must keep. Both invocations pass
+    // an ARGV ARRAY to `spawnSync` (no shell, so no word-splitting and no interpolation of a
+    // record's self-chosen filename into a command line), and both are READ-ONLY plumbing:
+    // `rev-parse` and `log`. Nothing here may become a command that refreshes or writes the
+    // index — `git status`, `git add`, `git diff` without `--no-index`, `git stash` — because
+    // this scanner runs inside the owner's checkout during `npm run lint` and must not touch
+    // the staging area a drive is mid-way through building.
+    const gitOk = instrumentedRoot.length > 0 &&
+      (() => {
+        const r = spawnSync('git', ['-C', args.bundle, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' });
+        return r.status === 0 && (r.stdout || '').trim() === 'true';
+      })();
+    // EVERY ADD-DATE IN ONE GIT PASS, ANCHORED ON THE EARLIEST ADD. This was one
+    // `git log … -1 -- <record>` spawn PER RECORD, over a directory D2 grows by one record per
+    // run: the process count scaled with history and the whole walk is re-run on every lint.
+    // One walk over `history/` builds the path → add-date map instead.
+    //
+    // And `-1` was the wrong end. `git log` emits commits NEWEST FIRST, so `-1` returned the
+    // MOST RECENT add of a path, while the window opener means the first time those bytes
+    // entered history. A path that was added, deleted and re-added has two add-commits, and
+    // anchoring on the newest hands a backdater exactly the exit that choosing add-commit
+    // order over filename order exists to close: delete a record, re-add it, and its add-date
+    // moves forward at will. Here the map is written in walk order, so the LAST write for a
+    // path — the OLDEST commit that added it — is the one that survives.
+    const HIST_REL = '.claude/veriloop/history';
+    const addDates = new Map();
+    if (gitOk) {
+      // `-c core.quotePath=false`: git C-QUOTES a path holding non-ASCII bytes by default, so the
+      // line arrives as `".claude/…/2026-08-21T0…Z\303\251.json"` — it ends in `"`, the
+      // `.endsWith('.json')` filter drops it, and the record silently loses its add-date. Dropping
+      // an add-date is not inert: it removes the record from `withAdds`, so it can neither BE the
+      // window opener nor be flagged as a suspect. A filename is the one field a record's author
+      // chooses, which makes "unusual bytes in the name" an attacker-selectable input here.
+      //
+      // maxBuffer is raised off the 1MB spawnSync default for the same class of silent loss: one
+      // walk over a directory D2 grows by a record per run outgrows 1MB, and on overflow node
+      // truncates stdout and sets `error` — which, unread, produced a partial map that reads
+      // exactly like a repo with fewer records. Status and error are now checked, so a failed log
+      // leaves the map EMPTY and the gate says SKIPPED rather than passing on partial evidence.
+      const log = spawnSync('git', ['-c', 'core.quotePath=false', '-C', args.bundle, 'log', '--diff-filter=A', '--format=%cI', '--name-only', '--', `${HIST_REL}/`], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      let commitDate = null;
+      for (const raw of (log.status !== 0 || log.error ? '' : log.stdout || '').split('\n')) {
+        const s = raw.trim();
+        if (!s) continue;
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s)) { commitDate = s; continue; }
+        if (commitDate === null || !s.endsWith('.json')) continue;
+        // `--name-only` prints repo-root-relative paths while `relPath` is bundle-relative;
+        // slicing from the marker makes the two agree without assuming the bundle IS the root.
+        const i = s.indexOf(`${HIST_REL}/`);
+        if (i !== -1) addDates.set(s.slice(i), commitDate); // newest→oldest ⇒ last write wins
+      }
+    }
+    const addedAt = (relPath) => {
+      const raw = addDates.get(relPath) || '';
+      return { raw, at: Date.parse(raw) };
+    };
+    const withAdds = gitOk
+      ? instrumentedRoot.map((r) => ({ ...r, add: addedAt(r.relPath) })).filter((r) => !Number.isNaN(r.add.at))
+      : [];
+    // Earliest ADD; a same-second tie falls back to the earlier filename so the result is
+    // deterministic rather than dependent on git's ordering.
+    const opener = withAdds.length
+      ? withAdds.reduce((a, b) => (b.add.at < a.add.at || (b.add.at === a.add.at && b.instant < a.instant) ? b : a))
+      : earliestByName;
+    const RECORD_KEYS_FROM = opener ? opener.instant : null;
+    const windowOpener = opener ? opener.relPath : null;
+    for (const { relPath, instant, rec } of (RECORD_KEYS_FROM === null ? [] : rootRecords)) {
+      if (instant < RECORD_KEYS_FROM) continue;  // NaN ⇒ checked
+      if (!EMITTED_BY.includes(rec && rec.emittedBy)) {
+        histHits++;
+        fail(`committed attestation record ${relPath} has no valid \`emittedBy\` (got ${JSON.stringify(rec && rec.emittedBy)}; expected one of ${EMITTED_BY.join(' | ')}) — it is not older than this bundle's first instrumented record (${windowOpener}), so its provenance is unknown and it can never be counted or excluded (resolve-clean-observation-period.md D3)`);
+      }
+      // D3's key list is a SUPERSET ("incl. `emittedBy`; incl. the D8-fields…"). D5's whole
+      // guarantee is the COMPLETENESS of the denominator, so the two fields countability is
+      // decided by — `resolveMode` and `verdict` — must be PRESENT on every countable-class
+      // record. Presence, not a value: a run that parked before the gate honestly has
+      // `verdict: null`, and a record that SAYS null is evidence, while a record that omits
+      // the key is a silent drop out of the denominator that lints green.
+      if (['loop', 'regate'].includes(rec && rec.emittedBy)) {
+        const missingCore = ['resolveMode', 'verdict'].filter((k) => !(k in rec));
+        if (missingCore.length) {
+          histHits++;
+          fail(`committed attestation record ${relPath} is \`emittedBy: ${JSON.stringify(rec.emittedBy)}\` (a countable class) but OMITS ${missingCore.join(', ')} — countability is decided by exactly those keys, so an omitted one leaves the observation window's denominator silently rather than as recorded evidence. Write the key with an explicit \`null\` if the run genuinely never reached that state (resolve-clean-observation-period.md D3/D5)`);
+        }
+        if (rec.resolveMode != null && !['blockers', 'clean'].includes(rec.resolveMode)) {
+          histHits++;
+          fail(`committed attestation record ${relPath} declares \`resolveMode: ${JSON.stringify(rec.resolveMode)}\`, which is neither \`blockers\` nor \`clean\` — the counter cannot decide whether it is a clean run, so it would drop out of the denominator unexplained (resolve-clean-observation-period.md D3/D5)`);
+        }
+        // …AND BOTH D7 SENSOR AXES, on a record that actually claims the countable class
+        // (`emittedBy ∈ {loop, regate}` AND `resolveMode: "clean"` — D5's definition). D6 opens
+        // the window at "the FIRST record carrying `emittedBy` + the D7 window key", and the key
+        // is BOTH axes: the confirm-prompt hash and the recorded review route the confirm seat
+        // rides. A countable record carrying neither has NO sensor identity, so there is no
+        // segment it can honestly belong to — and D7's rule is that runs under different sensors
+        // never pool. Left unchecked, the counter's only options are to invent a shared "unknown"
+        // segment (pooling exactly the runs whose sensor is unknowable) or to drop the run
+        // silently; the counter now refuses to count it, and this makes that refusal loud at the
+        // point the record is written rather than at the arming evaluation weeks later.
+        //
+        // A NON-NULL VALUE, not mere key presence — the one place this check departs from the
+        // `resolveMode`/`verdict` rule above. `attestationFrom` writes an explicit
+        // `confirmPromptHash: null` / `routing: null` when the run recorded no sensor, so
+        // key-presence would pass a record the counter still cannot place, and lint and the
+        // counter would disagree about what is countable. They must agree: two definitions of
+        // countability is the defect the single window opener above exists to avoid.
+        if (rec.resolveMode === 'clean') {
+          // ONE implementation, shared with `count-window.mjs` (lib/util.mjs). Written twice,
+          // the two copies were free to drift — and a mutation probe proved they already were.
+          const missingAxes = missingWindowKeyAxes(rec);
+          if (missingAxes.length) {
+            histHits++;
+            fail(`committed attestation record ${relPath} claims the COUNTABLE class (\`emittedBy: ${JSON.stringify(rec.emittedBy)}\`, \`resolveMode: "clean"\`) but records no ${missingAxes.join(' and no ')} — the D7 window key is BOTH axes (the confirm-prompt hash and the resolved review route), so a run missing either has no sensor identity and can never be pooled into a window segment. It is NON-COUNTABLE to \`count-window.mjs\`, which warns and excludes it (resolve-clean-observation-period.md D6/D7)`);
+          }
+        }
+      }
+      if (rec && rec.resolveMode === 'clean') {
+        const missing = ['rawConcerns', 'confirmedConcerns', 'unverifiedConcerns'].filter((k) => !(k in rec));
+        if (missing.length) {
+          histHits++;
+          fail(`committed attestation record ${relPath} declares \`resolveMode: "clean"\` but is missing ${missing.join(', ')} — the refutation rate is computed from exactly those fields, so a clean record without them is unreadable evidence (resolve-clean-observation-period.md D3)`);
+        }
+      }
+    }
+
+    // THE BACKDATING GATE — the close the temp backstop's own comment names as open ("no
+    // parse fix closes that; it is what gating on a self-reported name means"). The window
+    // OPENS at the first record carrying `emittedBy`; a record whose FILENAME timestamp
+    // predates that but whose ADD-COMMIT lands after it is a record dressed as pre-window
+    // history, which is exactly how a FAIL-ward run would be laundered out of the
+    // denominator. It is FLAGGED, not failed: the add date is real, but "backdated" is a
+    // judgment about intent that this scanner has no standing to make, and a legitimately
+    // late-COLLECTED legacy record (D4) has the same shape.
+    //
+    //     THE OPENER IS CHOSEN BY ADD-COMMIT ORDER, NOT BY FILENAME (see the resolution
+    //     above). Choosing it by the earliest filename instant handed the forger the exit: a
+    //     record carrying `emittedBy` AND a pre-window filename simply BECAME the opener, so
+    //     it was never its own suspect — and unlike the `emittedBy`-less variant, that one is
+    //     fully COUNTABLE, i.e. the gate flagged only the shape that was already harmless.
+    //
+    // FAIL-CLOSED ON AN UNPARSEABLE NAME, the same convention as the temp backstop above: the
+    // predicate is the NEGATED `>=` rather than a bare `<`, because every comparison with NaN
+    // is false and the bare `<` silently EXEMPTED any record whose name is not `<ts>.json`.
+    // That is the wrong side to fail toward here for the same reason it was there, only
+    // sharper: a hand-placed `restored.json` is precisely the shape a record laundered out of
+    // the denominator would take, and under the bare `<` it was never even a suspect. A name
+    // that does not parse now IS one — its add-date is still a real fact, and if it lands after
+    // the opener's the flag says so.
+    //
+    // Cheap precondition, on the SAME predicate the gate itself uses: if no root record is a
+    // suspect, the gate has nothing to check — so a bundle scanned outside a git worktree does
+    // not print a SKIPPED warning it never needed. It used to test against
+    // `latestInstrumented` (the LATEST instrumented filename) while the gate compared against
+    // `opener.instant` (the EARLIEST by add-commit), so the two disagreed on every bundle with
+    // more than one instrumented record: the precondition opened the gate for records that
+    // were never suspects, printing SKIPPED warnings nothing was waiting on. One predicate,
+    // used in both places.
+    const isSuspect = (r) => opener !== null && r.relPath !== opener.relPath && !(r.instant >= opener.instant); // NaN ⇒ suspect
+    if (opener !== null && rootRecords.some(isSuspect)) {
+      if (!gitOk) {
+        warn(`the attestation backdating gate was SKIPPED, not passed: ${args.bundle} is not inside a git worktree, so no record's add-commit date could be read (the provenance window opener fell back to the earliest instrumented FILENAME, ${windowOpener})`);
+      } else if (!withAdds.length) {
+        warn(`the attestation backdating gate was SKIPPED, not passed: no instrumented record has an add-commit yet, so there is no window opener to compare later records against (the provenance window opener fell back to the earliest instrumented FILENAME, ${windowOpener})`);
+      } else {
+        // Suspects include INSTRUMENTED records — the exploitable variant is precisely the
+        // one that carries `emittedBy`, because that is what makes it countable — and records
+        // whose filename does not parse at all (see `isSuspect`).
+        const suspects = rootRecords.filter(isSuspect);
+        for (const s of suspects) {
+          const a = addedAt(s.relPath);
+          if (Number.isNaN(a.at)) continue; // no add-commit found for this path — nothing to compare
+          if (a.at > opener.add.at) {
+            warn(`FLAG — committed attestation record ${s.relPath} names a pre-window timestamp but was ADDED to git at ${a.raw}, after the window's first instrumented record (${opener.relPath}, added ${opener.add.raw}). Either it is a legacy record collected late (fine — say so) or a new record backdated out of the denominator (resolve-clean-observation-period.md D3)`);
+          }
+        }
+      }
+    }
+    // The whole second clause sits INSIDE the truthy arm. Spliced the other way, the falsy
+    // branch ended "…so the requirement is inert carries `emittedBy` plus the D8 fields…" — the
+    // trailing verb phrase was appended to both arms and swallowed the sentence exactly in the
+    // state (window not yet open) that most needs to read clearly, since it is what an adopter
+    // and this repo both see first.
+    if (!histHits) {
+      ok(`committed attestation records scanned for absolute paths + secret patterns (and for temp-root paths, except where the filename timestamp parses to before 2026-08-16)${windowOpener
+        ? `, and every root record at or after the provenance window opener (${windowOpener}) carries \`emittedBy\`, plus the D8 fields and BOTH D7 window-key axes when it claims resolveMode=clean`
+        : '. The provenance window is NOT YET OPEN — no record here carries `emittedBy` — so the requirement is inert and was never exercised'}`);
+    }
   }
 
   // 6b. the domain bundle — the SAME backstop, for the same reason (constitution rule 7).

@@ -296,7 +296,26 @@ posture changed in 0.5.0, and that is a fact about your machine, not about ours.
   is false). The residual bypass is named rather than implied: the gate is a **self-reported
   file name**, so a record *backdated* to a parseable pre-cutoff stamp is exempted exactly as
   a genuine pre-cutoff record is, and no parse fix closes that — only a different gate (the
-  commit date, or scanning every record) would
+  commit date, or scanning every record) would. **That commit-date gate now exists**
+  (`resolve-clean-observation-period.md` D3; `scripts/lint-bundle.mjs`, "THE BACKDATING
+  GATE"): the scanner reads two real `git log --diff-filter=A` add-commit dates and flags a
+  record whose *filename* predates the record-provenance window opener while its *add-commit*
+  lands after it. Its scope is narrower than that sentence implies, so read it precisely — it
+  **warns, it does not fail** ("backdated" is an intent this scanner has no standing to judge,
+  and a legitimately late-collected legacy record has the same shape); it needs a git
+  worktree, and outside one it prints **SKIPPED, not passed**; and it is anchored on the
+  *provenance* window, not on this temp backstop's 2026-08-16 cutoff, so a record backdated to
+  before that cutoff still evades **this** temp scan on its filename alone. The bypass above
+  is **narrowed, not closed**
+- **record provenance** (`resolve-clean-observation-period.md` D3): a committed root-level
+  attestation record must declare `emittedBy ∈ {loop, regate, probe}`, plus `resolveMode` and
+  `verdict` when it is of a countable class, plus the three D8 concern counts when it claims
+  `resolveMode: "clean"`. The window this is required over is **empirical, never a wall-clock
+  date**: it opens at the earliest record that actually carries `emittedBy` (chosen by
+  add-commit date where git is available, by filename otherwise). A record written before this
+  repo — or an adopter's bundle — was instrumented is therefore exempt, because its emitter
+  could not have stamped the key; and a bundle with no instrumented record at all has an inert
+  check rather than a red gate on history nobody can rewrite
 - harness-forbidden APIs in an emitted workflow (`FORBIDDEN`,
   `scripts/lint-bundle.mjs:124`)
 - secret-shaped lines in a committed attestation record, or in an emitted

@@ -190,8 +190,12 @@ export function renderConstitution({ repoName, stack, roster, gate }) {
 // /dev-loop command
 // ---------------------------------------------------------------------------
 
-export function renderCommand({ repoName, roster, commandsJson, gate, budget }) {
+export function renderCommand({ repoName, roster, commandsJson, gate, budget, resolveDefault }) {
   const lenses = roster.experts.map((e) => e.key).join(', ');
+  // Rule 9 — the command doc's statement of the default is DERIVED from the generated config,
+  // never re-hardcoded (M1 bug #2). `resolve_default: "clean"` changes what a bare `/dev-loop`
+  // costs and what its verdict means, and this line is the only surface an owner reads to learn it.
+  const rd = resolveDefault === 'clean' ? 'clean' : 'blockers';
   const gateText = (gate || []).map((c) => `\`${c.cmd}\``).join(' + ');
   const shot = commandsJson.has_ui ? ', a **screenshot gate** on UI changes,' : '';
   const b = budget || { posture: 'balanced', presets: {}, models: {}, effort: {} };
@@ -247,7 +251,9 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `  RATIFIED ⇒ PARK (that one refuses in EVERY mode); a spec with NO \`Status:\` line ⇒ PARK **under\n` +
     `  this mode only** — unattended ambiguity fails safe, and an interactive run builds it as before; a final\n` +
     `  \`FAIL\` or a no-progress halt ⇒ **PARK-TERMINAL** with the worktree preserved and no autonomous\n` +
-    `  re-plan; an attestation that cannot be confirmed written ⇒ park loudly. A park is **TERMINAL** —\n` +
+    `  re-plan; an attestation that cannot be confirmed written ⇒ park loudly — **that last one in\n` +
+    `  EVERY mode**, not only this one, and it is the one park point this mode did not introduce.\n` +
+    `  A park is **TERMINAL** —\n` +
     `  there is no resume path in the workflow, so re-invoking is a fresh run, and answered docket\n` +
     `  entries are never re-opened because the owner's answers live in the **ratified spec** the\n` +
     `  docket tap produced, not in workflow state.\n` +
@@ -340,8 +346,9 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `- \`args.waive = ["substring", ...]\` — human waiver: downgrade a matching blocker to WAIVED. An agent\n` +
     `  may never waive its own finding.\n` +
     `- \`args.spec = "..."\` — the spec from step 1 (binding on the planner, implementer, and reviewers).\n` +
-    `- \`args.resolve = "blockers" | "clean"\` — how far the loop resolves findings. **Default \`blockers\`:\n` +
-    `  today's behavior exactly** — the fix loop runs on FAIL only and concerns are reported, not qualified.\n` +
+    `- \`args.resolve = "blockers" | "clean"\` — how far the loop resolves findings. **This repo's default is\n` +
+    `  \`${rd}\`** (\`resolve_default\` in \`.claude/veriloop/interview.json\`; change it there and regenerate). \`blockers\`\n` +
+    `  runs the fix loop on FAIL only and reports concerns without qualifying them.\n` +
     `  \`clean\` sends every SHOULD-FIX to a fresh **independent confirm agent** first (blockers are never\n` +
     `  qualified away), counts only confirmed concerns toward the verdict, and extends the fix loop to the\n` +
     `  confirmed, non-pre-existing, non-waived ones. The attestation records the raw AND confirmed counts,\n` +
@@ -367,8 +374,13 @@ export function renderCommand({ repoName, roster, commandsJson, gate, budget }) 
     `  ⇒ PARK (superseding \`args.interview = false\`), a spec whose \`Status:\` line does not say\n` +
     `  RATIFIED ⇒ PARK (that one in every mode), a spec with NO \`Status:\` line ⇒ PARK (this mode\n` +
     `  only), \`FAIL\` or a no-progress halt ⇒ PARK-TERMINAL with the worktree preserved and no\n` +
-    `  autonomous re-plan, an unconfirmed\n` +
-    `  attestation write ⇒ a loud park. A pre-build park serializes to \`history/parks/<ts>.json\`\n` +
+    `  autonomous re-plan.\n` +
+    `  **An unconfirmed attestation write ⇒ a loud park in EVERY mode** — that park was introduced\n` +
+    `  here as overnight-only and is no longer gated to this flag\n` +
+    `  (\`resolve-clean-observation-period.md\` D1, 2026-08-21): the observation period needs a\n` +
+    `  durable record whether or not anybody is awake, and the record is now COMMITTED on the\n` +
+    `  feature branch for every non-dry run, landed or not — only the push still waits on landing.\n` +
+    `  A pre-build park serializes to \`history/parks/<ts>.json\`\n` +
     `  (machine-ignored, in the owner's checkout); a PARK-TERMINAL rides the run's own\n` +
     `  \`history/<ts>.json\`, which carries \`terminalState: "PARKED"\` at top level; the loud\n` +
     `  attestation park serializes nothing and says so via \`parked.recordSerialized: false\`. Every\n` +

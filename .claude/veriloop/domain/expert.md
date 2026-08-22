@@ -39,7 +39,7 @@ finding, not a detail. The full audit is `.claude/veriloop/domain/audit.md`.
 `veriloop` — primary field **AI developer tooling — agentic code review and gating** (confidence high).
 Stack: **node** · package manager: **npm**.
 
-File census (4 of 4 top-level directories; hidden and vendor directories excluded, walk depth <= 4): `docs/` 13 · `fixtures/` 12 · `scripts/` 14 · `skills/` 1
+File census (4 of 4 top-level directories; hidden and vendor directories excluded, walk depth <= 4): `docs/` 13 · `fixtures/` 12 · `scripts/` 15 · `skills/` 1
 
 ### Declared dependencies (0)
 
