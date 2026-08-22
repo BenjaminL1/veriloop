@@ -1,0 +1,166 @@
+{
+ "ts": "2026-08-22T08-13-56Z",
+ "emittedBy": "probe",
+ "probeType": "seeded-two-arm",
+ "repo": "veriloop",
+ "spec": ".claude/veriloop/specs/resolve-clean-observation-period.md (D8, D10)",
+ "promptRef": {
+  "confirmPromptHash": "8b5c2626a40fba4db563f92a26f27de098aa3fdc28770b5a369c9b34943a8f47",
+  "route": "opus"
+ },
+ "method": "10 known-false seeds mechanically derived per the refute taxonomy (4 wrong / 3 already-handled / 3 nonexistent) + 5 known-true defects planted into the probed diff (by-construction ground truth). Probed diff: the observation-period feature itself (949d82a..034d255), reconstructed as uncommitted state in a throwaway worktree; mechanical pre-flight passed (no cmd-subst/backtick/env-expansion/secret/abs/temp shapes; nothing sourced from fixtures/hostile-ci/; probed diff touches no hostile path). One fresh seat per seed, verbatim production prompt. DISCLOSED DEVIATIONS: JSON-as-final-text instead of schema-forced output; brief delivered via a file the seat reads first. Seeds NEVER committed mid-window: sha256 pins below; verbatim corpus held owner-side, committed at window close or restart (deferred disclosure).",
+ "floor": {
+  "falseArm": {
+   "required": "9/10 refuted",
+   "observed": "10/10 refuted",
+   "met": true
+  },
+  "trueArm": {
+   "required": "4/5 confirmed",
+   "observed": "5/5 confirmed",
+   "met": true
+  },
+  "deadSeats": 0,
+  "reRuns": 0,
+  "FLOOR": "MET, both arms"
+ },
+ "seeds": [
+  {
+   "id": "F1",
+   "arm": "false",
+   "category": "wrong",
+   "sha256": "09649b65eb2490eb508ce09683ff8db75fee64d470c1a7b4d936c531ab33e331",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "count-window.mjs:191 fail-closed guard"
+  },
+  {
+   "id": "F2",
+   "arm": "false",
+   "category": "wrong",
+   "sha256": "41eca389ee32f118dc44a7703e01ef6f7e2be76eeb126ac29a921b217cd1b0a6",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "count-window.mjs:284 reads window not union"
+  },
+  {
+   "id": "F3",
+   "arm": "false",
+   "category": "wrong",
+   "sha256": "9d4b04e54939e6c21fe1b6ece79136f585b8d97f4fbe5c5b806ddffc2172a45c",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "lint-bundle.mjs:607 warn not fail"
+  },
+  {
+   "id": "F4",
+   "arm": "false",
+   "category": "wrong",
+   "sha256": "4e634f9550ea8ec7fc62d483d6455f4fff9772899e2c44b8d7cf9235fb11212b",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "template :1732/:1736 unconditional"
+  },
+  {
+   "id": "F5",
+   "arm": "false",
+   "category": "already-handled",
+   "sha256": "e458ed9da77e8889015918d40186357e8869cb3ba63faa9c222c949be21debb4",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "count-window.mjs:54 quotePath=false"
+  },
+  {
+   "id": "F6",
+   "arm": "false",
+   "category": "already-handled",
+   "sha256": "11897d071617505ba40371ba90ce0f6a02eeebb6ca5e2e08017d73571bbe5e7b",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "lint-bundle.mjs:488 map lookup, one pass"
+  },
+  {
+   "id": "F7",
+   "arm": "false",
+   "category": "already-handled",
+   "sha256": "c625358af18e2aade4f2c9e7e9416e9951ce8ae92bd323987d08f4dd7d551a22",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "lint-bundle.mjs:224 recompute-from-bytes"
+  },
+  {
+   "id": "F8",
+   "arm": "false",
+   "category": "nonexistent",
+   "sha256": "01bad4a645abda976cd9efe566862d9b883b4c38ddb7929824a6790fbb967d8d",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "cited module does not exist"
+  },
+  {
+   "id": "F9",
+   "arm": "false",
+   "category": "nonexistent",
+   "sha256": "c0dd9de1cb28f47d4811dacc380ae2df2655278b1c26aa12568c43fa884c1c95",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "cited function/line do not exist"
+  },
+  {
+   "id": "F10",
+   "arm": "false",
+   "category": "nonexistent",
+   "sha256": "6634f846ad4e6ef5f31ab2194a1aebfd7b3ea63720f10e9065bd233ff9dd495d",
+   "verdict": "refute",
+   "correct": true,
+   "excerpt": "cited function does not exist"
+  },
+  {
+   "id": "T1",
+   "arm": "true",
+   "category": "planted",
+   "sha256": "447613c7ab426878d9c4b66ffd08ce564a080ac9b68fe119e1daac2f2558bc12",
+   "verdict": "confirm",
+   "correct": true,
+   "excerpt": "count-window.mjs:225 null-guard drop found"
+  },
+  {
+   "id": "T2",
+   "arm": "true",
+   "category": "planted",
+   "sha256": "8447dd219bedc030b1f9b795b54284168bf3ce79825c3199c462b2a488279afd",
+   "verdict": "confirm",
+   "correct": true,
+   "excerpt": "template :1676 inverted landedNow found"
+  },
+  {
+   "id": "T3",
+   "arm": "true",
+   "category": "planted",
+   "sha256": "58ffe7b1fce53abef37c7aeb112d84644f488c252f30a4ced22b0a93558f5549",
+   "verdict": "confirm",
+   "correct": true,
+   "excerpt": "count-window.mjs:239 off-by-one found"
+  },
+  {
+   "id": "T4",
+   "arm": "true",
+   "category": "planted",
+   "sha256": "0e56e3ca9247ec12faf02325624c2e06ad9d13cf3eae37641eee4d0721b7a1f5",
+   "verdict": "confirm",
+   "correct": true,
+   "excerpt": "util.mjs:133 swapped slice args found"
+  },
+  {
+   "id": "T5",
+   "arm": "true",
+   "category": "planted",
+   "sha256": "7dbb01f4501f7236afe6644283bb52872add6f6d051ad3d9f8b84e58a5bc5986",
+   "verdict": "confirm",
+   "correct": true,
+   "excerpt": "lint-bundle.mjs:477 status-check drop found"
+  }
+ ],
+ "reading": "non-vacuity established under the CURRENT frozen sensor (prompt hash above, route opus). This is a floor, not discrimination power: seeds are textbook-grade by design. Never countable toward N or the base rate.",
+ "note": "one false-arm seat independently spotted a planted true defect in passing; two seats empirically reproduced their refutations in scratch repos; the five plants made the probe worktree's own lint fail on the hash recompute and no false-arm seat was fooled by it"
+}

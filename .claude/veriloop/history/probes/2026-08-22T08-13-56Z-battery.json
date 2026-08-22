@@ -1,0 +1,135 @@
+{
+ "ts": "2026-08-22T08-13-56Z",
+ "emittedBy": "probe",
+ "probeType": "replay-battery",
+ "repo": "veriloop",
+ "spec": ".claude/veriloop/specs/resolve-clean-observation-period.md (D11)",
+ "promptRef": {
+  "confirmPromptHash": "8b5c2626a40fba4db563f92a26f27de098aa3fdc28770b5a369c9b34943a8f47",
+  "route": "opus"
+ },
+ "method": "17 recorded concern texts from the four CONCERNS-verdict records replayed one-per-fresh-seat against each record's reconstructed uncommitted state (worktree detached at the record's baseSha + git apply of base..head). Verbatim production confirm prompt; tokens only substituted. DISCLOSED DEVIATIONS from a live seat: JSON-as-final-text instead of schema-forced structured output; the verbatim brief delivered via a file the seat reads first. The 16 texts from the two FAIL records are unrecoverable (baseSha==headSha defect) and are excluded per the spec's D4 ledger.",
+ "results": {
+  "seats": 17,
+  "confirmed": 16,
+  "refuted": 1,
+  "preExisting": 0,
+  "deadSeats": 0,
+  "reRuns": 0,
+  "refutationRate": 0.0588
+ },
+ "verdicts": [
+  {
+   "record": "2026-07-21T00-39-06Z.json",
+   "idx": 0,
+   "verdict": "confirm",
+   "citation": "scripts/scan.mjs:257"
+  },
+  {
+   "record": "2026-07-21T00-39-06Z.json",
+   "idx": 1,
+   "verdict": "confirm",
+   "citation": "scripts/scan.mjs:156"
+  },
+  {
+   "record": "2026-07-21T00-39-06Z.json",
+   "idx": 2,
+   "verdict": "confirm",
+   "citation": "scripts/scan.mjs:257"
+  },
+  {
+   "record": "2026-07-21T00-39-06Z.json",
+   "idx": 3,
+   "verdict": "confirm",
+   "citation": "scripts/scan.mjs:156"
+  },
+  {
+   "record": "2026-07-21T00-39-06Z.json",
+   "idx": 4,
+   "verdict": "confirm",
+   "citation": "scripts/scan.mjs:257"
+  },
+  {
+   "record": "2026-07-21T10-41-20Z.json",
+   "idx": 0,
+   "verdict": "confirm",
+   "citation": "scripts/mine.mjs:143"
+  },
+  {
+   "record": "2026-07-21T10-41-20Z.json",
+   "idx": 1,
+   "verdict": "confirm",
+   "citation": "scripts/mine.mjs:262"
+  },
+  {
+   "record": "2026-07-21T11-26-20Z.json",
+   "idx": 0,
+   "verdict": "confirm",
+   "citation": "CHANGELOG.md:4"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 0,
+   "verdict": "confirm",
+   "citation": "scripts/lint-bundle.mjs:599"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 1,
+   "verdict": "confirm",
+   "citation": "SECURITY.md:85"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 2,
+   "verdict": "confirm",
+   "citation": "scripts/lint-bundle.mjs:593"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 3,
+   "verdict": "refute",
+   "citation": ".claude/veriloop/specs/session-hook-compact-delivery.md:80"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 4,
+   "verdict": "confirm",
+   "citation": "scripts/lint-bundle.mjs:599"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 5,
+   "verdict": "confirm",
+   "citation": "scripts/selftest.mjs:3115"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 6,
+   "verdict": "confirm",
+   "citation": "SECURITY.md:85"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 7,
+   "verdict": "confirm",
+   "citation": "README.md:215"
+  },
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 8,
+   "verdict": "confirm",
+   "citation": "scripts/selftest.mjs:3115"
+  }
+ ],
+ "adjudication": [
+  {
+   "record": "2026-08-04T23-23-21Z.json",
+   "idx": 3,
+   "class": "finding-was-actually-wrong",
+   "ground": "the binding spec's own defect table (session-hook-compact-delivery.md:80) places the empty matcher in the bolded false-green group, so the unconstrained-FAIL branch is the ratified overreach rule applied, not an unauthorized third verdict; the adjacent idx 2 finding (the deviation was never RECORDED in the spec) was independently confirmed and names the real defect"
+  }
+ ],
+ "reading": "sensor characterization only \u2014 NEVER countable toward N or the base rate. First recorded refutation by the confirm layer, on merit.",
+ "note": "several seats reproduced defects empirically (scan --max surface loss, __proto__ TypeError, ENOTDIR HEAD read) rather than confirming from prose"
+}
