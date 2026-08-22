@@ -43,8 +43,8 @@ violates one is a **BLOCKER**. Keep this list short and true.
 
 8. **The ownership asymmetry is sacred.** Machine-owned files regenerate; hand-owned
    files (`*.overrides.md`, this constitution) are never clobbered; anything
-   overwritten is backed up first (`scripts/generate.mjs:313 machine`,
-   `scripts/generate.mjs:351 handOnce`, `scripts/generate.mjs:303 backup`). Splice
+   overwritten is backed up first (`scripts/generate.mjs:318 machine`,
+   `scripts/generate.mjs:356 handOnce`, `scripts/generate.mjs:308 backup`). Splice
    markers (`scripts/lib/render.mjs:11 AUTO_START`) bound every machine-owned block — owner
    lines outside them are preserved byte-for-byte. _(owner: `drift`)_
 9. **Emitted config has one source of truth.** The workflow's wired gate must equal
